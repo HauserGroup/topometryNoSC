@@ -26,6 +26,7 @@ except Exception:
 
 try:
     from sklearn.neighbors import NearestNeighbors
+
     _HAVE_SK = True
 except Exception:
     _HAVE_SK = False
@@ -86,12 +87,16 @@ class RiemannMetric:
 
     def get_dual_rmetric(self, invert_h=False):
         if self.H is None:
-            self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG)
+            self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(
+                self.Y, self.L, self.mdimG
+            )
         return (self.H, self.G) if invert_h else self.H
 
     def get_rmetric(self, return_svd=False):
         if self.G is None:
-            self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG)
+            self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(
+                self.Y, self.L, self.mdimG
+            )
         return (self.G, self.Hvv, self.Hsvals, self.Gsvals) if return_svd else self.G
 
     def get_mdimG(self):
@@ -99,7 +104,9 @@ class RiemannMetric:
 
     def get_detG(self, use_log=True):
         if self.G is None:
-            self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(self.Y, self.L, self.mdimG)
+            self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(
+                self.Y, self.L, self.mdimG
+            )
         if use_log:
             self.detG = -np.sum(np.log(self.Hsvals + 1e-8), axis=1)
             return self.detG
@@ -177,14 +184,17 @@ def _scaling_values(G, mode="anisotropy", eps=1e-8):
         return np.ones_like(s)
     return s / (rng + eps)
 
+
 def _prepare_colors(c, n, cmap="viridis", vmin=None, vmax=None, default_alpha=None):
     if c is None:
         return None
     try:
         arr = np.asarray(c)
         if arr.ndim == 1 and arr.shape[0] == n and np.issubdtype(arr.dtype, np.number):
-            norm = mcolors.Normalize(vmin=None if vmin is None else float(vmin),
-                                     vmax=None if vmax is None else float(vmax))
+            norm = mcolors.Normalize(
+                vmin=None if vmin is None else float(vmin),
+                vmax=None if vmax is None else float(vmax),
+            )
             mapper = cm.get_cmap(cmap)
             rgba = mapper(norm(arr))
             if default_alpha is not None:
@@ -192,7 +202,7 @@ def _prepare_colors(c, n, cmap="viridis", vmin=None, vmax=None, default_alpha=No
             return rgba
         if arr.ndim == 2 and arr.shape[0] == n and arr.shape[1] in (3, 4):
             rgba = np.zeros((n, 4), float)
-            rgba[:, :arr.shape[1]] = arr
+            rgba[:, : arr.shape[1]] = arr
             if arr.shape[1] == 3:
                 rgba[:, 3] = 1.0 if default_alpha is None else default_alpha
             if default_alpha is not None:
@@ -213,11 +223,14 @@ def _prepare_colors(c, n, cmap="viridis", vmin=None, vmax=None, default_alpha=No
     # Treat as categorical labels
     labels, inv = np.unique(np.asarray(c), return_inverse=True)
     base = cm.get_cmap("tab20" if len(labels) > 10 else "tab10")
-    palette = np.array([base(i / max(1, len(labels) - 1)) for i in range(len(labels))], float)
+    palette = np.array(
+        [base(i / max(1, len(labels) - 1)) for i in range(len(labels))], float
+    )
     rgba = palette[inv]
     if default_alpha is not None:
         rgba[:, 3] = default_alpha
     return rgba
+
 
 def plot_riemann_metric_localized(
     Y,
@@ -334,7 +347,8 @@ def plot_riemann_metric_localized(
         ax = plt.gca()
 
     # Establish target axes limits EARLY (we will fit ellipses inside these)
-    x0, y0 = Y.min(0); x1, y1 = Y.max(0)
+    x0, y0 = Y.min(0)
+    x1, y1 = Y.max(0)
     span = max(x1 - x0, y1 - y0)
     base = (0.05 * span) if scale_base == "auto" else float(scale_base)
     base = max(base, 1e-6)
@@ -350,17 +364,20 @@ def plot_riemann_metric_localized(
     if edgecolor is None:
         edgecolor = "k"
 
-    rgba_all = _prepare_colors(colors, n, cmap=cmap, vmin=vmin, vmax=vmax,
-                               default_alpha=point_alpha)
+    rgba_all = _prepare_colors(
+        colors, n, cmap=cmap, vmin=vmin, vmax=vmax, default_alpha=point_alpha
+    )
 
     if show_points:
         if rgba_all is not None:
             kw = dict(s=point_size, zorder=zorder - 2)
-            if scatter_kw: kw.update(scatter_kw)
+            if scatter_kw:
+                kw.update(scatter_kw)
             ax.scatter(Y[:, 0], Y[:, 1], c=rgba_all, **kw)
         else:
             kw = dict(s=point_size, c="0.3", alpha=point_alpha, zorder=zorder - 2)
-            if scatter_kw: kw.update(scatter_kw)
+            if scatter_kw:
+                kw.update(scatter_kw)
             ax.scatter(Y[:, 0], Y[:, 1], **kw)
 
     min_axis = 0.2 * base
@@ -386,9 +403,19 @@ def plot_riemann_metric_localized(
         ec = edgecolor
         if rgba_all is not None:
             rch, gch, bch, a_in = rgba_all[i]
-            a_fill = alpha if ellipse_alpha is None else ellipse_alpha
-            fc = (rch, gch, bch, a_fill)
-            ec = (rch, gch, bch, 1.0 if ellipse_alpha is None else ellipse_alpha)
+            # Fall back to point_alpha when neither alpha nor ellipse_alpha is set
+            a_fill = (
+                ellipse_alpha
+                if ellipse_alpha is not None
+                else (alpha if alpha is not None else point_alpha)
+            )
+            fc = (rch, gch, bch, float(a_fill))
+            ec = (
+                rch,
+                gch,
+                bch,
+                float(ellipse_alpha) if ellipse_alpha is not None else 1.0,
+            )
 
         e = Ellipse(
             (cx, cy),
@@ -397,20 +424,24 @@ def plot_riemann_metric_localized(
             angle=theta,
             facecolor=fc if rgba_all is not None else facecolor,
             edgecolor=ec,
-            alpha=None if rgba_all is not None else (alpha if ellipse_alpha is None else ellipse_alpha),
+            alpha=None
+            if rgba_all is not None
+            else (alpha if ellipse_alpha is None else ellipse_alpha),
             linewidth=0.3,
             zorder=zorder,
         )
-        e.set_clip_on(True)  # still clip (belt-and-braces), but scaling should keep it inside
+        e.set_clip_on(
+            True
+        )  # still clip (belt-and-braces), but scaling should keep it inside
         ax.add_patch(e)
 
     ax.set_aspect("equal", adjustable="box")
     ax.grid(False)
     for spine in ax.spines.values():
         spine.set_visible(False)
-    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_xticks([])
+    ax.set_yticks([])
     return ax
-
 
 
 def plot_riemann_metric_global(
@@ -425,7 +456,8 @@ def plot_riemann_metric_global(
     alpha=0.35,
     edgecolor="k",
     cmap="coolwarm",
-    vmin=None, vmax=None,
+    vmin=None,
+    vmax=None,
     ax=None,
     zorder=3,
     show_points=True,
@@ -516,7 +548,10 @@ def plot_riemann_metric_global(
         raise RuntimeError("matplotlib is required for plotting.")
     from matplotlib import cm, colors as mcolors
     from topo.eval.rmetric import (
-        RiemannMetric, _symmetrize as _sz, _project_spd, _scaling_values
+        RiemannMetric,
+        _symmetrize as _sz,
+        _project_spd,
+        _scaling_values,
     )
 
     Y_plot = np.asarray(Y, dtype=float)
@@ -531,24 +566,37 @@ def plot_riemann_metric_global(
 
     # Deformation (for colors)
     if deformation_vals is None:
-        kwargs = dict(center="median", diffusion_t=0, normalize="symmetric",
-                      clip_percentile=2.0, return_limits=True)
-        if deformation_kwargs: kwargs.update(deformation_kwargs)
-        deform_vals, (vmin_auto, vmax_auto) = calculate_deformation(Y_plot, L, G_emb=G_emb, **kwargs)
+        kwargs = dict(
+            center="median",
+            diffusion_t=0,
+            normalize="symmetric",
+            clip_percentile=2.0,
+            return_limits=True,
+        )
+        if deformation_kwargs:
+            kwargs.update(deformation_kwargs)
+        deform_vals, (vmin_auto, vmax_auto) = calculate_deformation(
+            Y_plot, L, G_emb=G_emb, **kwargs
+        )
     else:
         deform_vals = np.asarray(deformation_vals)
-        a = np.nanmax(np.abs(np.clip(
-            deform_vals,
-            np.nanpercentile(deform_vals, 2.0),
-            np.nanpercentile(deform_vals, 98.0)
-        )))
+        a = np.nanmax(
+            np.abs(
+                np.clip(
+                    deform_vals,
+                    np.nanpercentile(deform_vals, 2.0),
+                    np.nanpercentile(deform_vals, 98.0),
+                )
+            )
+        )
         vmin_auto, vmax_auto = -a, a
 
     if ax is None:
         ax = plt.gca()
 
     # Establish target axes limits EARLY; we will fit ellipses inside these
-    x0, y0 = Y_plot.min(0); x1, y1 = Y_plot.max(0)
+    x0, y0 = Y_plot.min(0)
+    x1, y1 = Y_plot.max(0)
     span = max(x1 - x0, y1 - y0)
     pad = 0.06 * span
     if respect_existing_limits:
@@ -558,11 +606,13 @@ def plot_riemann_metric_global(
         if (xL, xR) == (0.0, 1.0) and (yB, yT) == (0.0, 1.0):
             xL, xR = x0 - pad, x1 + pad
             yB, yT = y0 - pad, y1 + pad
-            ax.set_xlim(xL, xR); ax.set_ylim(yB, yT)
+            ax.set_xlim(xL, xR)
+            ax.set_ylim(yB, yT)
     else:
         xL, xR = x0 - pad, x1 + pad
         yB, yT = y0 - pad, y1 + pad
-        ax.set_xlim(xL, xR); ax.set_ylim(yB, yT)
+        ax.set_xlim(xL, xR)
+        ax.set_ylim(yB, yT)
 
     # Grid over the original extent
     gx = np.linspace(x0, x1, max(2, int(grid_res)))
@@ -598,23 +648,31 @@ def plot_riemann_metric_global(
     # Thinning to reduce overlaps
     keep = []
     taken = np.zeros(grid_pts.shape[0], dtype=bool)
-    order = np.argsort(-np.abs(deform_grid)) if choose_strong_first else np.arange(grid_pts.shape[0])
+    order = (
+        np.argsort(-np.abs(deform_grid))
+        if choose_strong_first
+        else np.arange(grid_pts.shape[0])
+    )
     min_sep = min_sep_factor * base
 
     for j in order:
         if taken[j]:
             continue
         if not keep:
-            keep.append(j); taken[j] = True; continue
-        d2 = np.sum((grid_pts[keep] - grid_pts[j])**2, axis=1)
+            keep.append(j)
+            taken[j] = True
+            continue
+        d2 = np.sum((grid_pts[keep] - grid_pts[j]) ** 2, axis=1)
         if np.all(np.sqrt(d2) >= min_sep):
-            keep.append(j); taken[j] = True
+            keep.append(j)
+            taken[j] = True
     keep = np.array(keep, dtype=int)
 
     # Optional background points
     if show_points:
         kw = dict(s=point_size, c="0.3", alpha=point_alpha, zorder=zorder - 3)
-        if scatter_kw: kw.update(scatter_kw)
+        if scatter_kw:
+            kw.update(scatter_kw)
         ax.scatter(Y_plot[:, 0], Y_plot[:, 1], **kw)
 
     # Draw ellipses, scaling them to stay INSIDE the axes box.
@@ -663,7 +721,8 @@ def plot_riemann_metric_global(
     ax.grid(False)
     for spine in ax.spines.values():
         spine.set_visible(False)
-    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_xticks([])
+    ax.set_yticks([])
 
     # Colorbar
     mappable = cm.ScalarMappable(norm=norm, cmap=cmap)
@@ -672,7 +731,6 @@ def plot_riemann_metric_global(
     cb.set_label("Contraction  ←  centered log det(G)  →  Expansion", size=8)
 
     return ax
-
 
 
 def calculate_deformation(
@@ -747,10 +805,14 @@ def calculate_deformation(
         pass
 
     from topo.eval.rmetric import (
-        RiemannMetric, _center as _ct, _symmetrize as _sz,
-        _ensure_array as _ea
+        RiemannMetric,
+        _center as _ct,
+        _symmetrize as _sz,
+        _ensure_array as _ea,
     )
-    Y = _ct(Y); L = _sz(L)
+
+    Y = _ct(Y)
+    L = _sz(L)
     if G_emb is None:
         G_emb = RiemannMetric(Y, L).get_rmetric()
 
@@ -779,7 +841,7 @@ def calculate_deformation(
             Ld = _ea(L)
             d = np.clip(np.diag(Ld).astype(float), 1e-12, None)
             W = np.diag(d) - Ld
-            P = (W / d[:, None])
+            P = W / d[:, None]
         else:
             P = diffusion_op
         v = vals.copy()
@@ -815,7 +877,8 @@ def plot_metric_contraction_expansion(
     s=6,
     alpha=0.9,
     cmap="coolwarm",
-    vmin=None, vmax=None,
+    vmin=None,
+    vmax=None,
     show_colorbar=True,
     ax=None,
     zorder=1,
@@ -898,15 +961,26 @@ def plot_metric_contraction_expansion(
         raise RuntimeError("matplotlib is required for plotting.")
 
     from topo.eval.rmetric import _center as _ct, _symmetrize as _sz
-    Y = _ct(Y); L = _sz(L)
+
+    Y = _ct(Y)
+    L = _sz(L)
     if Y.shape[1] != 2:
-        raise ValueError("plot_metric_contraction_expansion expects a 2D embedding (n,2).")
+        raise ValueError(
+            "plot_metric_contraction_expansion expects a 2D embedding (n,2)."
+        )
 
     vals, (vmin_eff_auto, vmax_eff_auto) = calculate_deformation(
-        Y, L, G_emb=G_emb, center=center, use_dual=use_dual,
-        diffusion_t=diffusion_t, diffusion_op=diffusion_op,
+        Y,
+        L,
+        G_emb=G_emb,
+        center=center,
+        use_dual=use_dual,
+        diffusion_t=diffusion_t,
+        diffusion_op=diffusion_op,
         re_center_after_diffusion=re_center_after_diffusion,
-        clip_percentile=clip_percentile, normalize=normalize, return_limits=True
+        clip_percentile=clip_percentile,
+        normalize=normalize,
+        return_limits=True,
     )
     vmin_eff = vmin if vmin is not None else vmin_eff_auto
     vmax_eff = vmax if vmax is not None else vmax_eff_auto
@@ -919,25 +993,35 @@ def plot_metric_contraction_expansion(
         order = np.argsort(np.abs(vals))
 
     sc = ax.scatter(
-        Y[order, 0], Y[order, 1],
+        Y[order, 0],
+        Y[order, 1],
         c=vals[order],
         s=s,
         alpha=alpha,
         cmap=cmap,
-        vmin=vmin_eff, vmax=vmax_eff,
+        vmin=vmin_eff,
+        vmax=vmax_eff,
         zorder=zorder,
     )
 
-    x0, y0 = Y.min(0); x1, y1 = Y.max(0)
-    span = max(x1 - x0, y1 - y0); pad = 0.06 * span
-    ax.set_xlim(x0 - pad, x1 + pad); ax.set_ylim(y0 - pad, y1 + pad)
-    ax.set_aspect("equal", adjustable="box"); ax.grid(False)
-    for sp in ax.spines.values(): sp.set_visible(False)
-    ax.set_xticks([]); ax.set_yticks([])
+    x0, y0 = Y.min(0)
+    x1, y1 = Y.max(0)
+    span = max(x1 - x0, y1 - y0)
+    pad = 0.06 * span
+    ax.set_xlim(x0 - pad, x1 + pad)
+    ax.set_ylim(y0 - pad, y1 + pad)
+    ax.set_aspect("equal", adjustable="box")
+    ax.grid(False)
+    for sp in ax.spines.values():
+        sp.set_visible(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
 
     if show_colorbar:
         cb = plt.colorbar(sc, ax=ax, fraction=0.046, pad=0.04)
-        cb.set_label("Contraction  ←  log det(G)  →  Expansion", fontsize=legend_fontsize)
+        cb.set_label(
+            "Contraction  ←  log det(G)  →  Expansion", fontsize=legend_fontsize
+        )
 
     if title:
         ax.set_title(title, fontsize=title_fontsize)

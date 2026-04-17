@@ -9,7 +9,7 @@
 # About TopoMetry
 
 > **Fork notice:** This is a heavily modified fork of
-> [original-repo](https://github.com/davisidarta/topometry) by David S Oliveira,
+> [topometry](https://github.com/davisidarta/topometry) by David S Oliveira,
 > It has diverged significantly and may or may not be maintained independently.
 
 **TopoMetry** is a geometry-aware Python toolkit for exploring high-dimensional data via diffusion/Laplacian operators. It learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** and then finds clusters and builds low-dimensional layouts for analysis and visualization.

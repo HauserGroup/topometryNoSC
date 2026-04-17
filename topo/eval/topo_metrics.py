@@ -3,9 +3,9 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from scipy.stats import spearmanr, wasserstein_distance
-from scipy.linalg import orthogonal_procrustes, subspace_angles
-import scipy.sparse as sp
 from topo.tpgraph.kernels import Kernel
+
+
 # ----------------------------
 # Utilities
 # ----------------------------
@@ -15,7 +15,10 @@ def _ensure_csr(P):
     P.eliminate_zeros()
     return P
 
-def _top_eigs_of_P(P, r=64, which='LM', tol=1e-4, maxiter=None, v0=None, symmetric_hint=False):
+
+def _top_eigs_of_P(
+    P, r=64, which="LM", tol=1e-4, maxiter=None, v0=None, symmetric_hint=False
+):
     """
     Compute top-r eigenpairs of P (row-stochastic Markov operator).
     If you used a symmetric diffusion operator earlier, set symmetric_hint=True for
@@ -24,22 +27,26 @@ def _top_eigs_of_P(P, r=64, which='LM', tol=1e-4, maxiter=None, v0=None, symmetr
     """
     P = _ensure_csr(P)
     n = P.shape[0]
-    r = min(r, n-1)
+    r = min(r, n - 1)
     if r < 1:
         raise ValueError("r must be >= 1 and < n.")
     G = (P + P.T) * 0.5 if symmetric_hint else P
     # eigsh works for symmetric; for non-symmetric use eigs
     if symmetric_hint:
-        w, V = spla.eigsh(G, k=r, which='LM', tol=tol, maxiter=maxiter, v0=v0)
+        w, V = spla.eigsh(G, k=r, which="LM", tol=tol, maxiter=maxiter, v0=v0)
     else:
-        w, V = spla.eigs(G, k=r, which='LR', tol=tol, maxiter=maxiter, v0=v0)
-        w = np.real(w); V = np.real(V)
+        w, V = spla.eigs(G, k=r, which="LR", tol=tol, maxiter=maxiter, v0=v0)
+        w = np.real(w)
+        V = np.real(V)
     # sort by magnitude (descending), drop trivial ~1 at index 0 later where needed
     idx = np.argsort(-np.abs(w))
     w, V = w[idx], V[:, idx]
     return w, V
 
-def diffusion_coordinates(evals, evecs, t, drop_first=True, r_use=None, normalize_cols=True):
+
+def diffusion_coordinates(
+    evals, evecs, t, drop_first=True, r_use=None, normalize_cols=True
+):
     """
     Phi_t(P) = [lambda_1^t psi_1, ..., lambda_r^t psi_r], optionally skipping the trivial first.
     """
@@ -49,21 +56,26 @@ def diffusion_coordinates(evals, evecs, t, drop_first=True, r_use=None, normaliz
     if r_use is None:
         r_use = Psi.shape[1] - start
     r_use = max(1, min(r_use, Psi.shape[1] - start))
-    lam_t = lam[start:start+r_use] ** float(t)
-    Phi = Psi[:, start:start+r_use] * lam_t[None, :]
+    lam_t = lam[start : start + r_use] ** float(t)
+    Phi = Psi[:, start : start + r_use] * lam_t[None, :]
     if normalize_cols:
         # shrink numerical drift
         s = np.linalg.norm(Phi, axis=0) + 1e-12
         Phi = Phi / s
     return Phi
 
-def diffusion_distance_from_eigs(evals, evecs, t, r_use=None, drop_first=True, squared=False):
+
+def diffusion_distance_from_eigs(
+    evals, evecs, t, r_use=None, drop_first=True, squared=False
+):
     """
     Compute diffusion distance matrix (via truncated eigendecomposition).
     D^2(i,j) = sum_l lambda_l^{2t} (psi_l(i)-psi_l(j))^2
     Returns a dense (n,n) matrix for convenience; for large n use sampling.
     """
-    Phi = diffusion_coordinates(evals, evecs, t, drop_first=drop_first, r_use=r_use, normalize_cols=False)
+    Phi = diffusion_coordinates(
+        evals, evecs, t, drop_first=drop_first, r_use=r_use, normalize_cols=False
+    )
     # pairwise squared Euclidean distances with weighted coordinates (which already include lambda^t)
     # efficient trick: ||x-y||^2 = ||x||^2 + ||y||^2 - 2 x·y
     G = Phi @ Phi.T  # Gram
@@ -72,9 +84,11 @@ def diffusion_distance_from_eigs(evals, evecs, t, r_use=None, drop_first=True, s
     np.maximum(D2, 0.0, out=D2)  # numerical floor
     return D2 if squared else np.sqrt(D2)
 
+
 def _upper_triangle_vec(M):
     i, j = np.triu_indices(M.shape[0], k=1)
     return M[i, j]
+
 
 def _topk_support_from_row(data, ind, k):
     if k is None or k >= data.size:
@@ -102,7 +116,7 @@ def get_P(Y, **kwargs_for_kernel):
           metric='cosine' | 'euclidean' | 'precomputed'
           n_neighbors=30
           adaptive_bw=True
-          backend='nmslib' | 'hnswlib' 
+          backend='nmslib' | 'hnswlib'
           n_jobs=-1
           symmetrize=True
           anisotropy=1.0
@@ -126,10 +140,10 @@ def get_P(Y, **kwargs_for_kernel):
 
     # 2) Prepare defaults and merge user options
     params = dict(
-        metric='cosine',
+        metric="cosine",
         n_neighbors=30,
         adaptive_bw=True,
-        backend='nmslib',
+        backend="nmslib",
         n_jobs=-1,
         symmetrize=True,
         use_angular=True,  # sensible for cosine on z-scored data
@@ -139,18 +153,19 @@ def get_P(Y, **kwargs_for_kernel):
     # 3) Auto-detect precomputed case: square matrix input → kernel/affinity
     try:
         n0, n1 = Y.shape
-        is_square = (n0 == n1)
+        is_square = n0 == n1
     except Exception:
         is_square = False
 
-    if is_square and params.get('metric', None) != 'precomputed':
+    if is_square and params.get("metric", None) != "precomputed":
         # Interpret as a precomputed affinity/kernel unless explicitly told otherwise
-        params['metric'] = 'precomputed'
+        params["metric"] = "precomputed"
 
     # 4) Build the Kernel and compute P
     Kobj = Kernel(**params).fit(Y)
     P = Kobj.P  # already symmetrized internally
     return P.tocsr()
+
 
 # ----------------------------
 # 1) Global geometry
@@ -187,12 +202,16 @@ def rank_diffusion_correlation(Px, Py, times=(1, 2, 4, 8), r=64, symmetric_hint=
     for t in times:
         Dx = diffusion_distance_from_eigs(wx, Vx, t)
         Dy = diffusion_distance_from_eigs(wy, Vy, t)
-        vx = _upper_triangle_vec(Dx); vy = _upper_triangle_vec(Dy)
+        vx = _upper_triangle_vec(Dx)
+        vy = _upper_triangle_vec(Dy)
         rho, _ = spearmanr(vx, vy)
         rhos.append(float(rho))
     return np.nanmean(rhos)
 
-def multiscale_diffusion_emd(Px, Py, times=(1,2,4,8), r=64, bins=64, symmetric_hint=False):
+
+def multiscale_diffusion_emd(
+    Px, Py, times=(1, 2, 4, 8), r=64, bins=64, symmetric_hint=False
+):
     """
     Global geometry preservation via multiscale Earth Mover’s Distance (EMD) on diffusion distances.
 
@@ -239,17 +258,21 @@ def multiscale_diffusion_emd(Px, Py, times=(1,2,4,8), r=64, bins=64, symmetric_h
         hx = _upper_triangle_vec(Dx)
         hy = _upper_triangle_vec(Dy)
         # histogram supports shared bins
-        lo = min(hx.min(), hy.min()); hi = max(hx.max(), hy.max())
+        lo = min(hx.min(), hy.min())
+        hi = max(hx.max(), hy.max())
         edges = np.linspace(lo, hi + 1e-12, bins + 1)
         cx, _ = np.histogram(hx, bins=edges, density=True)
         cy, _ = np.histogram(hy, bins=edges, density=True)
         # approximate EMD with 1-Wasserstein on the midpoints
-        mids = 0.5*(edges[:-1] + edges[1:])
+        mids = 0.5 * (edges[:-1] + edges[1:])
         emd = wasserstein_distance(mids, mids, u_weights=cx, v_weights=cy)
         emds.append(float(emd))
     return np.nanmean(emds)
 
-def spectral_procrustes(Px, Py, times=(1, 2, 4, 8), r=64, symmetric_hint=False, center=True):
+
+def spectral_procrustes(
+    Px, Py, times=(1, 2, 4, 8), r=64, symmetric_hint=False, center=True
+):
     """
     Align diffusion coordinates via orthogonal Procrustes and report R^2.
 
@@ -283,8 +306,12 @@ def spectral_procrustes(Px, Py, times=(1, 2, 4, 8), r=64, symmetric_hint=False, 
 
     scores = []
     for t in times:
-        Phix = diffusion_coordinates(wx, Vx, t, r_use=r_use, drop_first=True, normalize_cols=True)
-        Phiy = diffusion_coordinates(wy, Vy, t, r_use=r_use, drop_first=True, normalize_cols=True)
+        Phix = diffusion_coordinates(
+            wx, Vx, t, r_use=r_use, drop_first=True, normalize_cols=True
+        )
+        Phiy = diffusion_coordinates(
+            wy, Vy, t, r_use=r_use, drop_first=True, normalize_cols=True
+        )
 
         if center:
             Phix = Phix - Phix.mean(0, keepdims=True)
@@ -295,14 +322,16 @@ def spectral_procrustes(Px, Py, times=(1, 2, 4, 8), r=64, symmetric_hint=False, 
 
         # R^2 with centered data (no intercept): 1 - SSE/SST
         sse = float(np.sum((Phix - Yhat) ** 2))
-        sst = float(np.sum(Phix ** 2)) + 1e-12
+        sst = float(np.sum(Phix**2)) + 1e-12
         r2 = 1.0 - (sse / sst)
         # clip to [0,1] for stability
         scores.append(max(0.0, min(1.0, r2)))
     return float(np.nanmean(scores))
 
 
-def diffusion_rank_biased_overlap(Px, Py, times=(1,2,4,8), r=64, p=0.9, k_max=100, symmetric_hint=False):
+def diffusion_rank_biased_overlap(
+    Px, Py, times=(1, 2, 4, 8), r=64, p=0.9, k_max=100, symmetric_hint=False
+):
     """
     Local geometry agreement via Rank-Biased Overlap (RBO) of diffusion neighbors.
 
@@ -338,15 +367,18 @@ def diffusion_rank_biased_overlap(Px, Py, times=(1,2,4,8), r=64, p=0.9, k_max=10
 
     def _rbo(listA, listB, p, k):
         # listA/listB are ordered neighbor lists (no self), length >= k
-        A = listA[:k]; B = listB[:k]
+        A = listA[:k]
+        B = listB[:k]
         score = 0.0
         Aseen, Bseen = set(), set()
         overlap = 0
-        for d in range(1, k+1):
-            Aseen.add(A[d-1]); Bseen.add(B[d-1])
+        for d in range(1, k + 1):
+            Aseen.add(A[d - 1])
+            Bseen.add(B[d - 1])
             overlap = len(Aseen.intersection(Bseen))
-            score += (overlap / d) * (p**(d-1))
+            score += (overlap / d) * (p ** (d - 1))
         return (1 - p) * score
+
     wx, Vx = _top_eigs_of_P(Px, r=r, symmetric_hint=symmetric_hint)
     wy, Vy = _top_eigs_of_P(Py, r=r, symmetric_hint=symmetric_hint)
     n = Px.shape[0]
@@ -363,11 +395,16 @@ def diffusion_rank_biased_overlap(Px, Py, times=(1,2,4,8), r=64, p=0.9, k_max=10
             ay = Ry[i][Ry[i] != i][:k_max]
             if ax.size == 0 or ay.size == 0:
                 continue
-            rbo_i.append(_rbo(ax.tolist(), ay.tolist(), p=p, k=min(k_max, len(ax), len(ay))))
+            rbo_i.append(
+                _rbo(ax.tolist(), ay.tolist(), p=p, k=min(k_max, len(ax), len(ay)))
+            )
         vals.append(np.mean(rbo_i) if rbo_i else np.nan)
     return float(np.nanmean(vals))
 
-def rowwise_js_similarity(Px, Py, eps: float = 1e-12, topk: int = None, return_per_row: bool = False):
+
+def rowwise_js_similarity(
+    Px, Py, eps: float = 1e-12, topk: int | None = None, return_per_row: bool = False
+):
     """
     Row-wise Jensen–Shannon (JS) similarity between two diffusion operators.
 
@@ -427,8 +464,9 @@ def rowwise_js_similarity(Px, Py, eps: float = 1e-12, topk: int = None, return_p
         q /= q.sum()
         m = 0.5 * (p + q)
         # KL in nats; JS = 0.5*(KL(p||m) + KL(q||m))
-        js = 0.5 * (np.sum(p * (np.log(p) - np.log(m))) +
-                    np.sum(q * (np.log(q) - np.log(m))))
+        js = 0.5 * (
+            np.sum(p * (np.log(p) - np.log(m))) + np.sum(q * (np.log(q) - np.log(m)))
+        )
         return float(js)
 
     def _topk_from_row(data, ind, k):
@@ -437,16 +475,17 @@ def rowwise_js_similarity(Px, Py, eps: float = 1e-12, topk: int = None, return_p
         sel = np.argpartition(data, -k)[-k:]
         return ind[sel], data[sel]
 
-    Px = _ensure_csr(Px); Py = _ensure_csr(Py)
+    Px = _ensure_csr(Px)
+    Py = _ensure_csr(Py)
     n = Px.shape[0]
     one_minus_js = []
 
     for i in range(n):
         # Sparse slices
-        p_row = Px.data[Px.indptr[i]:Px.indptr[i+1]]
-        p_ind = Px.indices[Px.indptr[i]:Px.indptr[i+1]]
-        q_row = Py.data[Py.indptr[i]:Py.indptr[i+1]]
-        q_ind = Py.indices[Py.indptr[i]:Py.indptr[i+1]]
+        p_row = Px.data[Px.indptr[i] : Px.indptr[i + 1]]
+        p_ind = Px.indices[Px.indptr[i] : Px.indptr[i + 1]]
+        q_row = Py.data[Py.indptr[i] : Py.indptr[i + 1]]
+        q_ind = Py.indices[Py.indptr[i] : Py.indptr[i + 1]]
 
         if p_row.size == 0 and q_row.size == 0:
             continue  # skip fully empty rows
@@ -478,6 +517,7 @@ def rowwise_js_similarity(Px, Py, eps: float = 1e-12, topk: int = None, return_p
         return sim, np.asarray(one_minus_js, dtype=float)
     return sim
 
+
 def sparse_neighborhood_f1(Px, Py, k=None):
     """
     Operator-level set overlap: F1 of top-k transition neighborhoods per row.
@@ -502,22 +542,26 @@ def sparse_neighborhood_f1(Px, Py, k=None):
     - Complements JS: insensitive to weights but sensitive to support overlap.
     """
 
-    Px = _ensure_csr(Px); Py = _ensure_csr(Py)
+    Px = _ensure_csr(Px)
+    Py = _ensure_csr(Py)
     n = Px.shape[0]
     f1s = []
     for i in range(n):
-        pr = Px.data[Px.indptr[i]:Px.indptr[i+1]]
-        pi = Px.indices[Px.indptr[i]:Px.indptr[i+1]]
-        qr = Py.data[Py.indptr[i]:Py.indptr[i+1]]
-        qi = Py.indices[Py.indptr[i]:Py.indptr[i+1]]
+        pr = Px.data[Px.indptr[i] : Px.indptr[i + 1]]
+        pi = Px.indices[Px.indptr[i] : Px.indptr[i + 1]]
+        qr = Py.data[Py.indptr[i] : Py.indptr[i + 1]]
+        qi = Py.indices[Py.indptr[i] : Py.indptr[i + 1]]
         A = _topk_support_from_row(pr, pi, k)
         B = _topk_support_from_row(qr, qi, k)
         if len(A) == 0 and len(B) == 0:
             continue
-        tp = len(A & B); prec = tp / (len(B) + 1e-12); rec = tp / (len(A) + 1e-12)
-        f1 = 0.0 if (prec + rec) == 0 else (2*prec*rec)/(prec+rec)
+        tp = len(A & B)
+        prec = tp / (len(B) + 1e-12)
+        rec = tp / (len(A) + 1e-12)
+        f1 = 0.0 if (prec + rec) == 0 else (2 * prec * rec) / (prec + rec)
         f1s.append(f1)
     return float(np.mean(f1s)) if f1s else np.nan
+
 
 def spectral_similarity(Px, Py, r=64, symmetric_hint=False, return_details=False):
     """
@@ -538,26 +582,30 @@ def spectral_similarity(Px, Py, r=64, symmetric_hint=False, return_details=False
     wy, Vy = _top_eigs_of_P(Py, r=r, symmetric_hint=symmetric_hint)
 
     # Drop the trivial first mode (~1.0)
-    wx = wx[1:]; wy = wy[1:]
+    wx = wx[1:]
+    wy = wy[1:]
 
     r_pair = min(len(wx), len(wy))
     # Wasserstein-1 between (absolute) leading spectra (lower is better)
     w1 = wasserstein_distance(
-        np.arange(r_pair), np.arange(r_pair),
-        u_weights=np.abs(wx[:r_pair]), v_weights=np.abs(wy[:r_pair])
+        np.arange(r_pair),
+        np.arange(r_pair),
+        u_weights=np.abs(wx[:r_pair]),
+        v_weights=np.abs(wy[:r_pair]),
     )
 
     # principal angles between top subspaces (skip first vector)
     r_use = max(1, min(Vx.shape[1] - 1, Vy.shape[1] - 1, r))
-    U = Vx[:, 1:1 + r_use]
-    V = Vy[:, 1:1 + r_use]
+    U = Vx[:, 1 : 1 + r_use]
+    V = Vy[:, 1 : 1 + r_use]
     # Orthonormalize columns (QR) to be safe
-    U, _ = np.linalg.qr(U); V, _ = np.linalg.qr(V)
+    U, _ = np.linalg.qr(U)
+    V, _ = np.linalg.qr(V)
     ang = subspace_angles(U, V)  # ascending
     cos_largest = float(np.cos(ang[-1])) if ang.size > 0 else np.nan
 
     if return_details:
-        return {'eigenvalue_w1': float(w1), 'subspace_cos': cos_largest}
+        return {"eigenvalue_w1": float(w1), "subspace_cos": cos_largest}
     else:
         return cos_largest
     """
@@ -599,22 +647,32 @@ def spectral_similarity(Px, Py, r=64, symmetric_hint=False, return_details=False
     wx, Vx = _top_eigs_of_P(Px, r=r, symmetric_hint=symmetric_hint)
     wy, Vy = _top_eigs_of_P(Py, r=r, symmetric_hint=symmetric_hint)
     # drop trivial ~1
-    wx = wx[1:]; wy = wy[1:]
+    wx = wx[1:]
+    wy = wy[1:]
     r_pair = min(len(wx), len(wy))
     # eigenvalue W1 (on real lines)
-    w1 = wasserstein_distance(np.arange(r_pair), np.arange(r_pair), u_weights=np.abs(wx[:r_pair]), v_weights=np.abs(wy[:r_pair]))
+    w1 = wasserstein_distance(
+        np.arange(r_pair),
+        np.arange(r_pair),
+        u_weights=np.abs(wx[:r_pair]),
+        v_weights=np.abs(wy[:r_pair]),
+    )
     # principal angles (use same r_use)
     if r_use is None:
-        r_use = min(Vx.shape[1]-1, Vy.shape[1]-1, 32)
-    U = Vx[:, 1:1+r_use]
-    V = Vy[:, 1:1+r_use]
+        r_use = min(Vx.shape[1] - 1, Vy.shape[1] - 1, 32)
+    U = Vx[:, 1 : 1 + r_use]
+    V = Vy[:, 1 : 1 + r_use]
     # orthonormalize columns (QR) to be safe
-    U, _ = np.linalg.qr(U); V, _ = np.linalg.qr(V)
+    U, _ = np.linalg.qr(U)
+    V, _ = np.linalg.qr(V)
     ang = subspace_angles(U, V)  # ascending angles
     cos_largest = float(np.cos(ang[-1])) if ang.size > 0 else np.nan
-    return {'eigenvalue_w1': float(w1), 'subspace_cos': cos_largest}
+    return {"eigenvalue_w1": float(w1), "subspace_cos": cos_largest}
 
-def commute_time_trace_gap(Px, Py, r=64, symmetric_hint=False, hutchinson_probes=None, random_state=None):
+
+def commute_time_trace_gap(
+    Px, Py, r=64, symmetric_hint=False, hutchinson_probes=None, random_state=None
+):
     """
     Global connectivity gap via (approximate) trace of Laplacian pseudoinverse.
 
@@ -650,28 +708,39 @@ def commute_time_trace_gap(Px, Py, r=64, symmetric_hint=False, hutchinson_probes
         A = _ensure_csr(A)
         d = np.asarray(A.sum(axis=1)).ravel()
         d[d <= 0] = 1e-12
-        Dm12 = sp.diags(1.0/np.sqrt(d))
-        Lsym = sp.eye(A.shape[0], format='csr') - Dm12 @ A @ Dm12
-        k = min(r+1, A.shape[0]-1)
-        vals, _ = spla.eigsh(Lsym, k=k, which='SM', tol=1e-4, maxiter=A.shape[0]*5, v0=np.ones(A.shape[0]))
+        Dm12 = sp.diags(1.0 / np.sqrt(d))
+        Lsym = sp.eye(A.shape[0], format="csr") - Dm12 @ A @ Dm12
+        k = min(r + 1, A.shape[0] - 1)
+        vals, _ = spla.eigsh(
+            Lsym,
+            k=k,
+            which="SM",
+            tol=1e-4,  # type: ignore
+            maxiter=A.shape[0] * 5,
+            v0=np.ones(A.shape[0]),
+        )
         vals = np.sort(vals)
         vals = vals[1:]  # drop the 0 eigenvalue
         vals = vals[vals > 1e-12]
-        return float(np.sum(1.0/vals))
+        return float(np.sum(1.0 / vals))
+
     tx = _trace_pinv_laplacian(Px)
     ty = _trace_pinv_laplacian(Py)
     return float(abs(tx - ty))
+
 
 # ----------------------------
 # Composite score
 # ----------------------------
 
+
 def topo_preserve_score(
-    Px, Py,
+    Px,
+    Py,
     times=(1, 2, 4, 8),
     r: int = 64,
     symmetric_hint: bool = False,
-    k_for_pf1: int = None,
+    k_for_pf1: int | None = None,
     weights: dict = dict(PF1=0.30, PJS=0.30, SP=0.30),
 ):
     """
@@ -739,18 +808,25 @@ def topo_preserve_score(
         d = np.asarray(A.sum(axis=1)).ravel()
         d[d <= 0] = 1e-12
         Dm12 = sp.diags(1.0 / np.sqrt(d))
-        Lsym = sp.eye(A.shape[0], format='csr') - Dm12 @ A @ Dm12
+        Lsym = sp.eye(A.shape[0], format="csr") - Dm12 @ A @ Dm12
         # Smallest eigenvalues of Lsym; drop the trivial 0 mode
         k = min(int(r) + 1, A.shape[0] - 1) if A.shape[0] > 2 else 1
-        vals, _ = spla.eigsh(Lsym, k=k, which='SM', tol=1e-4,
-                             maxiter=A.shape[0]*5, v0=np.ones(A.shape[0]))
+        vals, _ = spla.eigsh(
+            Lsym,
+            k=k,
+            which="SM",
+            tol=1e-4,  # type: ignore
+            maxiter=A.shape[0] * 5,
+            v0=np.ones(A.shape[0]),
+        )
         vals = np.sort(vals)
         vals = vals[1:]  # drop the 0 eigenvalue
         vals = vals[vals > 1e-12]
         return float(np.sum(1.0 / vals)) if vals.size else np.inf
 
     # --- ensure CSR ---
-    Px = _ensure_csr(Px); Py = _ensure_csr(Py)
+    Px = _ensure_csr(Px)
+    Py = _ensure_csr(Py)
 
     # --- components ---
     # PF1: set-overlap of top-k transition supports

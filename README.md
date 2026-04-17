@@ -10,7 +10,7 @@
 
 > **Fork notice:** This is a heavily modified fork of
 > [topometry](https://github.com/davisidarta/topometry) by David S Oliveira,
-> It has diverged significantly and may or may not be maintained independently.
+> It has diverged significantly and may or may not be maintained independently. Most likely unmaintained. 
 
 **TopoMetry** is a geometry-aware Python toolkit for exploring high-dimensional data via diffusion/Laplacian operators. It learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** and then finds clusters and builds low-dimensional layouts for analysis and visualization.
 
@@ -43,22 +43,20 @@ Empirically, TopoMetry often outperforms PCA-based pipelines and stand-alone lay
 
 ## Installation
 
-Prior to installing TopoMetry, make sure you have [cmake](https://cmake.org/), [scikit-build](https://scikit-build.readthedocs.io/en/latest/) and [setuptools](https://setuptools.readthedocs.io/en/latest/) available in your system. If using Linux:
-```
-sudo apt-get install cmake
-pip install scikit-build setuptools
-```
 
-Then you can install TopoMetry from PyPI:
+Install with [uv](https://docs.astral.sh/uv/) **(Recommended)**:
 
 ```
-pip install topometry
+uv sync
+
 ```
+
+With pip or conda, you're on your own.
 
 
 ## Tutorials and documentation
 
-Check TopoMetry's [documentation](https://topometry.readthedocs.io/en/latest/) for tutorials, guided analyses and other documentation.
+Check TopoMetry's **(OLD)** [documentation](https://topometry.readthedocs.io/en/latest/) for tutorials, guided analyses and other documentation.
 
 
 
@@ -88,7 +86,7 @@ tg.project_graph_layouts()
 Example output for `notebooks/example.ipynb`:
 
 
-![TopOMetry pipeline example](topo/example.png)
+![TopOMetry fit example](topo/example.png)
 
 ## Changelog
 

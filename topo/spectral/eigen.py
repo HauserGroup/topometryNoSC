@@ -8,20 +8,30 @@ from warnings import warn
 import numpy as np
 from sklearn.utils import check_random_state
 from scipy.linalg import eigh
-from topo.spectral import graph_laplacian, diffusion_operator, LE 
+from topo.spectral import graph_laplacian, diffusion_operator, LE
 from sklearn.base import BaseEstimator, TransformerMixin
 from scipy import sparse
 from topo.tpgraph.kernels import Kernel
-EIGEN_SOLVERS = ['dense', 'arpack', 'lobpcg']
+
+EIGEN_SOLVERS = ["dense", "arpack", "lobpcg"]
 try:
     from pyamg import smoothed_aggregation_solver
+
     PYAMG_LOADED = True
-    EIGEN_SOLVERS.append('amg')
+    EIGEN_SOLVERS.append("amg")
 except ImportError:
     PYAMG_LOADED = False
 
 
-def eigendecompose(G, n_components=8, eigensolver='arpack', largest=True, eigen_tol=1e-4, random_state=None, verbose=False):
+def eigendecompose(
+    G,
+    n_components=8,
+    eigensolver="arpack",
+    largest=True,
+    eigen_tol=1e-4,
+    random_state=None,
+    verbose=False,
+):
     """
     Eigendecomposition of a graph matrix.
 
@@ -59,7 +69,7 @@ def eigendecompose(G, n_components=8, eigensolver='arpack', largest=True, eigen_
     random_state : int or numpy.random.RandomState() (optional, default None).
         A pseudo random number generator used for the initialization of the
         lobpcg eigen vectors decomposition when eigen_solver == 'amg'.
-        By default, arpack is used.  
+        By default, arpack is used.
 
 
     Returns
@@ -70,47 +80,60 @@ def eigendecompose(G, n_components=8, eigensolver='arpack', largest=True, eigen_
     eigen_vectors : array, shape (n_vertices, n_components + 1)
         Eigenvectors of the graph matrix.
     """
-    n_components = n_components+1
+    n_components = n_components + 1
     N = G.shape[0]
     if eigensolver not in EIGEN_SOLVERS:
-        raise ValueError('Unknown eigensolver %s' % eigensolver)
+        raise ValueError("Unknown eigensolver %s" % eigensolver)
     random_state = check_random_state(random_state)
-    if not sparse.issparse(G) and eigensolver != 'dense':
+    if not sparse.issparse(G) and eigensolver != "dense":
         if verbose:
-            print('Dense input and `eigensolver` set to %s' %
-                eigensolver + '.' + '\n Converting to CSR matrix.')
+            print(
+                "Dense input and `eigensolver` set to %s" % eigensolver
+                + "."
+                + "\n Converting to CSR matrix."
+            )
         G = sparse.csr_matrix(G)
-    if eigensolver == 'dense':
+    if eigensolver == "dense":
         if sparse.issparse(G):
             if verbose:
-                print('Sparse input and `eigensolver` set to %s' %
-                    eigensolver + '.' + '\n Converting to dense array.')
+                print(
+                    "Sparse input and `eigensolver` set to %s" % eigensolver
+                    + "."
+                    + "\n Converting to dense array."
+                )
             G = G.toarray()
         evals, evecs = eigh(G)
     if sparse.issparse(G):
         if not isinstance(G, sparse.csr_matrix):
             G = G.tocsr()
     G = G.astype(float)
-    if eigensolver == 'arpack':
+    if eigensolver == "arpack":
         if largest:
-            which = 'LM'
+            which = "LM"
         else:
-            which = 'SM'
+            which = "SM"
         evals, evecs = sparse.linalg.eigsh(
-            G, k=n_components, which=which, tol=eigen_tol, maxiter=N * 5)
-    elif eigensolver == 'lobpcg':
+            G, k=n_components, which=which, tol=eigen_tol, maxiter=N * 5
+        )
+    elif eigensolver == "lobpcg":
         evals, evecs = sparse.linalg.lobpcg(
-            G, random_state.normal(size=(G.shape[0], n_components)), largest=largest, tol=eigen_tol, maxiter=N // 5)
-    elif eigensolver == 'amg':
+            G,
+            random_state.normal(size=(G.shape[0], n_components)),
+            largest=largest,
+            tol=eigen_tol,
+            maxiter=N // 5,
+        )
+    elif eigensolver == "amg":
         if not PYAMG_LOADED:
             raise ImportError(
-                'Using "amg" as eigensolver requires pyamg, which is not installed. Install it with pip install pyamg')
+                'Using "amg" as eigensolver requires pyamg, which is not installed. Install it with pip install pyamg'
+            )
         # for numerical stability
         np.random.set_state(random_state.get_state())
         # Use AMG to get a preconditioner and speed up the eigenvalue problem.
         ml = smoothed_aggregation_solver(G)
         M = ml.aspreconditioner()
-        n_find = min(N, 5 + 2*n_components)
+        n_find = min(N, 5 + 2 * n_components)
         X = random_state.rand(N, n_find)
         X[:, 0] = (G.diagonal()).ravel()
         evals, evecs = sparse.linalg.lobpcg(G, X, M=M, largest=largest)
@@ -130,7 +153,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
     Scikit-learn flavored class for computing eigendecompositions of sparse symmetric matrices.
     and exploring the associated eigenvectors and eigenvalues.
     Takes as main input a `topo.tpgraph.Kernel()` object or a symmetric matrix, which can be either an adjacency/affinity matrix,
-    a kernel, a graph laplacian, or a diffusion operator. 
+    a kernel, a graph laplacian, or a diffusion operator.
 
     Parameters
     ----------
@@ -143,7 +166,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         * 'bottom' : computes the bottom eigenpairs of the matrix.
         * 'msDM' : computes the eigenpairs of the diffusion operator on the matrix, and multiscales them. If a `Kernel()` object is provided, will use the computed diffusion operator if available.
         * 'DM' : computes the eigenpairs of the diffusion operator on the matrix. If a `Kernel()` object is provided, will use the computed diffusion operator if available.
-        * 'LE' : computes the eigenpairs of the graph laplacian on the matrix. If a `Kernel()` object is provided, will use the computed graph laplacian if available. 
+        * 'LE' : computes the eigenpairs of the graph laplacian on the matrix. If a `Kernel()` object is provided, will use the computed graph laplacian if available.
 
     eigensolver : string (optional, default 'arpack').
         Method for computing the eigendecomposition. Can be either 'arpack', 'lobpcg', 'amg' or 'dense'.
@@ -167,7 +190,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         The type of Laplacian to compute. Possible values are: 'normalized', 'unnormalized', 'random_walk' and 'geometric'.
 
     anisotropy : float (optional, default 0).
-        The anisotropy (alpha) parameter in the diffusion maps literature for kernel reweighting.     
+        The anisotropy (alpha) parameter in the diffusion maps literature for kernel reweighting.
 
     eigen_tol : float (optional, default 0.0).
         Error tolerance for the eigenvalue solver. If 0, machine precision is used.
@@ -182,25 +205,27 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
     random_state : int or numpy.random.RandomState() (optional, default None).
         A pseudo random number generator used for the initialization of the
         lobpcg eigen vectors decomposition when eigen_solver == 'amg'.
-        By default, arpack is used.  
+        By default, arpack is used.
 
     """
 
-    def __init__(self,
-                 n_components=10,
-                 method='DM',
-                 eigensolver='arpack',
-                 eigen_tol=1e-4,
-                 drop_first=True,
-                 weight=True,
-                 laplacian_type='random_walk',
-                 anisotropy=1,
-                 t=1,
-                 random_state=None,
-                 return_evals=False,
-                 estimate_eigengap=True,
-                 enforce_min_eigs=True,
-                 verbose=False):
+    def __init__(
+        self,
+        n_components=10,
+        method="DM",
+        eigensolver="arpack",
+        eigen_tol=1e-4,
+        drop_first=True,
+        weight=True,
+        laplacian_type="random_walk",
+        anisotropy=1,
+        t=1,
+        random_state=None,
+        return_evals=False,
+        estimate_eigengap=True,
+        enforce_min_eigs=True,
+        verbose=False,
+    ):
         self.n_components = n_components
         self.method = method
         self.eigensolver = eigensolver
@@ -227,27 +252,26 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
 
     def __repr__(self):
         if self.eigenvectors is not None:
-            if (self.N is not None):
-                msg = "EigenDecomposition() estimator fitted with %i samples" % (
-                    self.N)
+            if self.N is not None:
+                msg = "EigenDecomposition() estimator fitted with %i samples" % (self.N)
             else:
                 msg = "EigenDecomposition() estimator without fitted data."
         else:
             msg = "EigenDecomposition() estimator without any fitted data."
         if self.eigenvectors is not None:
-            if self.method == 'DM':
+            if self.method == "DM":
                 msg += " using Diffusion Maps"
-            elif self.method == 'msDM':
+            elif self.method == "msDM":
                 msg += " using multiscale Diffusion Maps"
-            elif self.method == 'LE':
+            elif self.method == "LE":
                 msg += " using Laplacian Eigenmaps"
-            elif self.method == 'top':
+            elif self.method == "top":
                 msg += " using top eigenpairs"
-            elif self.method == 'bottom':
+            elif self.method == "bottom":
                 msg += " using bottom eigenpairs"
             if self.weight:
                 msg += ", weighted by the square root of the eigenvalues"
-            msg += '.'
+            msg += "."
         return msg
 
     def fit(self, X):
@@ -257,9 +281,9 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         Parameters
         ----------
         X : array-like, shape (n_samples, n_samples)
-            Matrix to be decomposed. Should generally be an adjacency, affinity/kernel/similarity, Laplacian matrix or a diffusion-type operator. 
+            Matrix to be decomposed. Should generally be an adjacency, affinity/kernel/similarity, Laplacian matrix or a diffusion-type operator.
 
-        Returns 
+        Returns
         -------
         self : object
             Returns the instance itself, with eigenvectors stored at EigenDecomposition.eigenvectors
@@ -267,16 +291,17 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             If 'method' is 'DM' or 'LE', the diffusion operator or graph laplacian is stored at EigenDecomposition.diffusion_operator
             or EigenDecomposition.graph_laplacian, respectively.
         """
-        if self.method not in ['msDM','DM', 'LE', 'top', 'bottom']:
+        if self.method not in ["msDM", "DM", "LE", "top", "bottom"]:
             raise ValueError(
-                "Method must be one of 'msDM','DM', 'LE', 'top', 'bottom'.")
-        if self.method in ['msDM', 'DM', 'top']:
+                "Method must be one of 'msDM','DM', 'LE', 'top', 'bottom'."
+            )
+        if self.method in ["msDM", "DM", "top"]:
             largest = True
         else:
             largest = False
         if isinstance(X, Kernel):
             self.N = X.N
-            if self.method == 'DM' or self.method == 'msDM':
+            if self.method == "DM" or self.method == "msDM":
                 self.diffusion_operator = X.P
                 if X.D_inv_sqrt_ is not None:
                     self.D_inv_sqrt_ = X.D_inv_sqrt_
@@ -284,7 +309,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                 else:
                     symmetric = False
                 target = self.diffusion_operator
-            elif self.method == 'LE':
+            elif self.method == "LE":
                 self.laplacian = X.L
                 target = self.laplacian
             else:
@@ -292,34 +317,50 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         elif isinstance(X, np.ndarray) or isinstance(X, sparse.csr_matrix):
             if self.D_inv_sqrt_ is None:
                 symmetric = False
-                
+
             self.N = X.shape[0]
-            if self.method == 'DM':
+            if self.method == "DM":
                 if symmetric:
                     self.diffusion_operator, self.D_inv_sqrt_ = diffusion_operator(
-                        X, alpha=self.anisotropy, symmetric=True, return_D_inv_sqrt=True)
+                        X, alpha=self.anisotropy, symmetric=True, return_D_inv_sqrt=True
+                    )
                 else:
                     self.diffusion_operator = diffusion_operator(
-                        X, alpha=self.anisotropy, symmetric=False, return_D_inv_sqrt=False)
+                        X,
+                        alpha=self.anisotropy,
+                        symmetric=False,
+                        return_D_inv_sqrt=False,
+                    )
                 target = self.diffusion_operator
 
-            elif self.method == 'msDM':
+            elif self.method == "msDM":
                 if symmetric:
                     self.diffusion_operator, self.D_inv_sqrt_ = diffusion_operator(
-                        X, alpha=self.anisotropy, symmetric=True, return_D_inv_sqrt=True)
+                        X, alpha=self.anisotropy, symmetric=True, return_D_inv_sqrt=True
+                    )
                 else:
                     self.diffusion_operator = diffusion_operator(
-                        X, alpha=self.anisotropy, symmetric=False, return_D_inv_sqrt=False)
+                        X,
+                        alpha=self.anisotropy,
+                        symmetric=False,
+                        return_D_inv_sqrt=False,
+                    )
                 target = self.diffusion_operator
 
-            elif self.method == 'LE':
-                self.laplacian = graph_laplacian(
-                    X, laplacian_type=self.laplacian_type)
+            elif self.method == "LE":
+                self.laplacian = graph_laplacian(X, laplacian_type=self.laplacian_type)
                 target = self.laplacian
             else:
                 target = X
-        evals, evecs = eigendecompose(target, eigensolver=self.eigensolver, n_components=self.n_components,
-                                    largest=largest, eigen_tol=self.eigen_tol, random_state=self.random_state, verbose=self.verbose)
+        evals, evecs = eigendecompose(
+            target,
+            eigensolver=self.eigensolver,
+            n_components=self.n_components,
+            largest=largest,
+            eigen_tol=self.eigen_tol,
+            random_state=self.random_state,
+            verbose=self.verbose,
+        )
 
         if self.drop_first:
             evals = evals[1:]
@@ -327,7 +368,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
 
         if self.estimate_eigengap:
             max_eigs = int(np.sum(evals > 0, axis=0))
-            if self.method not in ['LE', 'top', 'bottom']:
+            if self.method not in ["LE", "top", "bottom"]:
                 first_diff = np.diff(evals)
                 eg = np.argmax(first_diff) + 1
                 self.eigengap = max_eigs if max_eigs == len(evals) else eg
@@ -335,16 +376,15 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                 self.eigengap = max_eigs
 
         # Normalize eigenvectors if DM/msDM; store, but DO NOT build embedding here.
-        if self.method in ['DM', 'msDM']:
+        if self.method in ["DM", "msDM"]:
             if symmetric and self.D_inv_sqrt_ is not None:
                 evecs = self.D_inv_sqrt_.dot(evecs)
             for i in range(evecs.shape[1]):
                 evecs[:, i] = evecs[:, i] / np.linalg.norm(evecs[:, i])
 
         self.eigenvectors = evecs
-        self.eigenvalues  = evals
+        self.eigenvalues = evals
         return self
-
 
     def rescale(self, use_eigs=50):
         """
@@ -356,12 +396,12 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             Number of eigenvectors to include in the embedding
             (must be ≤ the number retained during ``fit``).
         """
-        if self.method != 'msDM':
+        if self.method != "msDM":
             raise ValueError(
-                "Rescaling is only available for multiscale diffusion maps.")
+                "Rescaling is only available for multiscale diffusion maps."
+            )
         if use_eigs > self.eigenvectors.shape[1]:
-            raise ValueError(
-                "Cannot rescale to more eigenvectors than are available.")
+            raise ValueError("Cannot rescale to more eigenvectors than are available.")
         use_eigs = int(use_eigs)
         eig_vals = np.ravel(self.eigenvalues[:use_eigs])
         self.embedding = self.eigenvectors[:, :use_eigs] * (eig_vals / (1 - eig_vals))
@@ -377,11 +417,11 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             Eigenvectors of the matrix. If using 'msDM', returns the multiscaled eigenvectors.
         evals : array-like, shape (n_components, )
             Eigenvalues of the matrix. Returned only if return_evals is True.
-    
+
         """
         if self.eigenvectors is None:
-            raise ValueError('The estimator has not been fitted yet.')
-        if self.method == 'DM' or self.method == 'msDM':
+            raise ValueError("The estimator has not been fitted yet.")
+        if self.method == "DM" or self.method == "msDM":
             if return_evals:
                 return self.embedding, self.eigenvalues
             else:
@@ -391,7 +431,6 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                 return self.eigenvectors, self.eigenvalues
             else:
                 return self.eigenvectors
-
 
     def transform(self, X=None):
         """
@@ -403,10 +442,10 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
           the positive-eigenvalue components.
         """
         if self.eigenvectors is None:
-            raise ValueError('The estimator has not been fitted yet.')
+            raise ValueError("The estimator has not been fitted yet.")
 
         # Return eigenvectors/evals for non-diffusion methods.
-        if self.method not in ['DM', 'msDM']:
+        if self.method not in ["DM", "msDM"]:
             if self.return_evals:
                 return self.eigenvectors, self.eigenvalues
             else:
@@ -415,13 +454,13 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         evecs = self.eigenvectors
         evals = self.eigenvalues
 
-        if self.method == 'DM':
+        if self.method == "DM":
             t = int(self.t) if (self.t is not None and self.t > 1) else 1
-            lam = evals ** t  # apply diffusion time here (no powering in fit)
+            lam = evals**t  # apply diffusion time here (no powering in fit)
             emb = evecs * lam
             self.embedding = emb
 
-        elif self.method == 'msDM':
+        elif self.method == "msDM":
             # msDM scaling: weight each component by λ / (1 - λ), using only
             # positive-eigenvalue components (all of them after drop_first).
             use_eigs = int(np.sum(evals > 0, axis=0))
@@ -435,8 +474,6 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             return self.embedding, self.eigenvalues
         else:
             return self.embedding
-
-            
 
     def fit_transform(self, X=None):
         """
@@ -462,14 +499,14 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             self.fit(X)
         return self.transform(X)
 
-    def spectral_layout(self, X, laplacian_type='normalized', return_evals=False):
+    def spectral_layout(self, X, laplacian_type="normalized", return_evals=False):
         """Given a graph compute the spectral embedding of the graph. This function calls specialized
         routines if the graph has several connected components.
 
         Parameters
         ----------
         X : sparse matrix
-            The (weighted) adjacency matrix of the graph as a sparse matrix. 
+            The (weighted) adjacency matrix of the graph as a sparse matrix.
         laplacian_type : string (optional, default 'normalized').
             The type of laplacian to use. Can be 'unnormalized', 'symmetric' or 'random_walk'.
         return_evals : bool
@@ -483,8 +520,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         evals: array of shape (dim,)
             The eigenvalues of the laplacian of the graph. Only returned if return_evals is True.
         """
-        n_components, labels = sparse.csgraph.connected_components(
-            X, directed=False)
+        n_components, labels = sparse.csgraph.connected_components(X, directed=False)
         if n_components > 1:
             return multi_component_layout(
                 X,
@@ -494,7 +530,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                 laplacian_type,
                 self.random_state,
                 self.eigen_tol,
-                return_evals
+                return_evals,
             )
         else:
             if self.embedding is None:
@@ -509,19 +545,25 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         Plots the eigenspectrum.
         """
         if self.eigenvalues is None:
-            raise ValueError('The estimator has not been fitted yet.')
+            raise ValueError("The estimator has not been fitted yet.")
         try:
             import matplotlib.pyplot as plt
         except ImportError:
-            raise ImportError('matplotlib is required for plotting.')
+            raise ImportError("matplotlib is required for plotting.")
         plt.plot(range(0, len(self.eigenvalues)), self.eigenvalues)
-        plt.xlabel('Eigenvalue index')
-        plt.ylabel('Eigenvalue')
+        plt.xlabel("Eigenvalue index")
+        plt.ylabel("Eigenvalue")
         plt.show()
 
 
-
-def spectral_layout(graph, dim, random_state, laplacian_type='normalized', eigen_tol=10e-4, return_evals=False):
+def spectral_layout(
+    graph,
+    dim,
+    random_state,
+    laplacian_type="normalized",
+    eigen_tol=10e-4,
+    return_evals=False,
+):
     """Given a graph compute the spectral embedding of the graph. This is
     simply the eigenvectors of the laplacian of the graph. Here we use the
     normalized laplacian.
@@ -538,6 +580,7 @@ def spectral_layout(graph, dim, random_state, laplacian_type='normalized', eigen
     embedding: array of shape (n_vertices, dim)
         The spectral embedding of the graph.
     """
+    random_state = check_random_state(random_state)
     n_components, labels = sparse.csgraph.connected_components(graph, directed=False)
 
     if n_components > 1:
@@ -549,7 +592,7 @@ def spectral_layout(graph, dim, random_state, laplacian_type='normalized', eigen
             laplacian_type,
             random_state,
             eigen_tol,
-            return_evals
+            return_evals,
         )
 
     else:
@@ -557,13 +600,13 @@ def spectral_layout(graph, dim, random_state, laplacian_type='normalized', eigen
 
 
 def component_layout(
-        W,
-        n_components,
-        component_labels,
-        dim,
-        laplacian_type='normalized',
-        eigen_tol=10e-4,
-        return_evals=False
+    W,
+    n_components,
+    component_labels,
+    dim,
+    laplacian_type="normalized",
+    eigen_tol=10e-4,
+    return_evals=False,
 ):
     """Provide a layout relating the separate connected components. This is done
     by taking the centroid of each component and then performing a spectral embedding
@@ -601,10 +644,15 @@ def component_layout(
             distance_matrix[c_i, c_j] = dist
             distance_matrix[c_j, c_i] = dist
 
-    affinity_matrix = np.exp(-(distance_matrix ** 2))
+    affinity_matrix = np.exp(-(distance_matrix**2))
 
     component_embedding, evals = LE(
-        affinity_matrix, n_eigs=dim, laplacian_type=laplacian_type, eigen_tol=eigen_tol, return_evals=True)
+        affinity_matrix,
+        n_eigs=dim,
+        laplacian_type=laplacian_type,
+        eigen_tol=eigen_tol,
+        return_evals=True,
+    )
     component_embedding /= component_embedding.max()
     if return_evals:
         return component_embedding, evals
@@ -620,7 +668,7 @@ def multi_component_layout(
     laplacian_type,
     random_state,
     eigen_tol,
-    return_eval_list
+    return_eval_list,
 ):
 
     result = np.empty((graph.shape[0], dim), dtype=np.float32)
@@ -632,7 +680,7 @@ def multi_component_layout(
             component_labels,
             dim,
             laplacian_type,
-            return_evals=False
+            return_evals=False,
         )
         k = dim + 1
     else:
@@ -657,7 +705,7 @@ def multi_component_layout(
             )
             continue
 
-        L = graph_laplacian(graph, laplacian_type)
+        L = graph_laplacian(component_graph, laplacian_type)
         k = dim + 1
         try:
             eigenvalues, eigenvectors = sparse.linalg.eigsh(
@@ -665,8 +713,8 @@ def multi_component_layout(
                 k,
                 which="SM",
                 tol=eigen_tol,
-                v0=np.ones(L.shape[0]),
-                maxiter=graph.shape[0] * 2,
+                v0=np.ones(component_graph.shape[0]),
+                maxiter=component_graph.shape[0] * 2,
             )
             order = np.argsort(eigenvalues)[1:k]
             component_embedding = eigenvectors[:, order]
@@ -678,10 +726,18 @@ def multi_component_layout(
             evals_list.append(eigenvalues[order])
         except sparse.linalg.ArpackError:
             warn(
-                "WARNING: spectral decomposition FAILED! This is likely due to too small an eigengap. Consider\n"
-                "adding some noise or jitter to your data."
+                "WARNING: spectral decomposition failed for one connected component; "
+                "falling back to a random local initialization for that component."
             )
-            return None
+            result[component_labels == label] = (
+                random_state.uniform(
+                    low=-data_range,
+                    high=data_range,
+                    size=(component_graph.shape[0], dim),
+                )
+                + meta_embedding[label]
+            )
+            evals_list.append(np.full(dim, np.nan, dtype=float))
     if return_eval_list:
         return result, evals_list
     else:

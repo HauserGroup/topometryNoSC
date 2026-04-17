@@ -1,6 +1,30 @@
-[build-system]
-requires = [
-    "setuptools",
-    "wheel"
+[project]
+name = "topometry"
+version = "2.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "hnswlib>=0.8.0",
+    "matplotlib>=3.10.8",
+    "numba>=0.65.0",
+    "numpy>=2.4.4",
+    "pacmap>=0.9.1",
+    "pandas>=3.0.2",
+    "pymde>=0.3.0",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.17.1",
+    "trimap>=1.1.5",
+    "umap-learn>=0.5.12",
 ]
-build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "nbstripout>=0.9.1",
+    "pre-commit>=4.5.1",
+    "pytest>=8.0",
+    "ruff>=0.15.11",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

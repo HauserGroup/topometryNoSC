@@ -8,11 +8,11 @@ No prior knowledge of differential geometry is required. Where equations appear,
 
 ## 1. The Manifold Hypothesis
 
-Single-cell RNA sequencing measures the expression of tens of thousands of genes per cell, producing a data point in a space of dimension $D \sim 10^4$. Most of this space is empty: biologically meaningful states — cell types, differentiation trajectories, cell-cycle phases — live along smooth, low-dimensional paths or surfaces.
+Image embeddings, text representations, sensor arrays, genomics — modern data collection routinely produces observations in a space of dimension $D \sim 10^2$–$10^4$. Most of this space is empty: meaningful states live along smooth, low-dimensional paths or surfaces.
 
 This is the **manifold hypothesis**: the data lie (approximately) on a smooth $d$-dimensional manifold $\mathcal{M}$ embedded in the ambient $\mathbb{R}^D$, with intrinsic dimension $d \ll D$.
 
-Think of it this way: a spiral of cells differentiating from stem to mature state traces a 1-dimensional curve through thousands of gene dimensions. The biologically informative structure is the curve, not the 10,000-dimensional box it sits in.
+Think of it this way: a spiral of data points tracing a smooth transition traces a 1-dimensional curve through thousands of feature dimensions. The informative structure is the curve, not the high-dimensional box it sits in.
 
 The challenge for any analysis method is to *respect this intrinsic geometry* rather than imposing the geometry of the ambient box.
 
@@ -20,16 +20,16 @@ The challenge for any analysis method is to *respect this intrinsic geometry* ra
 
 ## 2. Why PCA Falls Short
 
-The standard approach — PCA followed by kNN graph construction — projects data onto the directions of maximum *global* variance in gene space. This is mathematically equivalent to finding the best-fitting flat (hyperplane) subspace.
+The standard approach — PCA followed by kNN graph construction — projects data onto the directions of maximum *global* variance in feature space. This is mathematically equivalent to finding the best-fitting flat (hyperplane) subspace.
 
-The problem: **curved manifolds cannot be faithfully represented by flat subspaces**. A spiral cannot be unrolled by projecting onto a plane without distorting distances along the spiral. 
+The problem: **curved manifolds cannot be faithfully represented by flat subspaces**. A spiral cannot be unrolled by projecting onto a plane without distorting distances along the spiral.
 
 More precisely: for PCA to preserve the geometry of $\mathcal{M}$, the tangent plane to $\mathcal{M}$ at *every* data point would need to point in the same direction — but on a curved manifold, tangent planes rotate as you move along the surface. A single global projection cannot align with all of them simultaneously.
 
 This creates two compounding problems:
 
-1. **Geometric distortion**: Euclidean distances in PCA space are poor proxies for actual distances along the manifold. Nearby cells on the manifold may appear far apart (or vice versa) after projection.
-2. **Dropped signal**: Rare cell types and subtle trajectories often vary in directions of *low* global variance. PCA discards exactly these directions, making rare populations invisible.
+1. **Geometric distortion**: Euclidean distances in PCA space are poor proxies for actual distances along the manifold. Nearby points on the manifold may appear far apart (or vice versa) after projection.
+2. **Dropped signal**: Rare subpopulations and subtle trajectories often vary in directions of *low* global variance. PCA discards exactly these directions, making rare groups invisible.
 
 TopoMetry addresses both problems by working directly with the intrinsic geometry of the data manifold, using operators derived from the **Laplace-Beltrami Operator**.
 
@@ -83,7 +83,7 @@ $$
 x \mapsto \left(e^{-\tilde\lambda_1 t/2}\varphi_1(x),\; e^{-\tilde\lambda_2 t/2}\varphi_2(x),\; \ldots\right)
 $$
 
-is an **isometric embedding** of $\mathcal{M}$: squared distances in this infinite-dimensional representation converge to geodesic distances squared as $t \to 0$. This is the rigorous theoretical foundation for Diffusion Maps — and for why diffusing on a cell graph is geometrically meaningful.
+is an **isometric embedding** of $\mathcal{M}$: squared distances in this infinite-dimensional representation converge to geodesic distances squared as $t \to 0$. This is the rigorous theoretical foundation for Diffusion Maps — and for why diffusing on a data graph is geometrically meaningful.
 
 ---
 
@@ -95,7 +95,7 @@ $$
 \frac{1}{nh^{d/2+1}} L f(x_i) \;\xrightarrow{n\to\infty}\; C_d\!\left[\Delta_\mathcal{M} f + g(\nabla \log p,\, \nabla f)\right]
 $$
 
-The extra term $g(\nabla \log p, \nabla f)$ is a **drift towards high-density regions**: the random walk is pulled toward wherever there are more cells, regardless of geometry. In single-cell data, $p(x)$ reflects both true biology and artefacts (sequencing depth, cell cycle, donor variation). The standard pipeline — kNN graph without density correction — therefore encodes a mixture of geometry and sampling statistics rather than pure manifold structure (in addition to the distortions introduced by PCA).
+The extra term $g(\nabla \log p, \nabla f)$ is a **drift towards high-density regions**: the random walk is pulled toward wherever there are more data points, regardless of geometry. In practice, $p(x)$ reflects both true structure and artefacts (sampling bias, batch effects, noise). The standard pipeline — kNN graph without density correction — therefore encodes a mixture of geometry and sampling statistics rather than pure manifold structure.
 
 ---
 
@@ -147,7 +147,7 @@ $$
 T_{ij} = \frac{k_\varepsilon^{(\alpha)}(x_i, x_j)}{\sum_j k_\varepsilon^{(\alpha)}(x_i, x_j)}
 $$
 
-$T$ describes a random walk on the cell graph: entry $T_{ij}$ is the probability of moving from cell $i$ to cell $j$ in one step. Its eigenpairs $\{(\lambda_k, \psi_k)\}$ satisfy $T\, \psi_k = \lambda_k\, \psi_k$.
+$T$ describes a random walk on the data graph: entry $T_{ij}$ is the probability of moving from point $i$ to point $j$ in one step. Its eigenpairs $\{(\lambda_k, \psi_k)\}$ satisfy $T\, \psi_k = \lambda_k\, \psi_k$.
 
 **TopoMetry's eigenvalues live in $(0, 1]$ and are stored in decreasing order:**
 
@@ -163,7 +163,7 @@ $$
 
 where $\tilde\lambda_k \geq 0$ are the increasing LBO eigenvalues and $\varepsilon$ is the kernel bandwidth. A diffusion eigenvalue near 1 means the corresponding mode is smooth and geometrically persistent; a diffusion eigenvalue near 0 means the mode is noisy and rapidly-decaying.
 
-The trivial eigenvalue $\lambda_0 = 1$ (the constant eigenfunction, meaning every cell looks the same at all scales) is always discarded (`drop_first=True`). The eigenspectrum (`tg.eigenspectrum()`) plots $\lambda_1 \geq \lambda_2 \geq \cdots$ — a decreasing curve that "elbows" toward zero as modes transition from signal to noise.
+The trivial eigenvalue $\lambda_0 = 1$ (the constant eigenfunction, meaning every point looks the same at all scales) is always discarded (`drop_first=True`). The eigenspectrum (`tg.eigenspectrum()`) plots $\lambda_1 \geq \lambda_2 \geq \cdots$ — a decreasing curve that "elbows" toward zero as modes transition from signal to noise.
 
 > **Floating-point note**: At 64-bit double precision, theoretically zero eigenvalues may be computed as small negative numbers (e.g., $-10^{-16}$). TopoMetry's msDM weighting uses $\lambda_k / (1 - \lambda_k)$, which diverges for $\lambda_k \to 1^-$ and is undefined for $\lambda_k \leq 0$. The code therefore uses only components satisfying $\lambda_k > 0$, making the pipeline numerically robust to this floating-point artefact.
 
@@ -175,7 +175,7 @@ When the `method='LE'` option is used, TopoMetry instead decomposes the graph La
 
 ## 8. The Spectral Scaffold: DM and msDM
 
-The eigenvectors $\{\psi_k\}$ of $T$ converge to the eigenfunctions of $\Delta_\mathcal{M}$ — the "Fourier modes" of the cell-state manifold, ordered from smoothest ($\psi_1$, encoding global structure) to most oscillatory ($\psi_m$, encoding fine-scale detail).
+The eigenvectors $\{\psi_k\}$ of $T$ converge to the eigenfunctions of $\Delta_\mathcal{M}$ — the "Fourier modes" of the data manifold, ordered from smoothest ($\psi_1$, encoding global structure) to most oscillatory ($\psi_m$, encoding fine-scale detail).
 
 ### Diffusion Maps (DM)
 
@@ -187,11 +187,11 @@ $$
 
 Since $\lambda_k \in (0,1)$, raising to the power $t > 1$ suppresses small (noisy) eigenvalues more aggressively than large (geometrically meaningful) ones. The squared Euclidean distance in this space equals the **diffusion distance** — robust to noise because it integrates over all $t$-step paths simultaneously, not just the shortest path.
 
-TopoMetry stores the DM scaffold as `X_spectral_scaffold` in `adata.obsm`.
+TopoMetry stores the DM scaffold as `X_spectral_scaffold`.
 
 ### Multiscale Diffusion Maps (msDM)
 
-For datasets with hierarchical structure (e.g., a cell-type tree with both broad lineages and fine sub-populations), a fixed diffusion time $t$ captures only one geometric scale. The **multiscale Diffusion Map** aggregates over all $t \geq 1$ via the geometric series $\sum_{t=1}^\infty \lambda^t = \lambda/(1-\lambda)$:
+For datasets with hierarchical structure (e.g., a tree with both broad groups and fine sub-populations), a fixed diffusion time $t$ captures only one geometric scale. The **multiscale Diffusion Map** aggregates over all $t \geq 1$ via the geometric series $\sum_{t=1}^\infty \lambda^t = \lambda/(1-\lambda)$:
 
 $$
 \Psi_{\text{ms}}(x_i) = \left(\frac{\lambda_k}{1 - \lambda_k}\,\psi_k(x_i)\right)_{k=1}^m, \qquad \lambda_k > 0
@@ -199,7 +199,7 @@ $$
 
 The weight $\lambda_k / (1-\lambda_k)$ is monotone increasing in $\lambda_k$: eigenmodes with large eigenvalues (globally-persistent geometry) are upweighted; eigenmodes with small eigenvalues (local fluctuations) are downweighted. This simultaneously encodes structure at all scales in a single representation.
 
-TopoMetry uses the msDM scaffold as its default high-dimensional coordinate system, stored as `X_ms_spectral_scaffold` in `adata.obsm`.
+TopoMetry uses the msDM scaffold as its default high-dimensional coordinate system, stored as `X_ms_spectral_scaffold`.
 
 ### Reading the Eigenspectrum
 
@@ -223,24 +223,24 @@ $$
 
 where $J_f$ is the Jacobian of $f$. If the embedding is isometric, all singular values $\sigma_k$ of $J_f$ equal 1. Deviations measure distortion:
 
-- **Contraction** ($\sigma_k < 1$): the embedding compresses distances — cells that are far on the manifold appear close in the plot.
-- **Expansion** ($\sigma_k > 1$): the embedding stretches distances — cells that are close on the manifold appear far in the plot.
+- **Contraction** ($\sigma_k < 1$): the embedding compresses distances — points that are far on the manifold appear close in the plot.
+- **Expansion** ($\sigma_k > 1$): the embedding stretches distances — points that are close on the manifold appear far in the plot.
 - **Anisotropy** ($\sigma_1/\sigma_d \gg 1$): different directions are distorted by different amounts — trajectories are bent or twisted.
 
-The `tp.sc.plot_riemann_diagnostics()` and `tp.sc.calculate_deformation_on_projection()` functions compute these local distortion fields and overlay them on 2D embeddings, turning a qualitative visualisation into a quantitatively interpretable map.
+The `tg.riemann_diagnostics()` method computes these local distortion fields and overlays them on 2D embeddings, turning a qualitative visualisation into a quantitatively interpretable map.
 
 ---
 
 ## 10. TopoMetry's Pipeline: Putting It All Together
 
 ```
-Raw expression matrix (n cells × D genes)
+Data matrix (n samples × D features)
         │
         ▼
-  Normalise + HVG selection + Z-score scaling
+  (Optional) Feature selection + scaling
         │
         ▼
-  1. kNN graph in HVG space  (no PCA)
+  1. kNN graph in feature space  (no PCA)
         │
         ▼
   2. Density-corrected diffusion operator T  [bw_adaptive: local bandwidth + α=1]
@@ -264,9 +264,9 @@ Raw expression matrix (n cells × D genes)
   7. Evaluation: geometry-preservation scores and distortion quantification via Riemannian metric
 ```
 
-**Step 1 (kNN in HVG space, not PC space)** avoids the metric distortion introduced by PCA. After variance-stabilising normalisation, Euclidean distances in HVG space are already a reasonable proxy for geodesic distances — unlike distances in PCA space, which are distorted by curvature and by directions discarded by the projection.
+**Step 1 (kNN in feature space, not PC space)** avoids the metric distortion introduced by PCA. With appropriate preprocessing, Euclidean distances in feature space are already a reasonable proxy for geodesic distances — unlike distances in PCA space, which are distorted by curvature and by directions discarded by the projection.
 
-**Steps 2–3** implement the density-corrected LBO approximation. The eigenvectors of the resulting diffusion operator converge to the LBO eigenfunctions on the cell-state manifold. Critically, the eigenvalues are in $(0,1]$ and decreasing — large values mark geometrically meaningful modes, small values near 0 mark noise.
+**Steps 2–3** implement the density-corrected LBO approximation. The eigenvectors of the resulting diffusion operator converge to the LBO eigenfunctions on the data manifold. Critically, the eigenvalues are in $(0,1]$ and decreasing — large values mark geometrically meaningful modes, small values near 0 mark noise.
 
 **Step 5** is a second round of diffusion on the scaffold coordinates, further smoothing residual noise while preserving the structure captured in the first decomposition.
 
@@ -276,17 +276,17 @@ Raw expression matrix (n cells × D genes)
 
 ## 11. Summary: Why This Is Better
 
-| Property              | PCA-based pipelines (Seurat, Scanpy default)                                | TopoMetry                                                      |
+| Property              | PCA-based pipelines                                                         | TopoMetry                                                      |
 | --------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | Geometry model        | Global linear (flat)                                                        | Local nonlinear (curved manifold)                              |
 | Density bias          | Present ($\alpha=0$ → converges to $\Delta_p \neq \Delta_\mathcal{M}$) | Removed ($\alpha=1$ or CkNN)                                 |
 | Eigenvalue type       | Variance fractions (no diffusion time)                                      | Diffusion operator:$1 \geq \lambda_1 \geq \cdots \geq 0$     |
 | Scale sensitivity     | Single scale (fixed$k$ PCs)                                               | Multi-scale (msDM:$\lambda/(1-\lambda)$ sums over all $t$) |
-| Rare-cell detection   | May miss low-variance subtypes                                              | Preserved (no global variance filter)                          |
+| Rare-group detection  | May miss low-variance subtypes                                              | Preserved (no global variance filter)                          |
 | Distortion visible?   | No                                                                          | Yes (Riemannian metric diagnostics)                            |
 | Theoretical guarantee | None (heuristic)                                                            | Convergence to LBO eigenfunctions                              |
 
-In brief: TopoMetry replaces a heuristic pipeline built for computational convenience with one that is mathematically justified to recover the intrinsic geometry of the cell-state manifold. The practical consequence is better separation of rare populations, more faithful trajectories, and visualisations where distortion is explicit rather than hidden.
+In brief: TopoMetry replaces a heuristic pipeline built for computational convenience with one that is mathematically justified to recover the intrinsic geometry of the data manifold. The practical consequence is better separation of rare groups, more faithful trajectories, and visualisations where distortion is explicit rather than hidden.
 
 ---
 
@@ -300,4 +300,4 @@ The mathematical foundations are detailed in:
 - Bérard, Besson & Gallot (1994) — The heat kernel isometric embedding theorem.
 - Hein, Audibert & von Luxburg (2007) — Convergence of graph Laplacians to the LBO.
 
-For a self-contained mathematical treatment covering all of the above in a single-cell context, see the [preprint](https://github.com/davisidarta/topometry).
+For a self-contained mathematical treatment covering all of the above, see the [preprint](https://github.com/davisidarta/topometry).

@@ -5,14 +5,17 @@ from matplotlib.patches import Ellipse
 from sklearn.neighbors import KDTree
 from sklearn.utils import check_random_state
 from topo.eval.rmetric import eigsorted
+
 try:
-    from matplotlib import cm
     import matplotlib.pyplot as plt
 except ImportError:
     print("Matplotlib is required for the plotting functions.")
     sys.exit()
 
-def decay_plot(evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=14, wspace=0.3):
+
+def decay_plot(
+    evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=14, wspace=0.3
+):
     """
     Plot the eigenspectrum decay and its first derivatives.
 
@@ -28,50 +31,54 @@ def decay_plot(evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=14
     A simple plot of the eigenspectrum decay.
 
     """
-    fig, ax = plt.subplots(1,2, figsize=figsize)
+    fig, ax = plt.subplots(1, 2, figsize=figsize)
     fig.subplots_adjust(left=0.08, right=0.98, wspace=wspace)
     max_eigs = int(np.sum(evals > 0, axis=0))
     first_diff = np.diff(evals)
-    sec_diff = np.diff(first_diff)
     eigengap = np.argmax(first_diff) + 1
     ax1 = ax[0]
     if title is not None:
         plt.suptitle(title, fontsize=fontsize)
-    ax1.plot(range(0, len(evals)), evals, 'b')
-    ax1.set_ylabel('Eigenvalues', fontsize=label_fontsize)
-    ax1.set_xlabel('Eigenvectors', fontsize=label_fontsize)
+    ax1.plot(range(0, len(evals)), evals, "b")
+    ax1.set_ylabel("Eigenvalues", fontsize=label_fontsize)
+    ax1.set_xlabel("Eigenvectors", fontsize=label_fontsize)
     if max_eigs == len(evals):
         # Could not find a discrete eigengap crossing 0
         ax1.vlines(
-            eigengap, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Eigengap'
+            eigengap, plt.ylim()[0], plt.ylim()[1], linestyles="--", label="Eigengap"
         )
-        plt.suptitle('Spectrum decay and eigengap (%i)' %
-                      int(eigengap), fontsize=fontsize)
+        plt.suptitle(
+            "Spectrum decay and eigengap (%i)" % int(eigengap), fontsize=fontsize
+        )
     else:
         ax1.vlines(
-            max_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Eigengap'
+            max_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label="Eigengap"
         )
-        plt.suptitle('Spectrum decay and eigengap (%i)' %
-                      int(max_eigs), fontsize=fontsize)
-    ax1.legend(prop={'size': 12}, fontsize=label_fontsize, loc='best')
+        plt.suptitle(
+            "Spectrum decay and eigengap (%i)" % int(max_eigs), fontsize=fontsize
+        )
+    ax1.legend(prop={"size": 12}, fontsize=label_fontsize, loc="best")
     ax2 = ax[1]
-    ax2.set_yscale('log')
+    ax2.set_yscale("log")
     ax2.scatter(range(0, len(first_diff)), np.abs(first_diff))
-    ax2.set_ylabel('Eigenvalues first derivatives (abs)', fontsize=label_fontsize)
-    ax2.set_xlabel('Eigenvalues', fontsize=label_fontsize)
+    ax2.set_ylabel("Eigenvalues first derivatives (abs)", fontsize=label_fontsize)
+    ax2.set_xlabel("Eigenvalues", fontsize=label_fontsize)
     if max_eigs == len(evals):
         # Could not find a discrete eigengap crossing 0
         ax2.vlines(
-            eigengap, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Eigengap'
+            eigengap, plt.ylim()[0], plt.ylim()[1], linestyles="--", label="Eigengap"
         )
     else:
         ax2.vlines(
-            max_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label='Eigengap'
+            max_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label="Eigengap"
         )
     plt.tight_layout()
     return plt.show()
 
-def scatter(res, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral', **kwargs):
+
+def scatter(
+    res, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral", **kwargs
+):
     """
     Basic scatter plot function.
 
@@ -91,7 +98,7 @@ def scatter(res, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral',
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.set_aspect("equal", adjustable="datalim")
-    ax.set_box_aspect(1) 
+    ax.set_box_aspect(1)
     ax.scatter(
         res[:, 0],
         res[:, 1],
@@ -100,162 +107,177 @@ def scatter(res, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral',
         s=pt_size,
         marker=marker,
         alpha=opacity,
-        **kwargs)
+        **kwargs,
+    )
     return plt.show()
 
 
-def scatter3d(res, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
+def scatter3d(res, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
     if len(res[0]) != 3:
-        return print('Expects array with 3 columns. Input has ' + str(int(len(res[0]))) + '.')
+        return print(
+            "Expects array with 3 columns. Input has " + str(int(len(res[0]))) + "."
+        )
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(res[:, 0], res[:, 1], res[:, 2],
-               cmap=cmap,
-               c=labels,
-               s=pt_size,
-               marker=marker,
-               alpha=opacity)
+    ax = fig.add_subplot(111, projection="3d")
+    ax.scatter(
+        res[:, 0],
+        res[:, 1],
+        res[:, 2],
+        cmap=cmap,
+        c=labels,
+        s=pt_size,
+        marker=marker,
+        alpha=opacity,
+    )
     return plt.show()
 
-def hyperboloid(emb, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
+
+def hyperboloid(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
     x, y, z = two_to_3d_hyperboloid(emb)
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(x, y, z,
-               cmap=cmap,
-               c=labels,
-               s=pt_size,
-               marker=marker,
-               alpha=opacity
-               )
+    ax = fig.add_subplot(111, projection="3d")
+    ax.scatter(x, y, z, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
     ax.view_init(35, 80)
     ax.set_aspect("equal", adjustable="datalim")
     return plt.show()
 
 
-
 def two_to_3d_hyperboloid(emb):
     x = emb[:, 0]
     y = emb[:, 1]
-    z = np.sqrt(1 + np.sum(emb ** 2, axis=1))
+    z = np.sqrt(1 + np.sum(emb**2, axis=1))
     return x, y, z
 
-def poincare(emb, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
+
+def poincare(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
     x = emb[:, 0]
     y = emb[:, 1]
-    z = np.sqrt(1 + np.sum(emb ** 2, axis=1))
+    z = np.sqrt(1 + np.sum(emb**2, axis=1))
     disk_x = x / (1 + z)
     disk_y = y / (1 + z)
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    boundary = plt.Circle((0, 0), 1, fc='none', ec='k')
+    boundary = plt.Circle((0, 0), 1, fc="none", ec="k")
     ax.add_artist(boundary)
-    ax.scatter(disk_x, disk_y,
-               cmap=cmap,
-               c=labels,
-               s=pt_size,
-               marker=marker,
-               alpha=opacity)
-    ax.axis('off')
+    ax.scatter(
+        disk_x, disk_y, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity
+    )
+    ax.axis("off")
     ax.set_aspect("equal", adjustable="datalim")
-    ax.set_box_aspect(1) 
+    ax.set_box_aspect(1)
     return plt.show()
 
-def sphere(emb, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
+
+def sphere(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
     x = np.sin(emb[:, 0]) * np.cos(emb[:, 1])
     y = np.sin(emb[:, 0]) * np.sin(emb[:, 1])
     z = np.cos(emb[:, 0])
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(x, y, z,
-               cmap=cmap,
-               c=labels,
-               s=pt_size,
-               marker=marker,
-               alpha=opacity)
+    ax = fig.add_subplot(111, projection="3d")
+    ax.scatter(x, y, z, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
     return plt.show()
 
-def sphere_projection(emb, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
+
+def sphere_projection(
+    emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"
+):
     x = np.sin(emb[:, 0]) * np.cos(emb[:, 1])
     y = np.sin(emb[:, 0]) * np.sin(emb[:, 1])
     z = np.cos(emb[:, 0])
     x = np.arctan2(x, y)
     y = -np.arccos(z)
-    plt.scatter(x, y,
-                cmap=cmap,
-                c=labels,
-                s=pt_size,
-                marker=marker,
-                alpha=opacity)
+    plt.scatter(x, y, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
     return plt.show()
 
 
-def toroid(emb, R=3, r=1, labels=None, pt_size=5, marker='o', opacity=1, cmap='Spectral'):
+def toroid(
+    emb, R=3, r=1, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"
+):
     x = (R + r * np.cos(emb[:, 0])) * np.cos(emb[:, 1])
     y = (R + r * np.cos(emb[:, 0])) * np.sin(emb[:, 1])
     z = r * np.sin(emb[:, 0])
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(x, y, z,
-               cmap=cmap,
-               c=labels,
-               s=pt_size,
-               marker=marker,
-               alpha=opacity)
+    ax = fig.add_subplot(111, projection="3d")
+    ax.scatter(x, y, z, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
     ax.set_zlim3d(-3, 3)
     ax.view_init(35, 70)
     return plt.show()
 
 
-def draw_simple_ellipse(position, width, height, angle,
-                        ax=None, from_size=0.1, to_size=0.5, n_ellipses=3,
-                        alpha=0.1, color=None):
+def draw_simple_ellipse(
+    position,
+    width,
+    height,
+    angle,
+    ax=None,
+    from_size=0.1,
+    to_size=0.5,
+    n_ellipses=3,
+    alpha=0.1,
+    color=None,
+):
     ax = ax or plt.gca()
     angle = (angle / np.pi) * 180
     width, height = np.sqrt(width + 10e-4), np.sqrt(height + 10e-4)
     # Draw the Ellipse
     for nsig in np.linspace(from_size, to_size, n_ellipses):
-        ax.add_patch(Ellipse(position, nsig * width, nsig * height,
-                             angle, alpha=alpha, lw=0, color=color))
+        ax.add_patch(
+            Ellipse(
+                position,
+                nsig * width,
+                nsig * height,
+                angle,
+                alpha=alpha,
+                lw=0,
+                color=color,
+            )
+        )
 
 
-def gaussian_potential(emb, dims=[2, 3, 4],
-                            labels=None, pt_size=5,
-                            marker='o', opacity=1, cmap='Spectral'):
+def gaussian_potential(
+    emb, dims=[2, 3, 4], labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"
+):
     fig = plt.figure()
     ax = fig.add_subplot(111)
     colors = plt.get_cmap(cmap)(np.linspace(0, 1, np.shape(labels.unique())[0]))
     for i in range(emb.shape[0]):
         pos = emb[i, :2]
-        draw_simple_ellipse(pos, emb[i, dims[0]],
-                            emb[i, dims[1]],
-                            emb[i, dims[2]],
-                            ax, n_ellipses=1,
-                            color=colors[labels[i]],
-                            from_size=1.0, to_size=1.0, alpha=0.01)
+        draw_simple_ellipse(
+            pos,
+            emb[i, dims[0]],
+            emb[i, dims[1]],
+            emb[i, dims[2]],
+            ax,
+            n_ellipses=1,
+            color=colors[labels[i]],
+            from_size=1.0,
+            to_size=1.0,
+            alpha=0.01,
+        )
 
-    ax.scatter(emb.T[0],
-               emb.T[1],
-               cmap=cmap,
-               c=labels,
-               s=pt_size,
-               marker=marker,
-               alpha=opacity)
+    ax.scatter(
+        emb.T[0], emb.T[1], cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity
+    )
     return plt.show()
 
 
 @numba.njit(fastmath=True)
 def eval_gaussian(x, pos=np.array([0, 0]), cov=np.eye(2, dtype=np.float32)):
-    det = cov[0,0] * cov[1,1] - cov[0,1] * cov[1,0]
+    det = cov[0, 0] * cov[1, 1] - cov[0, 1] * cov[1, 0]
     if det > 1e-16:
-        cov_inv = np.array([[cov[1,1], -cov[0,1]], [-cov[1,0], cov[0,0]]]) * 1.0 / det
+        cov_inv = (
+            np.array([[cov[1, 1], -cov[0, 1]], [-cov[1, 0], cov[0, 0]]]) * 1.0 / det
+        )
         diff = x - pos
-        m_dist = cov_inv[0,0] * diff[0]**2 - \
-            (cov_inv[0,1] + cov_inv[1,0]) * diff[0] * diff[1] + \
-            cov_inv[1,1] * diff[1]**2
+        m_dist = (
+            cov_inv[0, 0] * diff[0] ** 2
+            - (cov_inv[0, 1] + cov_inv[1, 0]) * diff[0] * diff[1]
+            + cov_inv[1, 1] * diff[1] ** 2
+        )
         return (np.exp(-0.5 * m_dist)) / (2 * np.pi * np.sqrt(np.abs(det)))
     else:
         return 0.0
+
 
 @numba.njit(fastmath=True)
 def eval_density_at_point(x, embedding):
@@ -269,7 +291,7 @@ def eval_density_at_point(x, embedding):
     return result
 
 
-def get_cmap(n, name='hsv'):
+def get_cmap(n, name="hsv"):
     return plt.cm.get_cmap(name, n)
 
 
@@ -278,14 +300,15 @@ def create_density_plot(X, Y, embedding):
     tree = KDTree(embedding[:, :2])
     for i in range(X.shape[0]):
         for j in range(X.shape[1]):
-            nearby_points = embedding[tree.query_radius([[X[i,j],Y[i,j]]], r=2)[0]]
-            Z[i, j] = eval_density_at_point(np.array([X[i,j],Y[i,j]]), nearby_points)
+            nearby_points = embedding[tree.query_radius([[X[i, j], Y[i, j]]], r=2)[0]]
+            Z[i, j] = eval_density_at_point(np.array([X[i, j], Y[i, j]]), nearby_points)
     return Z / Z.sum()
 
-def plot_bases_scores(bases_scores, return_plot=True, figsize=(20,8), fontsize=20):
+
+def plot_bases_scores(bases_scores, return_plot=True, figsize=(20, 8), fontsize=20):
     keys = bases_scores.keys()
     values = bases_scores.values()
-    cmap = get_cmap(len(keys), name='tab20')
+    cmap = get_cmap(len(keys), name="tab20")
     k_color = list()
     for k in np.arange(len(keys)):
         k_color.append(cmap(k))
@@ -296,12 +319,12 @@ def plot_bases_scores(bases_scores, return_plot=True, figsize=(20,8), fontsize=2
         r_vals.append(val[1])
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
-    fig.suptitle('Bases scores:', fontsize=fontsize)
+    fig.suptitle("Bases scores:", fontsize=fontsize)
     ax1.bar(keys, pca_vals, color=k_color)
-    ax1.set_title('PCA loss', fontsize=fontsize)
+    ax1.set_title("PCA loss", fontsize=fontsize)
     ax1.set_xticklabels(keys, fontsize=fontsize)
     ax2.bar(keys, r_vals, color=k_color)
-    ax2.set_title('Geodesic Spearman R', fontsize=fontsize)
+    ax2.set_title("Geodesic Spearman R", fontsize=fontsize)
     ax2.set_xticklabels(keys, fontsize=fontsize)
     fig.tight_layout()
     if return_plot:
@@ -310,19 +333,19 @@ def plot_bases_scores(bases_scores, return_plot=True, figsize=(20,8), fontsize=2
         return fig
 
 
-def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20,8), fontsize=20):
+def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20, 8), fontsize=20):
     keys = graphs_scores.keys()
     values = graphs_scores.values()
-    cmap = get_cmap(len(keys), name='tab20')
+    cmap = get_cmap(len(keys), name="tab20")
     k_color = list()
     for k in np.arange(len(keys)):
         k_color.append(cmap(k))
 
     fig, (ax1) = plt.subplots(1, 1, figsize=figsize)
-    fig.suptitle('Graphs scores:', fontsize=fontsize)
+    fig.suptitle("Graphs scores:", fontsize=fontsize)
     ax1.bar(keys, values, color=k_color)
-    ax1.set_title('Geodesic Spearman R', fontsize=fontsize)
-    ax1.set_xticklabels(keys, fontsize=fontsize//2, rotation=90)
+    ax1.set_title("Geodesic Spearman R", fontsize=fontsize)
+    ax1.set_xticklabels(keys, fontsize=fontsize // 2, rotation=90)
     fig.tight_layout()
 
     if return_plot:
@@ -331,10 +354,10 @@ def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20,8), fontsize
         return fig
 
 
-def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20,8), fontsize=20):
+def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20, 8), fontsize=20):
     keys = layouts_scores.keys()
     values = layouts_scores.values()
-    cmap = get_cmap(len(keys), name='tab20')
+    cmap = get_cmap(len(keys), name="tab20")
     k_color = list()
     for k in np.arange(len(keys)):
         k_color.append(cmap(k))
@@ -345,20 +368,18 @@ def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20,8), fontsi
         r_vals.append(val[1])
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
-    fig.suptitle('Layouts scores:', fontsize=fontsize)
+    fig.suptitle("Layouts scores:", fontsize=fontsize)
     ax1.bar(keys, pca_vals, color=k_color)
-    ax1.set_title('PCA loss', fontsize=fontsize)
-    ax1.set_xticklabels(keys, fontsize=fontsize//2, rotation=90)
+    ax1.set_title("PCA loss", fontsize=fontsize)
+    ax1.set_xticklabels(keys, fontsize=fontsize // 2, rotation=90)
     ax2.bar(keys, r_vals, color=k_color)
-    ax2.set_title('Geodesic Spearman R', fontsize=fontsize)
-    ax2.set_xticklabels(keys, fontsize=fontsize//2, rotation=90)
+    ax2.set_title("Geodesic Spearman R", fontsize=fontsize)
+    ax2.set_xticklabels(keys, fontsize=fontsize // 2, rotation=90)
     fig.tight_layout()
     if return_plot:
         return plt.show()
     else:
         return fig
-
-
 
 
 def plot_point_cov(points, nstd=2, ax=None, **kwargs):
@@ -368,10 +389,10 @@ def plot_point_cov(points, nstd=2, ax=None, **kwargs):
 
 
 def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
-    #if ax is None:
+    # if ax is None:
     ax = plt.gca()
     vals, vecs = eigsorted(cov)
-    theta = np.degrees(np.arctan2(*vecs[:,0][::-1]))
+    theta = np.degrees(np.arctan2(*vecs[:, 0][::-1]))
     # Width and height are "full" widths, not radius
     width, height = 2 * nstd * np.sqrt(np.absolute(vals))
     ellip = Ellipse(pos, width=width, height=height, angle=theta, **kwargs)
@@ -379,21 +400,35 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     return ellip
 
 
-
-def plot_riemann_metric(emb, L, H_emb=None, ax=None, n_plot=50, std=1, alpha=0.1, title='Riemannian metric', title_fontsize=10,
-                        labels=None, pt_size=1, cmap='Spectral',  figsize=(8,8), random_state=None, **kwargs):
+def plot_riemann_metric(
+    emb,
+    L,
+    H_emb=None,
+    ax=None,
+    n_plot=50,
+    std=1,
+    alpha=0.1,
+    title="Riemannian metric",
+    title_fontsize=10,
+    labels=None,
+    pt_size=1,
+    cmap="Spectral",
+    figsize=(8, 8),
+    random_state=None,
+    **kwargs,
+):
     """
     Plot Riemannian metric using ellipses. Adapted from Megaman (https://github.com/mmp2/megaman).
 
     Parameters
     ----------
-    
+
     emb: numpy.ndarray, shape = (n, n_dim)
         Embedding matrix.
-    
+
     L: numpy.ndarray
        Graph Laplacian matrix. Should be provided if H_emb is not provided.
-    
+
     H : Dual Riemann metric, shape = (n, n_dim, n_dim)
         The inverse (dual) Riemann metric matrix at each point. Should be provided if Laplacian is not provided.
         Computed with the class `topo.eval.rmetric.RiemannMetric`.
@@ -406,10 +441,10 @@ def plot_riemann_metric(emb, L, H_emb=None, ax=None, n_plot=50, std=1, alpha=0.1
 
     labels: numpy.ndarray (optional, default None)
         Labels for the points.
-    
+
     pt_size: int (optional, default 1)
         Size of the points.
-    
+
     cmap: str (optional, default 'Spectral')
         Color map for the points.
 
@@ -433,20 +468,23 @@ def plot_riemann_metric(emb, L, H_emb=None, ax=None, n_plot=50, std=1, alpha=0.1
 
     if H_emb is None:
         from topo.eval import RiemannMetric
+
         rmetric = RiemannMetric(emb, L)
         H = rmetric.get_dual_rmetric()
 
     N = np.shape(emb)[0]
     rng = check_random_state(random_state)
     sample_points = rng.choice(range(N), n_plot, replace=False)
-    if ax == None:
+    if ax is None:
         f, ax = plt.subplots(figsize=figsize)
     # ax.grid(False)
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_title(title, fontsize=title_fontsize)
     ax.set_aspect("equal", adjustable="datalim")
-    ax.set_box_aspect(1)   # if an ellipse is a circle no distortion occured in particular directions
+    ax.set_box_aspect(
+        1
+    )  # if an ellipse is a circle no distortion occured in particular directions
     if labels is not None:
         colors = plt.get_cmap(cmap)(np.linspace(0, 1, np.shape(np.unique(labels))[0]))
         ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, c=labels, cmap=cmap)
@@ -456,28 +494,43 @@ def plot_riemann_metric(emb, L, H_emb=None, ax=None, n_plot=50, std=1, alpha=0.1
         ii = sample_points[i]
         cov = H[ii, :, :]
         if labels is not None:
-            plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor='none', color=colors[labels[ii]],
-                             alpha=alpha)
+            plot_cov_ellipse(
+                cov,
+                emb[ii, :],
+                nstd=std,
+                ax=ax,
+                edgecolor="none",
+                color=colors[labels[ii]],
+                alpha=alpha,
+            )
         else:
-            plot_cov_ellipse(cov, emb[ii, :], nstd=std, ax=ax, edgecolor='none',
-                             alpha=alpha)
+            plot_cov_ellipse(
+                cov, emb[ii, :], nstd=std, ax=ax, edgecolor="none", alpha=alpha
+            )
     return ax
 
 
-def draw_edges(ax, data, kernel, color='black', **kwargs):
-    for i in range(data.shape[0]-1):
-        for j in range(i+1, data.shape[0]):
-            affinity = kernel[i,j]
+def draw_edges(ax, data, kernel, color="black", **kwargs):
+    for i in range(data.shape[0] - 1):
+        for j in range(i + 1, data.shape[0]):
+            affinity = kernel[i, j]
             if affinity > 0:
-                ax.plot(data[[i,j],0], data[[i,j],1],
-                        color=color, alpha=affinity, zorder=0, **kwargs)
-    
+                ax.plot(
+                    data[[i, j], 0],
+                    data[[i, j], 1],
+                    color=color,
+                    alpha=affinity,
+                    zorder=0,
+                    **kwargs,
+                )
 
 
-def plot_scores(scores, return_plot=True, log=True, figsize=(8,3), fontsize=12, title='Scores'):
+def plot_scores(
+    scores, return_plot=True, log=True, figsize=(8, 3), fontsize=12, title="Scores"
+):
     keys = scores.keys()
     values = scores.values()
-    cmap = get_cmap(len(keys), name='tab20')
+    cmap = get_cmap(len(keys), name="tab20")
     k_color = list()
     for k in np.arange(len(keys)):
         k_color.append(cmap(k))
@@ -486,7 +539,7 @@ def plot_scores(scores, return_plot=True, log=True, figsize=(8,3), fontsize=12, 
     ax1.set_xticklabels(keys, fontsize=fontsize, rotation=90)
     ax1.bar(keys, values, color=k_color)
     if log:
-        ax1.set_yscale('log')
+        ax1.set_yscale("log")
     fig.tight_layout()
     if return_plot:
         return plt.show()
@@ -494,24 +547,23 @@ def plot_scores(scores, return_plot=True, log=True, figsize=(8,3), fontsize=12, 
         return fig
 
 
-def plot_all_scores(evaluation_dict, log=False, figsize=(20,8), fontsize=20):
+def plot_all_scores(evaluation_dict, log=False, figsize=(20, 8), fontsize=20):
     for key, value in evaluation_dict.items():
         plot_scores(value, figsize=figsize, log=log, fontsize=fontsize, title=key)
-
 
 
 def plot_eigenvectors(
     eigenvectors,
     n_eigenvectors=10,
     labels=None,
-    cmap='tab20',
+    cmap="tab20",
     figsize=(23, 2),
     fontsize=10,
-    title='DC',
-    orientation="horizontal",      # "horizontal" (1 row) or "vertical" (stacked rows)
-    row_height=0.8,                # inches per row when orientation="vertical"
-    width=8.0,                     # figure width (inches) for vertical layout
-    marker_base=6,                 # base marker size; auto-scales in vertical mode
+    title="DC",
+    orientation="horizontal",  # "horizontal" (1 row) or "vertical" (stacked rows)
+    row_height=0.8,  # inches per row when orientation="vertical"
+    width=8.0,  # figure width (inches) for vertical layout
+    marker_base=6,  # base marker size; auto-scales in vertical mode
     **kwargs,
 ):
     X = np.asarray(eigenvectors)
@@ -526,9 +578,12 @@ def plot_eigenvectors(
         fig, axes = plt.subplots(1, k, figsize=figsize, constrained_layout=False)
         axes = np.atleast_1d(axes)
         for i, ax in enumerate(axes):
-            ax.set_title(f"{title} {i+1}", fontsize=fontsize)
-            ax.scatter(np.arange(n), X[:, i], c=labels, cmap=cmap, s=marker_base, **kwargs)
-            ax.set_xticks([]); ax.set_yticks([])
+            ax.set_title(f"{title} {i + 1}", fontsize=fontsize)
+            ax.scatter(
+                np.arange(n), X[:, i], c=labels, cmap=cmap, s=marker_base, **kwargs
+            )
+            ax.set_xticks([])
+            ax.set_yticks([])
         plt.subplots_adjust(left=0.02, right=0.98, bottom=0.05, top=0.9, wspace=0.05)
         plt.show()
         return
@@ -538,7 +593,8 @@ def plot_eigenvectors(
     fig_h = max(2.5, k * float(row_height))
     fig_w = float(width)
     fig, axes = plt.subplots(
-        k, 1,
+        k,
+        1,
         figsize=(fig_w, fig_h),
         sharex=True,
         gridspec_kw=dict(hspace=0.05),
@@ -564,8 +620,15 @@ def plot_eigenvectors(
         ax.spines["left"].set_visible(False)
         ax.spines["bottom"].set_visible(False)
         # put a compact title label at the left of the strip
-        ax.text(-0.01, 0.5, f"{title} {i+1}", transform=ax.transAxes,
-                va="center", ha="right", fontsize=fontsize)
+        ax.text(
+            -0.01,
+            0.5,
+            f"{title} {i + 1}",
+            transform=ax.transAxes,
+            va="center",
+            ha="right",
+            fontsize=fontsize,
+        )
 
     axes[-1].set_xticks([])  # keep minimalist look; add ticks if you want
     # slim margins; no tight_layout to avoid warnings
@@ -573,53 +636,91 @@ def plot_eigenvectors(
     plt.show()
 
 
-
-
-def plot_dimensionality_histograms(local_id_dict, global_id_dict, bins=50, title = 'FSA', histtype='step', stacked=True, density=True, log=False, title_fontsize=22, legend_fontsize=15):
-    fig, ax = plt.subplots(1,1)
+def plot_dimensionality_histograms(
+    local_id_dict,
+    global_id_dict,
+    bins=50,
+    title="FSA",
+    histtype="step",
+    stacked=True,
+    density=True,
+    log=False,
+    title_fontsize=22,
+    legend_fontsize=15,
+):
+    fig, ax = plt.subplots(1, 1)
     fig.set_figwidth(6)
     fig.set_figheight(8)
     for key in local_id_dict.keys():
-        i=0
+        i = 0
         x = local_id_dict[key]
         #
         # Make a multiple-histogram of data-sets with different length.
-        label = 'k = ' + key + '    ( estim.i.d. = ' + str(int(global_id_dict[key])) + ' )'
-        n, bins, patches  = ax.hist(x, bins=bins, histtype=histtype, stacked=stacked, density=density, log=log, label=label)
-        sigma = np.std(x)
-        mu = np.mean(x)
-        y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
-            np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
-        i= i+1
+        label = (
+            "k = " + key + "    ( estim.i.d. = " + str(int(global_id_dict[key])) + " )"
+        )
+        n, bins, patches = ax.hist(
+            x,
+            bins=bins,
+            histtype=histtype,
+            stacked=stacked,
+            density=density,
+            log=log,
+            label=label,
+        )
+        i = i + 1
     ax.set_title(title, fontsize=title_fontsize, pad=10)
-    ax.legend(prop={'size': 12}, fontsize=legend_fontsize)
-    ax.set_xlabel('Estimated intrinsic dimension', fontsize=legend_fontsize)
-    ax.set_ylabel('Frequency', fontsize=legend_fontsize)
-    ax.legend(prop={'size': 10})
+    ax.legend(prop={"size": 12}, fontsize=legend_fontsize)
+    ax.set_xlabel("Estimated intrinsic dimension", fontsize=legend_fontsize)
+    ax.set_ylabel("Frequency", fontsize=legend_fontsize)
+    ax.legend(prop={"size": 10})
     plt.show()
 
-def plot_dimensionality_histograms_multiple(id_dict, bins=50, histtype='step', stacked=True, density=True, log=False,  title='I.D. estimates'):
-    fig, ax = plt.subplots(1,1)
+
+def plot_dimensionality_histograms_multiple(
+    id_dict,
+    bins=50,
+    histtype="step",
+    stacked=True,
+    density=True,
+    log=False,
+    title="I.D. estimates",
+):
+    fig, ax = plt.subplots(1, 1)
     # data
     for key in id_dict.keys():
-        i=0
+        i = 0
         x = id_dict[key]
         #
         # Make a multiple-histogram of data-sets with different length.
-        n, bins, patches  = ax.hist(x, bins=bins, histtype=histtype, stacked=stacked, density=True, log=log, label=key)
-        sigma = np.std(x)
-        mu = np.mean(x)
-        y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
-            np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
-        i= i+1
+        n, bins, patches = ax.hist(
+            x,
+            bins=bins,
+            histtype=histtype,
+            stacked=stacked,
+            density=True,
+            log=log,
+            label=key,
+        )
+        i = i + 1
     ax.set_title(title)
-    ax.legend(prop={'size': 10})
+    ax.legend(prop={"size": 10})
     fig.tight_layout()
     plt.show()
 
 
-def heatmap(data, row_labels, col_labels, ax=None,
-            cbar_kw=None, cbarlabel="", cbar_fontsize=12, shrink=0.6, cb_pad=0.3, **kwargs):
+def heatmap(
+    data,
+    row_labels,
+    col_labels,
+    ax=None,
+    cbar_kw=None,
+    cbarlabel="",
+    cbar_fontsize=12,
+    shrink=0.6,
+    cb_pad=0.3,
+    **kwargs,
+):
     """
     Create a heatmap from a numpy array and two lists of labels.
 
@@ -660,27 +761,31 @@ def heatmap(data, row_labels, col_labels, ax=None,
     ax.set_yticks(np.arange(data.shape[0]), labels=row_labels)
 
     # Let the horizontal axes labeling appear on top.
-    ax.tick_params(top=True, bottom=False,
-                   labeltop=True, labelbottom=False)
+    ax.tick_params(top=True, bottom=False, labeltop=True, labelbottom=False)
 
     # Rotate the tick labels and set their alignment.
-    plt.setp(ax.get_xticklabels(), rotation=-30, ha="right",
-             rotation_mode="anchor")
+    plt.setp(ax.get_xticklabels(), rotation=-30, ha="right", rotation_mode="anchor")
 
     # Turn spines off and create white grid.
     ax.spines[:].set_visible(False)
 
-    ax.set_xticks(np.arange(data.shape[1]+1)-.5, minor=True)
-    ax.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
-    ax.grid(which="minor", color="w", linestyle='-', linewidth=3)
+    ax.set_xticks(np.arange(data.shape[1] + 1) - 0.5, minor=True)
+    ax.set_yticks(np.arange(data.shape[0] + 1) - 0.5, minor=True)
+    ax.grid(which="minor", color="w", linestyle="-", linewidth=3)
     ax.tick_params(which="minor", bottom=False, left=False)
 
     return im, cbar
 
 
-def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
-                     textcolors=("black", "white"),
-                     threshold=None, an_fontsize=8, **textkw):
+def annotate_heatmap(
+    im,
+    data=None,
+    valfmt="{x:.2f}",
+    textcolors=("black", "white"),
+    threshold=None,
+    an_fontsize=8,
+    **textkw,
+):
     """
     A function to annotate a heatmap.
 
@@ -713,17 +818,17 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
     if threshold is not None:
         threshold = im.norm(threshold)
     else:
-        threshold = im.norm(data.max())/2.
+        threshold = im.norm(data.max()) / 2.0
 
     # Set default alignment to center, but allow it to be
     # overwritten by textkw.
-    kw = dict(horizontalalignment="center",
-              verticalalignment="center")
+    kw = dict(horizontalalignment="center", verticalalignment="center")
     kw.update(textkw)
 
     # Get the formatter in case a string is supplied
     if isinstance(valfmt, str):
         from matplotlib import ticker
+
         valfmt = ticker.StrMethodFormatter(valfmt)
 
     # Loop over the data and create a `Text` for each "pixel".
@@ -732,7 +837,164 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
             kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
-            text = im.axes.text(j, i, valfmt(data[i, j], None), fontsize=an_fontsize, **kw)
+            text = im.axes.text(
+                j, i, valfmt(data[i, j], None), fontsize=an_fontsize, **kw
+            )
             texts.append(text)
 
     return texts
+
+
+# ---------------------------------------------------------------------------
+# MAP training GIF
+# ---------------------------------------------------------------------------
+
+
+def visualize_optimization(
+    snapshots,
+    *,
+    dpi=120,
+    color=None,
+    filename=None,
+    point_size=3.0,
+    fps=20,
+    tag="msTopoMAP",
+    overlay_metrics=False,
+):
+    """
+    Produce an animated GIF from a list of MAP training snapshots.
+
+    Parameters
+    ----------
+    snapshots : list[dict]
+        Each dict must have an ``'embedding'`` key (ndarray, shape (n, 2)) and
+        optionally ``'epoch'`` (int) and ``'metrics'`` (dict with PF1/PJS/SP/TP).
+    dpi : int
+        Figure DPI.
+    color : None, array-like, or single color
+        Per-point coloring (see TopOGraph.visualize_optimization for details).
+    filename : str or None
+        Output GIF path.  Auto-generated if None.
+    point_size : float
+        Scatter marker size.
+    fps : int
+        Frames per second.
+    tag : str
+        Label used in title and default filename.
+    overlay_metrics : bool
+        Draw metric values on each frame if present.
+
+    Returns
+    -------
+    str
+        Path to the generated GIF.
+    """
+    import time as _time
+    import matplotlib.colors as mcolors
+
+    if not snapshots:
+        raise RuntimeError("No snapshots provided.")
+
+    snapshots = sorted(snapshots, key=lambda s: int(s.get("epoch", 0)))
+    n = snapshots[-1]["embedding"].shape[0]
+
+    def _to_rgba_array(c, n):
+        if c is None:
+            return np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
+        if isinstance(c, (str, tuple)):
+            rgba = np.array(mcolors.to_rgba(c), float)
+            return np.tile(rgba[None, :], (n, 1))
+        c = np.asarray(c)
+        if c.ndim == 1:
+            if c.shape[0] == n and np.issubdtype(c.dtype, np.number):
+                cmap = plt.get_cmap("viridis")
+                vmin, vmax = np.nanmin(c), np.nanmax(c)
+                if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
+                    vmin, vmax = 0.0, 1.0
+                t = (c - vmin) / (vmax - vmin + 1e-12)
+                return cmap(np.clip(t, 0, 1))
+            elif c.shape[0] == n:
+                return np.array([mcolors.to_rgba(ci) for ci in c], float)
+            return np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
+        if c.ndim == 2 and c.shape[0] == n and c.shape[1] in (3, 4):
+            if c.shape[1] == 3:
+                return np.concatenate([c, np.ones((n, 1))], axis=1)
+            return c.astype(float)
+        return np.tile(np.array([0.15, 0.15, 0.15, 0.85])[None, :], (n, 1))
+
+    point_colors = _to_rgba_array(color, n)
+
+    all_coords = np.concatenate([s["embedding"] for s in snapshots], axis=0)
+    x_min, x_max = np.min(all_coords[:, 0]), np.max(all_coords[:, 0])
+    y_min, y_max = np.min(all_coords[:, 1]), np.max(all_coords[:, 1])
+    pad_x = 0.05 * (x_max - x_min + 1e-9)
+    pad_y = 0.05 * (y_max - y_min + 1e-9)
+    xlim = (x_min - pad_x, x_max + pad_x)
+    ylim = (y_min - pad_y, y_max + pad_y)
+
+    frames = []
+    fig_w, fig_h = 6, 5
+    for snap in snapshots:
+        Y = snap["embedding"]
+        epoch = int(snap.get("epoch", 0))
+        fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=int(dpi))
+        ax.scatter(Y[:, 0], Y[:, 1], s=float(point_size), c=point_colors, linewidths=0)
+        ax.set_xlim(*xlim)
+        ax.set_ylim(*ylim)
+        ax.set_aspect("equal", adjustable="box")
+        ax.set_xlabel("TopoMAP_1")
+        ax.set_ylabel("TopoMAP_2")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(f"{tag} training — epoch {epoch}")
+
+        if overlay_metrics:
+            m = snap.get("metrics", None)
+            if isinstance(m, dict) and ("PF1" in m or "TP" in m):
+                txt = []
+                for key in ("PF1", "PJS", "SP", "TP"):
+                    if key in m:
+                        txt.append(f"{key} {m[key]:.3f}")
+                ax.text(
+                    0.98,
+                    0.02,
+                    "\n".join(txt),
+                    transform=ax.transAxes,
+                    ha="right",
+                    va="bottom",
+                    fontsize=9,
+                    bbox=dict(
+                        facecolor="white",
+                        edgecolor="none",
+                        alpha=0.75,
+                        boxstyle="round,pad=0.25",
+                    ),
+                )
+
+        fig.subplots_adjust(left=0.12, right=0.98, bottom=0.12, top=0.92)
+        fig.canvas.draw()
+        w, h = fig.canvas.get_width_height()
+        frame = (
+            np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            .reshape(h, w, 3)
+            .copy()
+        )
+        frames.append(frame)
+        plt.close(fig)
+
+    if filename is None:
+        filename = f"{tag}_training_{int(_time.time())}.gif"
+
+    from PIL import Image
+
+    pil_frames = [Image.fromarray(f, mode="RGB") for f in frames]
+    pil_frames[0].save(
+        filename,
+        save_all=True,
+        append_images=pil_frames[1:],
+        loop=0,
+        duration=int(1000 / max(1, int(fps))),
+        disposal=2,
+        optimize=False,
+    )
+    return filename

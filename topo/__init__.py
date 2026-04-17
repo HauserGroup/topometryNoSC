@@ -1,26 +1,12 @@
-import sys
-try:
-    import scanpy
-    _HAVE_SCANPY = True
-except ImportError:
-    _HAVE_SCANPY = False
-from .base import ann
-from . import layouts as lt
-from .topograph import TopOGraph, load_topograph, save_topograph
-from . import plot as pl
-from . import spectral as spt
-from . import tpgraph as tpg
-from . import eval
-from . import utils
-from . import pipes
-if _HAVE_SCANPY:
-    from . import single_cell as sc
-
-from .version import __version__
-if _HAVE_SCANPY:
-    sys.modules.update({f'{__name__}.{m}': globals()[m] for m in ['ann', 'lt', 'TopOGraph', 'pl', 'spt', 'tpg', 'eval',
-                                                              'pipes', 'load_topograph', 'save_topograph', 'sc']})
-else:
-    sys.modules.update({f'{__name__}.{m}': globals()[m] for m in ['ann', 'lt', 'TopOGraph', 'pl', 'spt', 'tpg', 'eval',
-                                                              'pipes', 'load_topograph', 'save_topograph']})
-del sys
+from . import layouts as layouts
+from .topograph import TopOGraph as TopOGraph
+from .topograph import load_topograph as load_topograph
+from .topograph import save_topograph as save_topograph
+from . import plot as plot
+from . import spectral as spectral
+from . import tpgraph as tpgraph
+from . import eval as eval
+from . import utils as utils
+from . import analysis as analysis
+from . import uom as uom
+from .version import __version__ as __version__

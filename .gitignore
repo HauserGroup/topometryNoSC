@@ -31,6 +31,7 @@ idea/
 *.tar.gz
 *.tar.bz2
 *.zarr
+*.bak
 
 # --- Docs output and large assets ---
 docs/_build/

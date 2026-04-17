@@ -1,8 +1,0 @@
-numpy
-scikit-learn
-scipy
-matplotlib
-pandas
-numba
-setuptools>=65.5.1
-torch

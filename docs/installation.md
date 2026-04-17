@@ -1,5 +1,70 @@
 ## Installation and dependencies
 
+TopoMetry is implemented in Python, with models that inherit from [scikit-learn](https://github.com/scikit-learn/scikit-learn) `BaseEstimator` and `TransformerMixin`. This makes the building-block classes compatible with scikit-learn pipelines and easy to combine with other workflows.
+
+### Hard dependencies
+
+* numpy
+* scipy
+* pandas
+* numba
+* scikit-learn
+* matplotlib
+
+### Install from PyPI
+
+```bash
+pip install topometry
+```
+
+---
+
+## Optional dependencies
+
+Some optional packages extend TopoMetry but are not required.
+
+### Approximate Nearest Neighbors
+
+TopoMetry uses a kNN-graph builder (`topo.base.ann.kNN`) that wraps several ANN backends. If none of the optional libraries below is installed, it falls back to `scikit-learn` neighborhood search (slower on large datasets).
+
+Supported ANN backends:
+
+* [HNSWlib](https://github.com/nmslib/hnswlib) — default recommendation
+* [NMSlib](https://github.com/nmslib/nmslib)
+* [ANNOY](https://github.com/spotify/annoy)
+* [FAISS](https://github.com/facebookresearch/faiss)
+* [PyNNDescent](https://pynndescent.readthedocs.io/en/latest/)
+
+If your CPU supports advanced instructions, install `nmslib` separately for the best performance:
+
+```bash
+pip install --no-binary :all: nmslib
+```
+
+### Additional layout methods
+
+From version `1.0` onwards, TopoMetry includes fast implementations of [Isomap](https://doi.org/10.1126/science.290.5500.2319) and a cross-entropy–minimization layout (MAP) as built-in layout methods. Other layout algorithms can be used via optional packages:
+
+* [t-SNE](https://www.jmlr.org/papers/volume9/vandermaaten08a/vandermaaten08a.pdf) — optionally via `multicore-tsne`, otherwise `scikit-learn`
+* [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) — requires `umap-learn`
+* [PaCMAP](http://jmlr.org/papers/v22/20-1061.html) — requires `pacmap`
+* [TriMAP](https://github.com/eamid/trimap) — requires `trimap`
+* IsomorphicMDE / IsometricMDE — requires `pymde`
+* [NCVis](https://github.com/stat-ml/ncvis) — requires `ncvis`
+
+Install all optional layout packages at once:
+
+```bash
+pip install multicore-tsne umap-learn pacmap trimap pymde ncvis
+```
+
+These are handled by `topo.layouts.Projector`. Open an [issue](https://github.com/davisidarta/topometry/issues) if your favorite method is not listed.
+
+---
+
+Please open a note in the [issue tracker](https://github.com/davisidarta/topometry/issues) if you have any trouble with installation.
+## Installation and dependencies
+
 TopoMetry is implemented in python and and its models are implemented as classes that inherit from [scikit-learn](https://github.com/scikit-learn/scikit-learn) ``BaseEstimator`` and ``TransformerMixin``. This makes these classes compatible with `scikit-learn` Pipelines and thus flexible and easy to apply and/or combine with different workflows on virtually any domain.
 
 The hard dependencies are common building-blocks of the python machine-learning environment:

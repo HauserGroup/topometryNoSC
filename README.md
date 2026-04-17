@@ -8,11 +8,10 @@
 
 **TopoMetry** is a geometry-aware Python toolkit for exploring high-dimensional data via diffusion/Laplacian operators. It learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** and then finds clusters and builds low-dimensional layouts for analysis and visualization.
 
-- **AnnData/Scanpy wrappers** for single-cell workflows
-- **scikit-learn–style transformers** with a high-level orchestrator
-- **Fixed-time & multiscale spectral scaffolds** (no `.X` mutation; namespaced outputs)
+- **scikit-learn–style transformers** with a high-level `TopOGraph` orchestrator
+- **Fixed-time & multiscale spectral scaffolds**
 - **Operator-native metrics** to quantify geometry preservation and **Riemannian diagnostics** to evaluate distortion in visualizations
-- Designed for **large, diverse datasets** (e.g., single-cell omics)
+- Designed for **large, diverse datasets**
 
 For background, see our preprint: https://doi.org/10.1101/2022.03.14.484134
 
@@ -27,7 +26,7 @@ Use TopoMetry when you want:
 - Geometry-faithful representations beyond variance maximization (e.g., PCA)
 - Robust low-dimensional views and clustering from operator-grounded features
 - Quantitative **operator-native** metrics to compare methods and parameter choices
-- Reproducible, **non-destructive** pipelines (no mutation of `adata.X`)
+- Reproducible, **non-destructive** pipelines
 
 Empirically, TopoMetry often outperforms PCA-based pipelines and stand-alone layouts. Still, **let the data decide**—TopoMetry includes metrics and reports to support evidence-based choices.
 
@@ -57,39 +56,32 @@ Check TopoMetry's [documentation](https://topometry.readthedocs.io/en/latest/) f
 
 
 
-## Minimal example (current API)
+## Minimal example
 
 ```python
-import scanpy as sc
+import numpy as np
 import topo as tp
 
-adata = sc.datasets.pbmc3k_processed()
+# Generate sample data (e.g., points on a Swiss roll)
+from sklearn.datasets import make_swiss_roll
+X, color = make_swiss_roll(n_samples=2000, noise=0.5, random_state=42)
 
-# Fit TopoMetry end-to-end (non-destructive; outputs are namespaced)
-tg = tp.sc.fit_adata(adata, n_jobs=1, verbosity=0, random_state=7)
+# Learn topological metrics and spectral scaffold
+tg = tp.TopOGraph()
+tg.fit(X)
 
-# Plot some results
-sc.pl.embedding(adata, basis='spectral_scaffold', color='topo_clusters')
-sc.pl.embedding(adata, basis='TopoMAP', color='topo_clusters')
-sc.pl.embedding(adata, basis='TopoPaCMAP', color='topo_clusters')
+# Build a refined topological graph
+tgraph = tg.transform(X)
 
-# Save cleanly (I/O-safe)
-adata.write_h5ad("pbmc3k_topometry.h5ad")
+# Optimize a 2-D layout
+tg.project_graph_layouts()
 ```
 
 ## Changelog
 
-**v1.1.0** — Batch integration and data mapping
-- CCA-anchor batch correction (Seurat v3-style) via `tp.sc.run_cca_integration`
-- Reference atlas persistence (`save_cca_reference` / `load_cca_reference`) and sequential query mapping (`map_to_cca_reference`)
-- High-level preparation utilities (`prepare_for_integration`, `prepare_for_mapping`, `find_mapping_order`)
-- Neighbourhood-based integration quality metrics (`compute_all_integration_metrics`: kNN purity, kNN mixing, iLISI, cLISI, ARI, NMI)
-
-**v1.0.x** — Complete overhaul
-- Redesigned user API with `tp.sc.fit_adata` and `tp.sc.run_and_report` one-liner workflows
-- New utilities for single-cell analysis: intrinsic dimensionality, spectral selectivity, feature modes, graph-signal filtering, imputation
-- Overhauled geometry-preservation metrics (PF1, PJS, SP) and Riemannian diagnostics (pullback metric, deformation maps)
-- Full compatibility with the `scverse` ecosystem (scanpy, scVelo, AnnData)
+**v2.0.0** — Core-only release
+- Removed single-cell / scanpy / AnnData wrappers (now a standalone geometry toolkit)
+- Core API unchanged: `TopOGraph`, spectral scaffolds, graph operators, layouts, metrics, plotting
 
 #### Citation
 

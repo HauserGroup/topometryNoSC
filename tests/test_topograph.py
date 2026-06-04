@@ -156,6 +156,18 @@ class TestTopOGraphProjections:
         assert "EAS" in result
         assert "smoothed_EAS" in fitted_topograph.LocalScoresDict
 
+    def test_find_ideal_projection_runs(self, fitted_topograph):
+        # A very minimal grid search to test the machinery
+        res = fitted_topograph.find_ideal_projection(
+            min_dist_grid=[0.1],
+            spread_grid=[1.0],
+            initial_alpha_grid=[1.0],
+            num_iters=10,
+            verbosity=0,
+        )
+        assert "best_params" in res
+        assert "best_score" in res
+
 
 class TestTopOGraphSaveLoad:
     """Test save / load roundtrip."""

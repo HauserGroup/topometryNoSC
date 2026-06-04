@@ -142,7 +142,8 @@ class TestRiemannMetric:
 
     def test_deformation_and_eccentricity(self):
         Y = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
-        L = sparse.csgraph.laplacian(_cycle_graph(4), normed=False)
+        # Use a dense laplacian to test both paths
+        L = sparse.csgraph.laplacian(_cycle_graph(4), normed=False).toarray()
         G = np.repeat(np.eye(2)[None], 4, axis=0)
 
         res = rmetric.calculate_deformation(Y, L, G_emb=G)

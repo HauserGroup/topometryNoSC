@@ -75,6 +75,29 @@ class TestGraphOperators:
         assert sparse.issparse(P)
         assert sparse.issparse(D_left)
 
+    def test_diffusion_operator_dense(self):
+        W = _path_graph().toarray()
+        P = _spectral.diffusion_operator(W, alpha=0.0, symmetric=False)
+        assert isinstance(P, np.ndarray)
+        assert P.shape == (3, 3)
+
+        res = _spectral.diffusion_operator(
+            W, alpha=0.0, symmetric=True, return_D_inv_sqrt=True
+        )
+        assert isinstance(res, tuple)
+        P_sym, D_left = res
+        assert isinstance(P_sym, np.ndarray)
+
+    def test_diffusion_operator_anisotropy(self):
+        W = sparse.csr_matrix(np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]], dtype=float))
+        P_sym = _spectral.diffusion_operator(W, alpha=1.0, symmetric=True)
+        P_asym = _spectral.diffusion_operator(W, alpha=1.0, symmetric=False)
+
+        assert isinstance(P_sym, sparse.csr_matrix)
+        assert isinstance(P_asym, sparse.csr_matrix)
+        np.testing.assert_allclose(P_sym.toarray(), P_sym.toarray().T)
+        np.testing.assert_allclose(np.asarray(P_asym.sum(axis=1)).ravel(), np.ones(3))
+
     def test_laplacian_eigenmaps_and_spectral_clustering(self):
         W = sparse.block_diag(
             [np.ones((3, 3)) - np.eye(3), np.ones((3, 3)) - np.eye(3)]

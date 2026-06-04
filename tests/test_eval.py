@@ -3,6 +3,7 @@
 import numpy as np
 
 from topo.eval.topo_metrics import (
+    commute_time_trace_gap,
     diffusion_rank_biased_overlap,
     multiscale_diffusion_emd,
     rank_diffusion_correlation,
@@ -39,3 +40,7 @@ def test_topo_metrics(fitted_topograph):
     score, parts = topo_preserve_score(Px, Py, times=(1,), r=10)
     assert np.isfinite(score)
     assert "PF1" in parts
+
+    gap = commute_time_trace_gap(Px, Py, r=10)
+    assert np.isfinite(gap)
+    assert gap >= 0

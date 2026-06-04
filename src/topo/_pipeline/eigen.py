@@ -64,12 +64,20 @@ class EigenBuildMixin:
     _kernel_Z: Kernel | None
     base_kernel: Kernel | None
 
-    def _build_kernel(self, *args, **kwargs) -> tuple[Kernel, dict[str, Kernel]]: ...
-    def spectral_layout(self, *args, **kwargs) -> np.ndarray: ...
-    def _run_projections(self, *args, **kwargs) -> None: ...
+    def _build_kernel(self, *args, **kwargs) -> tuple[Kernel, dict[str, Kernel]]:
+        raise NotImplementedError
+
+    def spectral_layout(self, *args, **kwargs) -> np.ndarray:
+        return cast(Any, super()).spectral_layout(*args, **kwargs)
+
+    def _run_projections(self, *args, **kwargs) -> None:
+        return cast(Any, super())._run_projections(*args, **kwargs)
 
     def _automated_sizing(self, X: np.ndarray | csr_matrix):
-        n = X.shape[0]
+        shape = X.shape
+        if shape is None:
+            raise ValueError("X must have a 2-D shape.")
+        n = int(shape[0])
         max_cap = min(int(self.id_max_components), max(2, n - 2))
 
         res = cast(Any, automated_scaffold_sizing)(
@@ -145,6 +153,8 @@ class EigenBuildMixin:
         self.current_graphkernel = f"{self.graph_kernel_version} from {ms_key}"
 
         # Spectral layout + projections
+        if self._kernel_msZ is None:
+            raise RuntimeError("msDM scaffold kernel was not built.")
         _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
         self._run_projections()
         return self

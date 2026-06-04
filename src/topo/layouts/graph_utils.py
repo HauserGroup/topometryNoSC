@@ -42,6 +42,7 @@ including ``a``/``b`` curve fitting and checkpoint-aware simplicial embedding.
 """
 
 import logging
+from typing import Any, cast
 
 import numpy as np
 from scipy.optimize import curve_fit
@@ -55,7 +56,6 @@ from topo.spectral.umap_layouts import (
     optimize_layout_generic,
 )
 from topo.tpgraph.fuzzy import fuzzy_simplicial_set
-from topo.utils.umap_utils import fast_knn_indices
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +213,8 @@ def simplicial_set_embedding(
                 ).astype(np.float32)
             else:
                 embedding = init_data
+        else:
+            raise ValueError("init must be 'random', 'spectral', or a 2-D array.")
         initialisation = embedding
 
     head = graph.row
@@ -346,8 +348,13 @@ def simplicial_set_embedding(
         # Compile the single-epoch kernel once (warm-up on first call)
         import numba
 
-        _opt_epoch = numba.njit(
-            _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=parallel
+        _opt_epoch = cast(
+            Any,
+            numba.njit(
+                _optimize_layout_euclidean_single_epoch,
+                fastmath=True,
+                parallel=parallel,
+            ),
         )
 
         # Densmap not supported in the checkpointed path (uncommon; fall back gracefully)
@@ -397,37 +404,30 @@ def simplicial_set_embedding(
         if verbose:
             logger.info("Computing embedding densities")
 
-        (
-            knn_indices,
-            knn_dists,
-            rp_forest,
-        ) = fast_knn_indices(
+        fss_result = fuzzy_simplicial_set(
             embedding,
-            densmap_kwds["n_neighbors"],
-            metric,
-            {},
-            False,
-            random_state,
-            verbose=verbose,
-        )
-
-        emb_graph, emb_sigmas, emb_rhos, emb_dists = fuzzy_simplicial_set(
-            embedding,
-            densmap_kwds["n_neighbors"],
-            random_state,
-            metric,
-            {},
-            knn_indices,
-            knn_dists,
+            n_neighbors=int(densmap_kwds["n_neighbors"]),
+            metric=metric,
+            backend="sklearn",
+            n_jobs=1,
             verbose=verbose,
             return_dists=True,
         )
+        if len(fss_result) != 4:
+            raise RuntimeError(
+                "Expected fuzzy_simplicial_set to return graph densities."
+            )
+        emb_graph, _emb_sigmas, _emb_rhos, emb_dists_raw = fss_result
+        emb_dists = np.asarray(emb_dists_raw)
 
         emb_graph = emb_graph.tocoo()
         emb_graph.sum_duplicates()
         emb_graph.eliminate_zeros()
 
-        n_vertices = emb_graph.shape[1]
+        emb_shape = emb_graph.shape
+        if emb_shape is None:
+            raise ValueError("Embedding graph must have a valid shape.")
+        n_vertices = int(emb_shape[1])
         mu_sum = np.zeros(n_vertices, dtype=np.float32)
         re = np.zeros(n_vertices, dtype=np.float32)
 

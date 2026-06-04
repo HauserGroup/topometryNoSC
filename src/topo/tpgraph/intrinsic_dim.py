@@ -319,7 +319,11 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
 def _get_dist_to_k_nearest_neighbor(K, n_neighbors=10):
     dist_to_k = np.zeros(K.shape[0])
     for i in np.arange(len(dist_to_k)):
-        dist_to_k[i] = np.sort(K.data[K.indptr[i] : K.indptr[i + 1]])[n_neighbors - 1]
+        row = np.sort(K.data[K.indptr[i] : K.indptr[i + 1]])
+        if row.size == 0:
+            dist_to_k[i] = 0.0
+            continue
+        dist_to_k[i] = row[min(int(n_neighbors) - 1, row.size - 1)]
     return dist_to_k
 
 
@@ -369,7 +373,19 @@ def fsa_global(K, id_local=None, **kwargs):
 
 def mle_local(K, n_neighbors=10, k1=1):
     """Estimate local intrinsic dimension via maximum likelihood (Levina-Bickel)."""
-    inds, dists = get_indices_distances_from_sparse_matrix(K, n_neighbors)
+    try:
+        _, dists = get_indices_distances_from_sparse_matrix(K, n_neighbors)
+    except ValueError:
+        dists = np.zeros((K.shape[0], int(n_neighbors)), dtype=float)
+        for row_id in range(K.shape[0]):
+            row = np.sort(K.data[K.indptr[row_id] : K.indptr[row_id + 1]])
+            if row.size == 0:
+                dists[row_id, :] = np.nan
+                continue
+            use = row[: int(n_neighbors)]
+            dists[row_id, : use.size] = use
+            if use.size < int(n_neighbors):
+                dists[row_id, use.size :] = use[-1]
     norm_dists = dists / dists[:, -1:]
     dims = -1.0 / np.nanmean(np.log(norm_dists[:, k1:-1]), axis=1)
     return dims
@@ -378,7 +394,7 @@ def mle_local(K, n_neighbors=10, k1=1):
 def mle_global(K, id_local=None, n_neighbors=15, k1=1):
     """Aggregate MLE local estimates into a single global dimension (harmonic mean)."""
     if id_local is None:
-        id_local, _, _ = mle_local(K, n_neighbors, k1)
+        id_local = mle_local(K, n_neighbors, k1)
     return 1.0 / np.mean(1.0 / id_local)
 
 
@@ -431,6 +447,7 @@ def automated_scaffold_sizing(
 
     if method == "fsa":
         # Normalize ks
+        ks_use: tuple[int, ...]
         if isinstance(ks, int):
             ks_use = (ks,)
         else:

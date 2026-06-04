@@ -111,16 +111,19 @@ def _safe_diffusion_operator_with_degree(W, alpha, semi_aniso=False):
     return result
 
 
-def _maybe_l2_normalize_rows(X):
+def _maybe_l2_normalize_rows(X: np.ndarray | csr_matrix) -> np.ndarray | csr_matrix:
     """Return ``X`` with row-wise L2 normalization if possible.
 
     Works for dense (ndarray) and CSR/CSC/COO sparse matrices.
     """
     try:
-        return _l2_normalize_rows(X, norm="l2", axis=1, copy=False)
+        normalized = _l2_normalize_rows(X, norm="l2", axis=1, copy=False)
     except Exception:
         # Fall back to a safe copy if in-place fails
-        return _l2_normalize_rows(X, norm="l2", axis=1, copy=True)
+        normalized = _l2_normalize_rows(X, norm="l2", axis=1, copy=True)
+    if issparse(normalized):
+        return csr_matrix(normalized)
+    return np.asarray(normalized)
 
 
 def _cosine_knn_requires_unit_vectors(backend: str) -> bool:
@@ -313,6 +316,10 @@ def compute_kernel(
         if (metric == "cosine") and (not pairwise):
             if _cosine_knn_requires_unit_vectors(backend):
                 X_for_knn = _maybe_l2_normalize_rows(X)
+        if issparse(X_for_knn):
+            X_for_knn = csr_matrix(X_for_knn)
+        else:
+            X_for_knn = np.asarray(X_for_knn)
         if pairwise:
             K = pairwise_distances(X_for_knn, metric)
         else:

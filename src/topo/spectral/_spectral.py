@@ -332,19 +332,23 @@ def LE(
     if not sparse.issparse(L):
         L = sparse.csr_matrix(L)  # for ARPACK efficiency
     L = cast(sparse.csr_matrix, L)
+    shape = L.shape
+    if shape is None:
+        raise ValueError("Graph Laplacian must have a valid shape.")
+    n_nodes = int(shape[0])
     # Add one more eig if drop_first is True
     if drop_first:
         n_eigs = n_eigs + 1
     # Compute eigenvalues and eigenvectors
     try:
-        if L.shape[0] < 1000000:
+        if n_nodes < 1000000:
             evals, evecs = sparse.linalg.eigsh(
-                L, k=n_eigs, which="SM", tol=eigen_tol, maxiter=L.shape[0] * 5
+                L, k=n_eigs, which="SM", tol=eigen_tol, maxiter=n_nodes * 5
             )
         else:
             evals, evecs = sparse.linalg.lobpcg(
                 L,
-                random_state.normal(size=(L.shape[0], n_eigs)),
+                random_state.normal(size=(n_nodes, n_eigs)),
                 largest=False,
                 tol=1e-8,
             )

@@ -21,6 +21,7 @@ Important conventions
 
 from __future__ import annotations
 
+import logging
 import time
 from warnings import warn
 
@@ -30,6 +31,8 @@ from scipy.sparse import csr_matrix, issparse
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.model_selection import ParameterGrid, train_test_split
 from sklearn.neighbors import NearestNeighbors
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_n_jobs(n_jobs: int) -> int:
@@ -250,7 +253,10 @@ def kNN(
     if Y is not None:
         _check_2d_data(Y, "Y")
         if backend in {"nmslib", "hnswlib"}:
-            warn("Only the sklearn backend supports Y. Falling back to sklearn.")
+            warn(
+                "Only the sklearn backend supports Y. Falling back to sklearn.",
+                stacklevel=2,
+            )
             backend = "sklearn"
 
     if backend == "nmslib":
@@ -283,13 +289,17 @@ def kNN(
 
     else:
         if verbose and backend != "sklearn":
-            print("Falling back to sklearn nearest-neighbors.")
+            logger.info("Falling back to sklearn nearest-neighbors.")
         backend = "sklearn"
+        # Drop ANN-only kwargs (random_state, M, efC, efS, ...) that the
+        # sklearn estimator does not accept.
+        _valid = set(NearestNeighbors().get_params())
+        sk_kwargs = {k: v for k, v in kwargs.items() if k in _valid}
         nbrs = NearestNeighbors(
             n_neighbors=n_neighbors,
             metric=metric,
             n_jobs=n_jobs,
-            **kwargs,
+            **sk_kwargs,
         ).fit(X)
         if Y is None:
             knn = nbrs.kneighbors_graph(X, mode="distance")
@@ -369,7 +379,8 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
     def fit(self, data):
         """Fit the NMSlib index."""
         try:
-            import nmslib
+            import nmslib  # type: ignore[reportMissingImports]
+
         except ImportError as exc:
             raise ImportError(
                 "NMSlib is required for NMSlibTransformer. "
@@ -408,7 +419,8 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
         if self.metric == "lp" and self.p is not None and self.p < 1:
             warn(
                 "Fractional Lp norms may be slower to compute. "
-                "Fractions such as 0.5 or 0.25 are typically faster."
+                "Fractions such as 0.5 or 0.25 are typically faster.",
+                stacklevel=2,
             )
 
         init_kwargs = {
@@ -432,18 +444,13 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         if self.verbose:
             elapsed = time.time() - start
-            print(
-                "Index-time parameters",
-                "M:",
+            logger.info(
+                "NMSlib index-time parameters M=%s n_threads=%s efConstruction=%s post=2",
                 self.M,
-                "n_threads:",
                 self.n_jobs,
-                "efConstruction:",
                 self.efC,
-                "post:",
-                2,
             )
-            print("Indexing time = %f (sec)" % elapsed)
+            logger.info("Indexing time = %f (sec)", elapsed)
 
         return self
 
@@ -480,7 +487,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         query_time_params = {"efSearch": self.efS}
         if self.verbose:
-            print("Query-time parameter efSearch:", self.efS)
+            logger.info("Query-time parameter efSearch: %s", self.efS)
         self.nmslib_.setQueryTimeParams(query_time_params)
 
         results = self.nmslib_.knnQueryBatch(
@@ -505,14 +512,9 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         if self.verbose:
             elapsed = time.time() - start
-            print(
-                "Search time =%f (sec), per query=%f (sec), "
-                "per query adjusted for thread number=%f (sec)"
-                % (
-                    elapsed,
-                    elapsed / query_qty,
-                    self.n_jobs * elapsed / query_qty,
-                )
+            logger.info(
+                f"Search time ={elapsed:f} (sec), per query={elapsed / query_qty:f} (sec), "
+                f"per query adjusted for thread number={self.n_jobs * elapsed / query_qty:f} (sec)"
             )
 
         return kneighbors_graph
@@ -542,7 +544,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         query_time_params = {"efSearch": self.efS}
         if self.verbose:
-            print("Query-time parameter efSearch:", self.efS)
+            logger.info("Query-time parameter efSearch: %s", self.efS)
         self.nmslib_.setQueryTimeParams(query_time_params)
 
         results = self.nmslib_.knnQueryBatch(
@@ -569,14 +571,9 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         if self.verbose:
             elapsed = time.time() - start
-            print(
-                "kNN time total=%f (sec), per query=%f (sec), "
-                "per query adjusted for thread number=%f (sec)"
-                % (
-                    elapsed,
-                    elapsed / query_qty,
-                    self.n_jobs * elapsed / query_qty,
-                )
+            logger.info(
+                f"kNN time total={elapsed:f} (sec), per query={elapsed / query_qty:f} (sec), "
+                f"per query adjusted for thread number={self.n_jobs * elapsed / query_qty:f} (sec)"
             )
 
         if return_graph:
@@ -597,7 +594,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         query_time_params = {"efSearch": self.efS}
         if self.verbose:
-            print("Setting query-time parameters", query_time_params)
+            logger.info("Setting query-time parameters %s", query_time_params)
         self.nmslib_.setQueryTimeParams(query_time_params)
 
         start = time.time()
@@ -608,14 +605,9 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
         )
         if self.verbose:
             elapsed = time.time() - start
-            print(
-                "ANN kNN time total=%f (sec), per query=%f (sec), "
-                "per query adjusted for thread number=%f (sec)"
-                % (
-                    elapsed,
-                    elapsed / query_qty,
-                    self.n_jobs * elapsed / query_qty,
-                )
+            logger.info(
+                f"ANN kNN time total={elapsed:f} (sec), per query={elapsed / query_qty:f} (sec), "
+                f"per query adjusted for thread number={self.n_jobs * elapsed / query_qty:f} (sec)"
             )
 
         exact_metric = "euclidean" if self.metric == "sqeuclidean" else self.metric
@@ -628,9 +620,8 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
         true_indices = nbrs.kneighbors(test, return_distance=False)
         if self.verbose:
             elapsed = time.time() - start
-            print(
-                "Brute-force kNN time total=%f (sec), per query=%f (sec)"
-                % (elapsed, elapsed / query_qty)
+            logger.info(
+                f"Brute-force kNN time total={elapsed:f} (sec), per query={elapsed / query_qty:f} (sec)"
             )
 
         recall = 0.0
@@ -641,7 +632,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
         recall /= query_qty
 
         if self.verbose:
-            print("kNN recall %f" % recall)
+            logger.info("kNN recall %f", recall)
 
         return recall
 
@@ -770,7 +761,7 @@ def grid_search(
     if verbose:
         for backend, backend_results in results.items():
             for row in backend_results:
-                print(
+                logger.info(
                     f"{backend}: params={row['params']}, "
                     f"recall={row['recall']:.3f}, "
                     f"time={row['time']:.3f}s"
@@ -868,7 +859,7 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
 
         if self.verbose:
             elapsed = time.time() - start
-            print(
+            logger.info(
                 "Index-time parameters",
                 "M:",
                 self.M,
@@ -877,7 +868,7 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
                 "efConstruction:",
                 self.efC,
             )
-            print("Indexing time = %f (sec)" % elapsed)
+            logger.info("Indexing time = %f (sec)", elapsed)
 
         return self
 
@@ -906,7 +897,7 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
 
         if self.verbose:
-            print("Query-time parameter efSearch:", self.efS)
+            logger.info("Query-time parameter efSearch: %s", self.efS)
 
         self.p.set_ef(self.efS)
         indices, distances = self.p.knn_query(query_data, k=query_k)
@@ -924,14 +915,9 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
 
         if self.verbose:
             elapsed = time.time() - start
-            print(
-                "Search time =%f (sec), per query=%f (sec), "
-                "per query adjusted for thread number=%f (sec)"
-                % (
-                    elapsed,
-                    elapsed / query_qty,
-                    self.n_jobs * elapsed / query_qty,
-                )
+            logger.info(
+                f"Search time ={elapsed:f} (sec), per query={elapsed / query_qty:f} (sec), "
+                f"per query adjusted for thread number={self.n_jobs * elapsed / query_qty:f} (sec)"
             )
 
         return kneighbors_graph
@@ -960,7 +946,7 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
 
         if self.verbose:
-            print("Query-time parameter efSearch:", self.efS)
+            logger.info("Query-time parameter efSearch: %s", self.efS)
 
         self.p.set_ef(self.efS)
         indices, distances = self.p.knn_query(query_data, k=query_k)
@@ -980,14 +966,9 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
 
         if self.verbose:
             elapsed = time.time() - start
-            print(
-                "kNN time total=%f (sec), per query=%f (sec), "
-                "per query adjusted for thread number=%f (sec)"
-                % (
-                    elapsed,
-                    elapsed / query_qty,
-                    self.n_jobs * elapsed / query_qty,
-                )
+            logger.info(
+                f"kNN time total={elapsed:f} (sec), per query={elapsed / query_qty:f} (sec), "
+                f"per query adjusted for thread number={self.n_jobs * elapsed / query_qty:f} (sec)"
             )
 
         if return_graph:
@@ -1007,21 +988,16 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
 
         if self.verbose:
-            print("Setting query-time parameter efSearch:", self.efS)
+            logger.info("Setting query-time parameter efSearch: %s", self.efS)
 
         start = time.time()
         self.p.set_ef(self.efS)
         ann_indices, _ = self.p.knn_query(test, k=query_k)
         if self.verbose:
             elapsed = time.time() - start
-            print(
-                "ANN kNN time total=%f (sec), per query=%f (sec), "
-                "per query adjusted for thread number=%f (sec)"
-                % (
-                    elapsed,
-                    elapsed / query_qty,
-                    self.n_jobs * elapsed / query_qty,
-                )
+            logger.info(
+                f"ANN kNN time total={elapsed:f} (sec), per query={elapsed / query_qty:f} (sec), "
+                f"per query adjusted for thread number={self.n_jobs * elapsed / query_qty:f} (sec)"
             )
 
         exact_metric = "euclidean" if self.metric == "sqeuclidean" else self.metric
@@ -1029,7 +1005,8 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
             exact_metric = "cosine"
             warn(
                 "Using cosine brute-force neighbors as an approximate recall "
-                "reference for HNSWlib metric='inner_product'."
+                "reference for HNSWlib metric='inner_product'.",
+                stacklevel=2,
             )
 
         start = time.time()
@@ -1041,9 +1018,8 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         true_indices = nbrs.kneighbors(test, return_distance=False)
         if self.verbose:
             elapsed = time.time() - start
-            print(
-                "Brute-force kNN time total=%f (sec), per query=%f (sec)"
-                % (elapsed, elapsed / query_qty)
+            logger.info(
+                f"Brute-force kNN time total={elapsed:f} (sec), per query={elapsed / query_qty:f} (sec)"
             )
 
         recall = 0.0
@@ -1054,7 +1030,7 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         recall /= query_qty
 
         if self.verbose:
-            print("kNN recall %f" % recall)
+            logger.info("kNN recall %f", recall)
 
         return recall
 

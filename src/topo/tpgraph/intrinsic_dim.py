@@ -227,7 +227,6 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
         else:
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize)
             for key in self.local_id["fsa"].keys():
-                i = 0
                 x = self.local_id["fsa"][key]
                 # Make a multiple-histogram of data-sets with different length.
                 label = (
@@ -246,14 +245,12 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
                     log=False,
                     label=label,
                 )
-                i = i + 1
             ax1.set_title("FSA", fontsize=titlesize, pad=10)
             ax1.legend(prop={"size": 12}, fontsize=legendsize)
             ax1.set_xlabel("Estimated intrinsic dimension", fontsize=labelsize)
             ax1.set_ylabel("Frequency", fontsize=labelsize)
 
             for key in self.local_id["mle"].keys():
-                i = 0
                 x = self.local_id["mle"][key]
                 # Make a multiple-histogram of data-sets with different length.
                 label = (
@@ -272,7 +269,6 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
                     log=False,
                     label=label,
                 )
-                i = i + 1
             ax2.set_title("MLE", fontsize=titlesize, pad=10)
             ax2.legend(prop={"size": 12}, fontsize=legendsize)
             ax2.set_xlabel("Estimated intrinsic dimension", fontsize=labelsize)

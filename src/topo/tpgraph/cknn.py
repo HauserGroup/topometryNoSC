@@ -19,17 +19,22 @@ from topo.base.ann import kNN
 
 
 def cknn_graph(
-    X,
-    n_neighbors=10,
-    delta=1.0,
-    metric="euclidean",
+    X: np.ndarray | csr_matrix,
+    n_neighbors: int = 10,
+    delta: float = 1.0,
+    metric: str = "euclidean",
     weighted: bool | None = False,
-    include_self=False,
-    return_densities=False,
-    backend="nmslib",
-    n_jobs=1,
-    verbose=False,
+    include_self: bool = False,
+    return_densities: bool = False,
+    backend: str = "nmslib",
+    n_jobs: int = 1,
+    verbose: bool = False,
     **kwargs,
+) -> (
+    csr_matrix
+    | tuple[csr_matrix, csr_matrix]
+    | tuple[csr_matrix, np.ndarray]
+    | tuple[csr_matrix, csr_matrix, np.ndarray]
 ):
     """Build a Continuous k-Nearest-Neighbors (CkNN) graph.
 
@@ -83,9 +88,12 @@ def cknn_graph(
 
 
     """
-    N = X.shape[0]
+    shape = X.shape
+    if shape is None:
+        raise ValueError("X must have a 2-D shape.")
+    N = int(shape[0])
     if metric == "precomputed":
-        knn = X.copy()
+        knn = X.copy() if isinstance(X, csr_matrix) else csr_matrix(X)
     else:
         # Fit kNN - we'll use a smaller number of k-neighbors for the CkNN normalization
         knn = csr_matrix(

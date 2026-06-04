@@ -21,6 +21,7 @@ Important conventions
 
 import logging
 import time
+from typing import Any, Literal, cast, overload
 from warnings import warn
 
 import numpy as np
@@ -33,14 +34,16 @@ from sklearn.neighbors import NearestNeighbors
 logger = logging.getLogger(__name__)
 
 
-def _resolve_n_jobs(n_jobs: int) -> int:
+def _resolve_n_jobs(n_jobs: int | str | None) -> int:
     """Resolve sklearn/joblib-style n_jobs."""
+    if n_jobs is None:
+        return 1
     if n_jobs == -1:
         return cpu_count()
     return int(n_jobs)
 
 
-def _validate_n_neighbors(n_neighbors: int) -> int:
+def _validate_n_neighbors(n_neighbors: int | float | str) -> int:
     """Validate and normalize a neighbor count."""
     n_neighbors = int(n_neighbors)
     if n_neighbors < 1:
@@ -53,16 +56,17 @@ def _query_k(n_neighbors: int, n_fit_samples: int) -> int:
     n_neighbors = _validate_n_neighbors(n_neighbors)
     if n_fit_samples < 1:
         raise ValueError("Cannot query an empty index.")
+    # Most ANN backends return the query point itself as the first neighbor
     return min(n_neighbors + 1, n_fit_samples)
 
 
-def _as_dense_array(data):
+def _as_dense_array(data: np.ndarray | csr_matrix | list) -> np.ndarray:
     """Convert supported array-like inputs to a dense numpy array."""
     if isinstance(data, np.ndarray):
         return data
 
     if issparse(data):
-        return data.toarray()
+        return cast(csr_matrix, data).toarray()
 
     try:
         import pandas as pd
@@ -78,10 +82,10 @@ def _as_dense_array(data):
     return arr
 
 
-def _as_csr_matrix(data):
+def _as_csr_matrix(data: np.ndarray | csr_matrix | list) -> csr_matrix:
     """Convert supported array-like inputs to CSR sparse matrix."""
     if issparse(data):
-        return data.tocsr()
+        return cast(csr_matrix, data).tocsr()
 
     try:
         import pandas as pd
@@ -94,7 +98,7 @@ def _as_csr_matrix(data):
     return csr_matrix(data)
 
 
-def _check_2d_data(data, name: str = "data"):
+def _check_2d_data(data: Any, name: str = "data") -> None:
     """Validate that data has a 2-D shape."""
     if not hasattr(data, "shape") or len(data.shape) != 2:
         raise ValueError(f"{name} must be a 2-D array-like or sparse matrix.")
@@ -104,7 +108,9 @@ def _check_2d_data(data, name: str = "data"):
         raise ValueError(f"{name} must contain at least one feature.")
 
 
-def _build_sparse_knn_graph(indices, distances, n_query_samples, n_fit_samples):
+def _build_sparse_knn_graph(
+    indices: np.ndarray, distances: np.ndarray, n_query_samples: int, n_fit_samples: int
+) -> csr_matrix:
     """Build a CSR neighbor-distance graph from dense index/distance arrays."""
     indices = np.asarray(indices)
     distances = np.asarray(distances)
@@ -117,6 +123,7 @@ def _build_sparse_knn_graph(indices, distances, n_query_samples, n_fit_samples):
         raise ValueError("indices row count does not match n_query_samples.")
 
     k = indices.shape[1]
+    # Create row pointers for CSR format directly from the regular k-neighbor grid
     indptr = np.arange(0, n_query_samples * k + 1, k, dtype=np.int64)
 
     return csr_matrix(
@@ -192,23 +199,84 @@ def _hnswlib_space(metric: str) -> str:
         ) from exc
 
 
+@overload
 def kNN(
-    X,
-    Y=None,
-    n_neighbors=5,
-    metric="euclidean",
-    n_jobs=-1,
-    backend="hnswlib",
-    low_memory=True,
-    M=60,
-    p=11 / 16,
-    efC=200,
-    efS=200,
-    n_trees=50,
-    return_instance=False,
-    verbose=False,
+    X: np.ndarray | csr_matrix,
+    Y: np.ndarray | csr_matrix | None = None,
+    n_neighbors: int | float | str = 5,
+    metric: str = "euclidean",
+    n_jobs: int | str | None = -1,
+    backend: str = "hnswlib",
+    low_memory: bool = True,
+    M: int = 60,
+    p: float = 11 / 16,
+    efC: int = 200,
+    efS: int = 200,
+    n_trees: int = 50,
+    *,
+    return_instance: Literal[True],
+    verbose: bool = False,
+    **kwargs: Any,
+) -> tuple[BaseEstimator, csr_matrix]: ...
+
+
+@overload
+def kNN(
+    X: np.ndarray | csr_matrix,
+    Y: np.ndarray | csr_matrix | None = None,
+    n_neighbors: int | float | str = 5,
+    metric: str = "euclidean",
+    n_jobs: int | str | None = -1,
+    backend: str = "hnswlib",
+    low_memory: bool = True,
+    M: int = 60,
+    p: float = 11 / 16,
+    efC: int = 200,
+    efS: int = 200,
+    n_trees: int = 50,
+    return_instance: Literal[False] = False,
+    verbose: bool = False,
+    **kwargs: Any,
+) -> csr_matrix: ...
+
+
+@overload
+def kNN(
+    X: np.ndarray | csr_matrix,
+    Y: np.ndarray | csr_matrix | None = None,
+    n_neighbors: int | float | str = 5,
+    metric: str = "euclidean",
+    n_jobs: int | str | None = -1,
+    backend: str = "hnswlib",
+    low_memory: bool = True,
+    M: int = 60,
+    p: float = 11 / 16,
+    efC: int = 200,
+    efS: int = 200,
+    n_trees: int = 50,
+    return_instance: bool = False,
+    verbose: bool = False,
+    **kwargs: Any,
+) -> csr_matrix | tuple[BaseEstimator, csr_matrix]: ...
+
+
+def kNN(
+    X: np.ndarray | csr_matrix,
+    Y: np.ndarray | csr_matrix | None = None,
+    n_neighbors: int | float | str = 5,
+    metric: str = "euclidean",
+    n_jobs: int | str | None = -1,
+    backend: str = "hnswlib",
+    low_memory: bool = True,
+    M: int = 60,
+    p: float = 11 / 16,
+    efC: int = 200,
+    efS: int = 200,
+    n_trees: int = 50,
+    return_instance: bool = False,
+    verbose: bool = False,
     **kwargs,
-):
+) -> csr_matrix | tuple[BaseEstimator, csr_matrix]:
     """Compute a k-nearest-neighbor distance graph.
 
     Parameters
@@ -304,9 +372,10 @@ def kNN(
         else:
             knn = nbrs.kneighbors_graph(Y, mode="distance")
 
+    knn_csr = cast(csr_matrix, knn)
     if return_instance:
-        return nbrs, knn
-    return knn
+        return nbrs, knn_csr
+    return knn_csr
 
 
 class NMSlibTransformer(BaseEstimator, TransformerMixin):

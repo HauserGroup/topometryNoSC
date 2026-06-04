@@ -16,7 +16,7 @@ from typing import Any, cast
 import numpy as np
 
 # dumb warning, suggests lilmatrix but it doesnt work
-from scipy.sparse import SparseEfficiencyWarning, issparse
+from scipy.sparse import SparseEfficiencyWarning, csr_matrix, issparse
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils import check_random_state
 
@@ -161,7 +161,7 @@ class Projector(BaseEstimator, TransformerMixin):
             )
         self.nbrs_backend = resolved
 
-    def fit(self, X, **kwargs):
+    def fit(self, X: np.ndarray | csr_matrix | Kernel, **kwargs: Any) -> "Projector":
         """Run the desired projection method on the specified data.
 
         Parameters
@@ -252,7 +252,7 @@ class Projector(BaseEstimator, TransformerMixin):
         else:
             if self.metric != "precomputed":
                 if issparse(X):
-                    X_fit = X.toarray()
+                    X_fit = cast(Any, X).toarray()
                 else:
                     X_fit = np.asarray(X)
                 if self.landmarks_ is not None and self.projection_method != "Isomap":
@@ -313,16 +313,16 @@ class Projector(BaseEstimator, TransformerMixin):
 
         elif self.projection_method == "t-SNE":
             if importlib.util.find_spec("MulticoreTSNE") is not None:
-                TSNE = importlib.import_module("MulticoreTSNE").MulticoreTSNE
-                self.estimator_ = TSNE(
+                tsne_cls = importlib.import_module("MulticoreTSNE").MulticoreTSNE
+                self.estimator_ = tsne_cls(
                     n_components=self.n_components,
                     metric="precomputed",
                     n_iter=self.num_iters,
                 )
             else:
-                from sklearn.manifold import TSNE
+                from sklearn.manifold import TSNE as SklearnTSNE
 
-                self.estimator_ = TSNE(
+                self.estimator_ = SklearnTSNE(
                     n_components=int(self.n_components),
                     metric="precomputed",
                     max_iter=int(self.num_iters),
@@ -502,7 +502,7 @@ class Projector(BaseEstimator, TransformerMixin):
             self.Y_ = self.estimator_.fit_transform(X)
         return self
 
-    def transform(self, X=None):
+    def transform(self, X: np.ndarray | csr_matrix | None = None) -> np.ndarray:
         """Return the projection, using the backend's transform when available.
 
         If the desired method does not have a transform method, returns the results from the fit method.
@@ -513,9 +513,9 @@ class Projector(BaseEstimator, TransformerMixin):
             Projection results
         """
         if self.projection_method == "UMAP":
-            return cast(Any, self.estimator_).transform(X)
+            return cast(np.ndarray, cast(Any, self.estimator_).transform(X))
         else:
-            return self.Y_
+            return cast(np.ndarray, self.Y_)
 
     def fit_transform(self, X, y=None, **kwargs) -> np.ndarray:
         """Fit the projection and return the embedding.

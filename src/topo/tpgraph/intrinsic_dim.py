@@ -201,7 +201,6 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
             fig, ax = plt.subplots(1, 1, figsize=figsize)
             method = self.methods[0]
             for key in self.local_id[method].keys():
-                i = 0
                 x = self.local_id[method][key]
                 # Make a multiple-histogram of data-sets with different length.
                 label = (
@@ -220,7 +219,6 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
                     log=False,
                     label=label,
                 )
-                i = i + 1
             ax.set_title(method.upper(), fontsize=titlesize, pad=10)
             ax.legend(prop={"size": 12}, fontsize=legendsize)
             ax.set_xlabel("Estimated intrinsic dimension", fontsize=labelsize)

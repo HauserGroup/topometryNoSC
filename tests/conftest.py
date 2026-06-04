@@ -22,6 +22,9 @@ def fitted_topograph(swiss_roll_data):
         graph_knn=15,
         verbosity=0,
         base_metric="euclidean",
+        projection_methods=[],
+        backend="sklearn",
     )
     tg.fit(X)
+    tg.project(projection_method="MAP", multiscale=True, num_iters=50)
     return tg

@@ -129,6 +129,9 @@ class TestTopOGraphProjections:
     def test_pacmap_layouts_exist(self, fitted_topograph, swiss_roll_data):
         X, _ = swiss_roll_data
         n = X.shape[0]
+        fitted_topograph.project(
+            projection_method="PaCMAP", multiscale=True, num_iters=50
+        )
         assert fitted_topograph.msTopoPaCMAP is not None
         assert fitted_topograph.msTopoPaCMAP.shape == (n, 2)
 

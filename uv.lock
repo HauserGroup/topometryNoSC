@@ -3922,7 +3922,7 @@ wheels = [
 ]
 
 [[package]]
-name = "topometry"
+name = "topometry-nosc"
 source = { editable = "." }
 dependencies = [
     { name = "numba" },

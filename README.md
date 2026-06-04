@@ -1,18 +1,20 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Documentation Status](https://readthedocs.org/projects/topometry/badge/?version=latest)](https://topometry.readthedocs.io/en/latest/?badge=latest)
-[![Downloads](https://static.pepy.tech/personalized-badge/topometry?period=total&units=international_system&left_color=grey&right_color=brightgreen&left_text=Downloads)](https://pepy.tech/project/topometry)
-[![Twitter](https://img.shields.io/twitter/url/https/twitter.com/DaviSidarta.svg?style=social&label=Follow%20%40davisidarta)](https://twitter.com/davisidarta)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://pre-commit.com/)
 [![Orcid: Jakob](https://img.shields.io/badge/Jakob-bar?style=flat&logo=orcid&labelColor=white&color=grey)](https://orcid.org/0000-0002-2841-7284)
 
-# About TopoMetry
+# About topometry-nosc
 
-> **Fork notice:** This is a heavily modified fork of
-> [topometry](https://github.com/davisidarta/topometry) by David S Oliveira,
-> It has diverged significantly and may or may not be maintained independently. Most likely unmaintained.
+> **Provenance.** `topometry-nosc` is an independently maintained, heavily
+> modified fork of [TopOMetry](https://github.com/davisidarta/topometry) by
+> David S Oliveira (original copyright and MIT license preserved). Its API,
+> internals and behaviour may differ substantially from upstream. It is **not**
+> an official release of, affiliated with, or endorsed by the original project.
+> The import package is still named `topo`, so it cannot be installed alongside
+> the upstream `topometry` distribution in the same environment. Please cite
+> both this fork and the original work (see `CITATION.cff`).
 
-**TopoMetry** is a geometry-aware Python toolkit for exploring high-dimensional data via diffusion/Laplacian operators. It learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** and then finds clusters and builds low-dimensional layouts for analysis and visualization.
+**topometry-nosc** is a geometry-aware Python toolkit for exploring high-dimensional data via diffusion/Laplacian operators. It learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** and then finds clusters and builds low-dimensional layouts for analysis and visualization.
 
 - **scikit-learn–style transformers** with a high-level `TopOGraph` orchestrator
 - **Fixed-time & multiscale spectral scaffolds**
@@ -43,12 +45,12 @@ Empirically, TopoMetry often outperforms PCA-based pipelines and stand-alone lay
 
 ## Installation
 
-TopoMetry is a standard, pip-installable package. The **core** install depends
-only on numpy, scipy, scikit-learn, numba and tqdm:
+topometry-nosc is a standard, pip-installable package. The **core** install
+depends only on numpy, scipy, scikit-learn, numba and tqdm:
 
 ```bash
-pip install topometry            # core
-pip install "topometry[all]"     # core + plotting, dataframes, ANN backends and extra layouts
+pip install topometry-nosc            # core
+pip install "topometry-nosc[all]"     # core + plotting, dataframes, ANN backends and extra layouts
 ```
 
 Optional features are grouped into extras — install only what you need:
@@ -63,7 +65,7 @@ Optional features are grouped into extras — install only what you need:
 | `all`        | everything above                                           |
 
 Missing an optional dependency raises a clear message telling you which extra to
-install (e.g. `pip install topometry[plot]`).
+install (e.g. `pip install topometry-nosc[plot]`).
 
 ### Development install
 

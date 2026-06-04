@@ -334,7 +334,7 @@ class Projector(BaseEstimator, TransformerMixin):
             Y, Y_aux = fuzzy_embedding(
                 K,
                 n_components=self.n_components,
-                init=self.init_Y_,
+                init=cast(Any, self.init_Y_),
                 n_epochs=self.num_iters,
                 random_state=self.random_state,
                 metric=self.metric,
@@ -379,7 +379,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 n_components=self.n_components,
                 precomputed_knn=precomputed_knn,
                 n_neighbors=k_nbrs,
-                init=self.init_Y_,
+                init=cast(Any, self.init_Y_),
                 n_epochs=self.num_iters,
                 **kwargs,
             )

@@ -18,7 +18,7 @@ import warnings
 from typing import Any, cast
 
 import numpy as np
-from scipy.sparse import issparse
+from scipy.sparse import csr_matrix, issparse
 from sklearn.base import BaseEstimator, TransformerMixin
 
 from topo import analysis as _analysis
@@ -48,7 +48,7 @@ VALID_KERNEL_VERSIONS = frozenset(
 
 # Each entry maps to the Kernel constructor kwargs that *differ* between versions.
 # Common kwargs (metric, n_neighbors, backend, …) are merged at call time.
-_KERNEL_CONFIGS = {
+_KERNEL_CONFIGS: dict[str, dict[str, Any]] = {
     "cknn": dict(
         cknn=True,
         fuzzy=False,
@@ -113,7 +113,7 @@ _KERNEL_CONFIGS = {
 # ============================================================================
 
 
-class TopOGraph(
+class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     GraphBuildMixin,
     EigenBuildMixin,
     LayoutBuildMixin,
@@ -288,8 +288,8 @@ class TopOGraph(
         self.EigenbasisDict = {}
         self.GraphKernelDict = {}
         self.ProjectionDict = {}
-        self.LocalScoresDict = {}
-        self.RiemannMetricDict = {}
+        self.LocalScoresDict: dict[str, Any] = {}
+        self.RiemannMetricDict: dict[str, Any] = {}
         self.runtimes = {}
 
         # UoM state (from mixin)
@@ -421,7 +421,12 @@ class TopOGraph(
         self._build_base_kernel(X, **kwargs)
 
         if self.base_metric != "precomputed":
-            self._automated_sizing(X if X is not None else self.base_kernel.X)
+            sizing_X = X
+            if sizing_X is None:
+                if self.base_kernel is None or self.base_kernel.X is None:
+                    raise ValueError("Input data is required for automated sizing.")
+                sizing_X = self.base_kernel.X
+            self._automated_sizing(sizing_X)
             if self.verbosity >= 1:
                 logger.info(
                     f"Automated sizing → target components: {self._scaffold_components_ms} "
@@ -557,22 +562,40 @@ class TopOGraph(
         return self._knn_Z
 
     @property
-    def P_of_msZ(self):
+    def P_of_msZ(self) -> csr_matrix:
         """Diffusion operator on the msDM scaffold."""
         if self.uom_enabled and self.P_of_msZ_uom is not None:
-            return self.P_of_msZ_uom
+            return (
+                self.P_of_msZ_uom
+                if isinstance(self.P_of_msZ_uom, csr_matrix)
+                else csr_matrix(self.P_of_msZ_uom)
+            )
         if self._kernel_msZ is None:
             raise AttributeError("P_of_msZ unavailable. Call .fit() first.")
-        return self._kernel_msZ.P
+        P = self._kernel_msZ.P
+        return P if isinstance(P, csr_matrix) else csr_matrix(P)
+
+    @P_of_msZ.setter
+    def P_of_msZ(self, value) -> None:
+        raise AttributeError("P_of_msZ is a read-only fitted property.")
 
     @property
-    def P_of_Z(self):
+    def P_of_Z(self) -> csr_matrix:
         """Diffusion operator on the DM scaffold."""
         if self.uom_enabled and self.P_of_Z_uom is not None:
-            return self.P_of_Z_uom
+            return (
+                self.P_of_Z_uom
+                if isinstance(self.P_of_Z_uom, csr_matrix)
+                else csr_matrix(self.P_of_Z_uom)
+            )
         if self._kernel_Z is None:
             raise AttributeError("P_of_Z unavailable. Call .fit() first.")
-        return self._kernel_Z.P
+        P = self._kernel_Z.P
+        return P if isinstance(P, csr_matrix) else csr_matrix(P)
+
+    @P_of_Z.setter
+    def P_of_Z(self, value) -> None:
+        raise AttributeError("P_of_Z is a read-only fitted property.")
 
     @property
     def knn_X(self):
@@ -668,11 +691,13 @@ class TopOGraph(
         """Per-sample spectral selectivity (delegates to ``topo.analysis``)."""
         if Z is None:
             Z = self.spectral_scaffold(multiscale=multiscale)
+        Z = np.asarray(Z)
         if use_scaffold_components and self._scaffold_components_ms is not None:
             Z = Z[:, : int(self._scaffold_components_ms)]
         if evals is None:
             key = f"{'msDM' if multiscale else 'DM'} with {self.base_kernel_version}"
-            ev = self.EigenbasisDict[key].eigenvalues
+            eigenbasis = self.EigenbasisDict[key]
+            ev = np.asarray(eigenbasis.eigenvalues)
             evals = (
                 ev[1 : Z.shape[1] + 1]
                 if ev.shape[0] >= Z.shape[1] + 1

@@ -6,6 +6,7 @@ eigendecomposition of the centered distance matrix, with optional landmarks.
 """
 
 import numpy as np
+from scipy.sparse import csr_matrix
 from sklearn.preprocessing import KernelCenterer
 
 from topo.base.ann import kNN
@@ -15,16 +16,16 @@ from topo.utils._utils import get_landmark_indices
 
 
 def Isomap(
-    X,
-    n_components=2,
-    n_neighbors=50,
-    metric="cosine",
-    landmarks=None,
-    landmark_method="kmeans",
-    eig_tol=0,
-    n_jobs=1,
+    X: np.ndarray | csr_matrix,
+    n_components: int = 2,
+    n_neighbors: int = 50,
+    metric: str = "cosine",
+    landmarks: int | np.ndarray | None = None,
+    landmark_method: str = "kmeans",
+    eig_tol: float = 0,
+    n_jobs: int = 1,
     **kwargs,
-):
+) -> np.ndarray:
     """
     Isomap embedding of a dataset or precomputed graph.
 
@@ -73,13 +74,17 @@ def Isomap(
     Y : ndarray of shape (n_samples, n_components)
         Isomap embedding coordinates.
     """
+    landmark_indices: np.ndarray | None = None
     if landmarks is not None:
         if isinstance(landmarks, np.ndarray):
-            pass  # use as-is
+            landmark_indices = np.asarray(landmarks, dtype=np.intp)
         elif isinstance(landmarks, int):
-            landmarks = get_landmark_indices(
-                X, n_landmarks=landmarks, method=landmark_method
+            landmark_indices = np.asarray(
+                get_landmark_indices(X, n_landmarks=landmarks, method=landmark_method),
+                dtype=np.intp,
             )
+        else:
+            raise ValueError("'landmarks' must be an integer or an integer array.")
 
     # Build kNN graph
     if metric != "precomputed":
@@ -93,11 +98,11 @@ def Isomap(
         method="D",
         unweighted=False,
         directed=False,
-        indices=landmarks,
+        indices=landmark_indices,
         n_jobs=n_jobs,
     )
-    if landmarks is not None:
-        G = G.T[landmarks].T
+    if landmark_indices is not None:
+        G = G.T[landmark_indices].T
 
     # Guarantee symmetry and zero diagonal
     G = (G + G.T) / 2

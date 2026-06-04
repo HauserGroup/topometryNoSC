@@ -17,6 +17,18 @@ from topo.utils._utils import get_landmark_indices
 logger = logging.getLogger(__name__)
 
 
+def _matrix_shape(A) -> tuple[int, ...]:
+    shape = A.shape if isinstance(A, csr_matrix) else np.shape(A)
+    if shape is None:
+        raise ValueError("Input must expose a valid shape.")
+    return tuple(int(dim) for dim in shape)
+
+
+def _is_square_matrix(A) -> bool:
+    shape = _matrix_shape(A)
+    return len(shape) == 2 and shape[0] == shape[1]
+
+
 def geodesic_distance(
     A,
     method="D",
@@ -200,14 +212,8 @@ def geodesic_correlation(
             "random_state must be None, an int, or a numpy RandomState, "
             f"got {type(random_state)!r}."
         )
-    if isinstance(data, csr_matrix):
-        DATA_IS_GRAPH = data.shape[0] == data.shape[1]
-    else:
-        DATA_IS_GRAPH = np.shape(data)[0] == np.shape(data)[1]
-    if isinstance(emb, csr_matrix):
-        EMB_IS_GRAPH = emb.shape[0] == emb.shape[1]
-    else:
-        EMB_IS_GRAPH = np.shape(emb)[0] == np.shape(emb)[1]
+    DATA_IS_GRAPH = _is_square_matrix(data)
+    EMB_IS_GRAPH = _is_square_matrix(emb)
     if not DATA_IS_GRAPH:
         data_graph = kNN(
             data,
@@ -244,7 +250,7 @@ def geodesic_correlation(
                 method=landmark_method,
                 random_state=random_state,
             )
-            if landmark_indices.shape[0] == data.shape[0]:
+            if landmark_indices.shape[0] == _matrix_shape(data)[0]:
                 landmark_indices = None
         elif isinstance(landmarks, np.ndarray):
             landmark_indices = landmarks

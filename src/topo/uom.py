@@ -313,14 +313,12 @@ class UoMMixin:
     # Core geometry
     n: int
     verbosity: int
-    random_state: Any
 
     # kNN / kernel settings
     backend: str
     base_knn: int
     base_metric: str
     base_kernel_version: str
-    base_kernel: Any
     graph_knn: int
     graph_metric: str
     graph_kernel_version: str
@@ -350,12 +348,9 @@ class UoMMixin:
 
     # Computed state (written by TopOGraph.fit before _fit_uom is called)
     current_eigenbasis: str
-    eigenbasis: Any
     n_jobs: int
     _knn_Z: Any
     _knn_msZ: Any
-    _kernel_Z: Any
-    _kernel_msZ: Any
 
     # Methods provided by the host class
     def _build_kernel(self, *args: Any, **kwargs: Any) -> Any: ...
@@ -444,7 +439,12 @@ class UoMMixin:
             if self.verbosity >= 1:
                 logger.info(f"UoM: using precomputed component labels (n={n_comp}).")
         else:
-            n_comp, labels = self.uom_find_components(P=self.base_kernel.P)
+            base_kernel = getattr(self, "base_kernel", None)
+            if base_kernel is None:
+                raise ValueError(
+                    "Base kernel is required before UoM component detection."
+                )
+            n_comp, labels = self.uom_find_components(P=base_kernel.P)
             if self.verbosity >= 1:
                 logger.info(
                     f"UoM: computed component labels on refined graph (n={n_comp})."
@@ -479,7 +479,7 @@ class UoMMixin:
                 min_components=int(min(self.id_min_components, cap)),
                 max_components=int(min(cap, n_max)),
                 headroom=float(self.id_headroom),
-                random_state=self.random_state,
+                random_state=getattr(self, "random_state", None),
                 return_details=False,
             )
             k_auto = res[0] if isinstance(res, tuple) else res
@@ -495,6 +495,10 @@ class UoMMixin:
             # Per-component kNN
             k_neighbors_i = min(self.base_knn, max(1, n_i - 1))
             Xi = self._get_component_data(X, idx)
+            if Xi is None:
+                raise ValueError(
+                    "Component data is unavailable for UoM kNN construction."
+                )
 
             knn_i = kNN(
                 Xi,
@@ -539,7 +543,7 @@ class UoMMixin:
                 drop_first=True,
                 weight=True,
                 t=self.diff_t,
-                random_state=self.random_state,
+                random_state=getattr(self, "random_state", None),
                 verbose=False,
             ).fit(Ki)
 
@@ -620,6 +624,8 @@ class UoMMixin:
         self._aggregate_uom_blocks()
 
         # Spectral layout + projections
+        if self._kernel_msZ is None:
+            raise RuntimeError("UoM msDM scaffold kernel was not built.")
         _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
         if self.projection_methods is not None:
             for proj in self.projection_methods:
@@ -674,13 +680,15 @@ class UoMMixin:
 
     def _get_component_data(self, X, idx):
         """Slice input data for a UoM component."""
+        base_kernel = getattr(self, "base_kernel", None)
         if self.base_metric == "precomputed":
             return (
                 X[np.ix_(idx, idx)]
                 if X is not None
                 else (
-                    self.base_kernel.X[np.ix_(idx, idx)]
-                    if getattr(self.base_kernel, "X", None) is not None
+                    base_kernel.X[np.ix_(idx, idx)]
+                    if base_kernel is not None
+                    and getattr(base_kernel, "X", None) is not None
                     else None
                 )
             )
@@ -688,8 +696,9 @@ class UoMMixin:
             X[idx]
             if X is not None
             else (
-                self.base_kernel.X[idx]
-                if getattr(self.base_kernel, "X", None) is not None
+                base_kernel.X[idx]
+                if base_kernel is not None
+                and getattr(base_kernel, "X", None) is not None
                 else None
             )
         )

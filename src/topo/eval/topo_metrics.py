@@ -18,11 +18,18 @@ from topo.tpgraph.kernels import Kernel
 # ----------------------------
 # Utilities
 # ----------------------------
-def _ensure_csr(P):
+def _ensure_csr(P) -> sp.csr_matrix:
     if not sp.isspmatrix_csr(P):
         P = sp.csr_matrix(P)
     P.eliminate_zeros()
     return P
+
+
+def _shape2(P: sp.csr_matrix) -> tuple[int, int]:
+    shape = P.shape
+    if shape is None:
+        raise ValueError("Operator must have a valid 2-D shape.")
+    return int(shape[0]), int(shape[1])
 
 
 def _top_eigs_of_P(
@@ -35,7 +42,7 @@ def _top_eigs_of_P(
     Returns evals (r,), evecs (n,r). Sorted by |lambda| desc.
     """
     P = _ensure_csr(P)
-    n = P.shape[0]
+    n, _ = _shape2(P)
     r = min(r, n - 1)
     if r < 1:
         raise ValueError("r must be >= 1 and < n.")
@@ -477,7 +484,7 @@ def rowwise_js_similarity(
     import numpy as np
     import scipy.sparse as sp
 
-    def _ensure_csr(P):
+    def _ensure_csr(P) -> sp.csr_matrix:
         if not sp.isspmatrix_csr(P):
             P = sp.csr_matrix(P)
         P.eliminate_zeros()
@@ -504,7 +511,7 @@ def rowwise_js_similarity(
 
     Px = _ensure_csr(Px)
     Py = _ensure_csr(Py)
-    n = Px.shape[0]
+    n, _ = _shape2(Px)
     one_minus_js = []
 
     for i in range(n):
@@ -570,7 +577,7 @@ def sparse_neighborhood_f1(Px, Py, k=None):
     """
     Px = _ensure_csr(Px)
     Py = _ensure_csr(Py)
-    n = Px.shape[0]
+    n, _ = _shape2(Px)
     f1s = []
     for i in range(n):
         pr = Px.data[Px.indptr[i] : Px.indptr[i + 1]]
@@ -675,11 +682,12 @@ def commute_time_trace_gap(
     def _trace_pinv_laplacian(P):
         A = (P + P.T) * 0.5
         A = _ensure_csr(A)
+        n, _ = _shape2(A)
         d = np.asarray(A.sum(axis=1)).ravel()
         d[d <= 0] = 1e-12
         Dm12 = sp.diags(1.0 / np.sqrt(d))
-        Lsym = sp.eye(A.shape[0], format="csr") - Dm12 @ A @ Dm12
-        k = min(r + 1, A.shape[0] - 1)
+        Lsym = sp.eye(n, format="csr") - Dm12 @ A @ Dm12
+        k = min(r + 1, n - 1)
         vals, _ = cast(
             tuple[np.ndarray, np.ndarray],
             spla.eigsh(
@@ -687,8 +695,8 @@ def commute_time_trace_gap(
                 k=k,
                 which="SM",
                 tol=cast(Any, 1e-4),
-                maxiter=A.shape[0] * 5,
-                v0=np.ones(A.shape[0]),
+                maxiter=n * 5,
+                v0=np.ones(n),
             ),
         )
         vals = np.sort(vals)
@@ -767,7 +775,7 @@ def topo_preserve_score(
     import scipy.sparse.linalg as spla
 
     # --- helpers (mirror commute_time_trace_gap internals so we can normalize CT) ---
-    def _ensure_csr(P):
+    def _ensure_csr(P) -> sp.csr_matrix:
         if not sp.isspmatrix_csr(P):
             P = sp.csr_matrix(P)
         P.eliminate_zeros()
@@ -777,12 +785,13 @@ def topo_preserve_score(
         # Symmetrize to an affinity, then build normalized Laplacian
         A = (P + P.T) * 0.5
         A = _ensure_csr(A)
+        n, _ = _shape2(A)
         d = np.asarray(A.sum(axis=1)).ravel()
         d[d <= 0] = 1e-12
         Dm12 = sp.diags(1.0 / np.sqrt(d))
-        Lsym = sp.eye(A.shape[0], format="csr") - Dm12 @ A @ Dm12
+        Lsym = sp.eye(n, format="csr") - Dm12 @ A @ Dm12
         # Smallest eigenvalues of Lsym; drop the trivial 0 mode
-        k = min(int(r) + 1, A.shape[0] - 1) if A.shape[0] > 2 else 1
+        k = min(int(r) + 1, n - 1) if n > 2 else 1
         vals, _ = cast(
             tuple[np.ndarray, np.ndarray],
             spla.eigsh(
@@ -790,8 +799,8 @@ def topo_preserve_score(
                 k=k,
                 which="SM",
                 tol=cast(Any, 1e-4),
-                maxiter=A.shape[0] * 5,
-                v0=np.ones(A.shape[0]),
+                maxiter=n * 5,
+                v0=np.ones(n),
             ),
         )
         vals = np.sort(vals)

@@ -24,19 +24,28 @@ from typing import Any, cast
 
 import numpy as np
 
-plt = cm = mcolors = Ellipse = None
+plt: Any = None
+cm: Any = None
+mcolors: Any = None
+Ellipse: Any = None
 try:
-    import matplotlib.pyplot as plt
-    from matplotlib import cm
-    from matplotlib import colors as mcolors
-    from matplotlib.patches import Ellipse
+    import matplotlib.pyplot as _plt
+    from matplotlib import cm as _cm
+    from matplotlib import colors as _mcolors
+    from matplotlib.patches import Ellipse as _Ellipse
+
+    plt = _plt
+    cm = _cm
+    mcolors = _mcolors
+    Ellipse = _Ellipse
 except Exception:
     pass
 
-NearestNeighbors = None
+NearestNeighbors: Any = None
 try:
-    from sklearn.neighbors import NearestNeighbors
+    from sklearn.neighbors import NearestNeighbors as _NearestNeighbors
 
+    NearestNeighbors = _NearestNeighbors
     _HAVE_SK = True
 except Exception:
     _HAVE_SK = False

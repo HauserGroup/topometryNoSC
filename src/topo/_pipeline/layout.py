@@ -38,8 +38,6 @@ class LayoutBuildMixin:
     runtimes: dict[str, float]
     SpecLayout: np.ndarray | None
     graph_knn: int
-    P_of_msZ: csr_matrix | None
-    P_of_Z: csr_matrix | None
     graph_metric: str
     uom_enabled: bool
     msZ_uom: csr_matrix | None
@@ -57,6 +55,28 @@ class LayoutBuildMixin:
     uom_components_: list[np.ndarray] | None
     eigenbasis: EigenDecomposition | None
     base_kernel: Kernel | None
+
+    @property
+    def P_of_msZ(self) -> csr_matrix:
+        P = getattr(self, "_P_of_msZ_mixin", None)
+        if P is None:
+            raise AttributeError("P_of_msZ unavailable. Call .fit() first.")
+        return P if isinstance(P, csr_matrix) else csr_matrix(P)
+
+    @P_of_msZ.setter
+    def P_of_msZ(self, value) -> None:
+        self._P_of_msZ_mixin = value
+
+    @property
+    def P_of_Z(self) -> csr_matrix:
+        P = getattr(self, "_P_of_Z_mixin", None)
+        if P is None:
+            raise AttributeError("P_of_Z unavailable. Call .fit() first.")
+        return P if isinstance(P, csr_matrix) else csr_matrix(P)
+
+    @P_of_Z.setter
+    def P_of_Z(self, value) -> None:
+        self._P_of_Z_mixin = value
 
     def _run_projections(self):
         """Compute requested 2-D projections on both scaffolds."""
@@ -106,7 +126,7 @@ class LayoutBuildMixin:
         t0 = time.time()
         rng = check_random_state(self.random_state)
         try:
-            spt = cast(
+            spt_result = cast(
                 Any,
                 spectral_layout(
                     graph,
@@ -117,13 +137,16 @@ class LayoutBuildMixin:
                     return_evals=False,
                 ),
             )
+            spt = np.asarray(spt_result)
             scale = float(np.abs(spt).max())
             expansion = 10.0 / scale if np.isfinite(scale) and scale > 0 else 1.0
             spt = (spt * expansion).astype(np.float32) + rng.normal(
                 scale=0.0001, size=(graph.shape[0], n_components)
             ).astype(np.float32)
         except Exception:
-            spt = EigenDecomposition(n_components=n_components).fit_transform(graph)
+            spt = np.asarray(
+                EigenDecomposition(n_components=n_components).fit_transform(graph)
+            )
         self.runtimes["Spectral"] = time.time() - t0
         self.SpecLayout = spt
         gc.collect()
@@ -308,6 +331,8 @@ class LayoutBuildMixin:
         if initial_alpha_grid is None:
             initial_alpha_grid = [0.4, 1.0, 1.6]
 
+        if self.base_kernel is None:
+            raise ValueError("No base kernel available. Call fit() first.")
         PX_ref = self.base_kernel.P
         if not issparse(PX_ref):
             PX_ref = csr_matrix(PX_ref)
@@ -319,7 +344,9 @@ class LayoutBuildMixin:
             for ia in initial_alpha_grid
         ]
 
-        best = {"score": -np.inf, "params": None, "snapshots": None, "Y": None}
+        best_score = float("-inf")
+        best_params: dict[str, float] | None = None
+        best_snapshots: list[dict] | None = None
         all_scores = []
         snap_attr = "msTopoMAP_snapshots" if multiscale else "TopoMAP_snapshots"
 
@@ -329,7 +356,7 @@ class LayoutBuildMixin:
                     f"[Grid] MAP: min_dist={md}, spread={sp_}, initial_alpha={ia}"
                 )
 
-            Y = self.project(
+            self.project(
                 projection_method="MAP",
                 multiscale=bool(multiscale),
                 num_iters=int(num_iters),
@@ -387,34 +414,36 @@ class LayoutBuildMixin:
                 }
             )
 
-            if final_score > best["score"]:
-                best = {
-                    "score": final_score,
-                    "params": {"min_dist": md, "spread": sp_, "initial_alpha": ia},
-                    "snapshots": [dict(s) for s in snapshots],
-                    "Y": np.array(Y, copy=True),
+            if final_score > best_score:
+                best_score = final_score
+                best_params = {
+                    "min_dist": float(md),
+                    "spread": float(sp_),
+                    "initial_alpha": float(ia),
                 }
+                best_snapshots = [dict(s) for s in snapshots]
 
-        if best["snapshots"] is not None:
-            setattr(self, snap_attr, best["snapshots"])
+        if best_snapshots is not None:
+            setattr(self, snap_attr, best_snapshots)
 
-        if best["params"] is not None:
-            bp = best["params"]
+        if best_params is not None:
             self.project(
                 projection_method="MAP",
                 multiscale=bool(multiscale),
                 num_iters=int(num_iters),
                 save_every=int(save_every),
                 include_init_snapshot=True,
-                **bp,
+                min_dist=best_params["min_dist"],
+                spread=best_params["spread"],
+                initial_alpha=best_params["initial_alpha"],
             )
-            setattr(self, snap_attr, best["snapshots"])
+            setattr(self, snap_attr, best_snapshots)
 
         return {
-            "best_params": best["params"],
-            "best_score": best["score"],
+            "best_params": best_params,
+            "best_score": best_score,
             "scores": all_scores,
-            "best_snapshots": best["snapshots"],
+            "best_snapshots": best_snapshots,
         }
 
     # ------------------------------------------------------------------

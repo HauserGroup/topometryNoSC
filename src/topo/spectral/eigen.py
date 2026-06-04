@@ -11,7 +11,7 @@ embedding, plus spectral-layout helpers for disconnected graphs.
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 from warnings import warn
 
 import numpy as np
@@ -27,14 +27,20 @@ from topo.tpgraph.kernels import Kernel
 logger = logging.getLogger(__name__)
 
 EIGEN_SOLVERS = ["dense", "arpack", "lobpcg"]
-try:
-    from pyamg import smoothed_aggregation_solver
 
-    PYAMG_LOADED = True
+
+def _load_smoothed_aggregation_solver() -> Any:
+    try:
+        import pyamg
+    except ImportError:
+        return None
+    return pyamg.smoothed_aggregation_solver
+
+
+_smoothed_aggregation_solver = _load_smoothed_aggregation_solver()
+PYAMG_LOADED = _smoothed_aggregation_solver is not None
+if PYAMG_LOADED:
     EIGEN_SOLVERS.append("amg")
-except ImportError:
-    PYAMG_LOADED = False
-    smoothed_aggregation_solver: Any = None
 
 
 def _diffusion_operator_with_degree(W, alpha) -> tuple[Any, Any]:
@@ -179,7 +185,7 @@ def eigendecompose(
 
         np.random.set_state(random_state.get_state())
 
-        ml = smoothed_aggregation_solver(G)
+        ml = _smoothed_aggregation_solver(G)
         M_prec = ml.aspreconditioner()
 
         X = random_state.normal(size=(N, k))
@@ -417,6 +423,8 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             random_state=self.random_state,
             verbose=self.verbose,
         )
+        evals = np.asarray(evals)
+        evecs = np.asarray(evecs)
 
         if self.drop_first:
             evals = evals[1:]
@@ -438,8 +446,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         if self.method in ["DM", "msDM"]:
             if symmetric and self.D_inv_sqrt_ is not None:
                 assert isinstance(self.D_inv_sqrt_, (np.ndarray, sparse.spmatrix))
-                evecs = self.D_inv_sqrt_.dot(evecs)  # type: ignore[union-attr]
-            assert evecs is not None
+                evecs = np.asarray(cast(Any, self.D_inv_sqrt_).dot(evecs))
             for i in range(evecs.shape[1]):
                 norm = np.linalg.norm(evecs[:, i])
                 if norm == 0:
@@ -466,11 +473,15 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             raise ValueError(
                 "Rescaling is only available for multiscale diffusion maps."
             )
-        if use_eigs > self.eigenvectors.shape[1]:
+        eigenvectors = self.eigenvectors
+        eigenvalues = self.eigenvalues
+        if eigenvectors is None or eigenvalues is None:
+            raise ValueError("The estimator has not been fitted yet.")
+        if use_eigs > eigenvectors.shape[1]:
             raise ValueError("Cannot rescale to more eigenvectors than are available.")
         use_eigs = int(use_eigs)
-        weights = _safe_msdm_weights(self.eigenvalues[:use_eigs])
-        self.embedding = self.eigenvectors[:, :use_eigs] * weights
+        weights = _safe_msdm_weights(eigenvalues[:use_eigs])
+        self.embedding = eigenvectors[:, :use_eigs] * weights
         return self
 
     def results(self, return_evals=None):
@@ -784,7 +795,11 @@ def multi_component_layout(
     else:
         graph_csr = sparse.csr_matrix(np.asarray(graph, dtype=float))
 
-    result = np.empty((graph_csr.shape[0], dim), dtype=np.float32)
+    shape = graph_csr.shape
+    if shape is None:
+        raise ValueError("Graph must have a valid shape.")
+    n_nodes = int(shape[0])
+    result = np.empty((n_nodes, dim), dtype=np.float32)
 
     if n_components > 2 * dim:
         meta_embedding = component_layout(

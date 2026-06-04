@@ -78,23 +78,25 @@ else:
 
 
 @njit(fastmath=True)
-def euclidean(x, y):
+def euclidean(x: np.ndarray, y: np.ndarray) -> float:
     """Standard Euclidean distance."""
     diff = x - y
+    # np.dot(diff, diff) is squared L2 norm
     return np.sqrt(np.dot(diff, diff))
 
 
 @njit(fastmath=True)
-def euclidean_grad(x, y):
+def euclidean_grad(x: np.ndarray, y: np.ndarray) -> tuple[float, np.ndarray]:
     """Euclidean distance and gradient with respect to ``x``."""
     diff = x - y
     dist = np.sqrt(np.dot(diff, diff))
+    # 1e-8 prevents division by zero at origin
     grad = diff / (1e-8 + dist)
     return dist, grad
 
 
 @njit(fastmath=True)
-def poincare(u, v):
+def poincare(u: np.ndarray, v: np.ndarray) -> float:
     """Poincaré ball distance."""
     uu = np.dot(u, u)
     vv = np.dot(v, v)
@@ -105,7 +107,7 @@ def poincare(u, v):
 
 
 @njit(fastmath=True)
-def poincare_grad(u, v):
+def poincare_grad(u: np.ndarray, v: np.ndarray) -> tuple[float, np.ndarray]:
     """Poincaré distance and gradient with respect to ``u``."""
     uu = np.dot(u, u)
     vv = np.dot(v, v)
@@ -121,7 +123,7 @@ def poincare_grad(u, v):
 
 
 @njit(fastmath=True)
-def cosine(x, y):
+def cosine(x: np.ndarray, y: np.ndarray) -> float:
     """Cosine distance."""
     num = np.dot(x, y)
     norm_x = np.sqrt(np.dot(x, x))
@@ -134,7 +136,7 @@ def cosine(x, y):
 
 
 @njit(fastmath=True)
-def cosine_grad(x, y):
+def cosine_grad(x: np.ndarray, y: np.ndarray) -> tuple[float, np.ndarray]:
     """Cosine distance and gradient with respect to ``x``."""
     num = np.dot(x, y)
     norm_x = np.sqrt(np.dot(x, x))

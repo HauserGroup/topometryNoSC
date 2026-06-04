@@ -17,6 +17,7 @@ from sklearn.utils import check_random_state
 
 from topo.layouts.projector import Projector
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
+from topo.tpgraph.kernels import Kernel
 
 logger = logging.getLogger(__name__)
 
@@ -28,34 +29,34 @@ class LayoutBuildMixin:
     projection_methods: list[str] | None
     graph_kernel_version: str
     base_kernel_version: str
-    ProjectionDict: dict[str, Any]
-    _kernel_msZ: Any
-    _kernel_Z: Any
-    random_state: Any
+    ProjectionDict: dict[str, np.ndarray]
+    _kernel_msZ: Kernel | None
+    _kernel_Z: Kernel | None
+    random_state: int | np.random.RandomState | None
     laplacian_type: str
     eigen_tol: float
     runtimes: dict[str, float]
-    SpecLayout: Any
+    SpecLayout: np.ndarray | None
     graph_knn: int
-    P_of_msZ: Any
-    P_of_Z: Any
+    P_of_msZ: csr_matrix | None
+    P_of_Z: csr_matrix | None
     graph_metric: str
     uom_enabled: bool
-    msZ_uom: Any
-    Z_uom: Any
-    EigenbasisDict: dict[str, Any]
+    msZ_uom: csr_matrix | None
+    Z_uom: csr_matrix | None
+    EigenbasisDict: dict[str, EigenDecomposition]
     n_jobs: int
     backend: str
     layout_verbose: bool
     verbosity: int
     msTopoMAP_snapshots: list[dict[str, Any]]
     TopoMAP_snapshots: list[dict[str, Any]]
-    uom_eigenvalues_ms_list: list[Any]
+    uom_eigenvalues_ms_list: list[np.ndarray]
     _uom_active_mode: str
-    uom_eigenvalues_dm_list: list[Any]
-    uom_components_: list[Any] | None
-    eigenbasis: Any
-    base_kernel: Any
+    uom_eigenvalues_dm_list: list[np.ndarray]
+    uom_components_: list[np.ndarray] | None
+    eigenbasis: EigenDecomposition | None
+    base_kernel: Kernel | None
 
     def _run_projections(self):
         """Compute requested 2-D projections on both scaffolds."""

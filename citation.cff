@@ -1,26 +1,31 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite the article as below."
+type: software
+title: TopoMetry
+version: 2.1.0
 authors:
-  - family-names: "Oliveira"
-    given-names: "David S"
-  - family-names: "Domingos"
-    given-names: "Ana I."
-  - family-names: "Velloso"
-    given-names: "Licio A"
-title: "TopOMetry"
-url: "https://github.com/davisidarta/topometry"
+  - family-names: Oliveira
+    given-names: David S
+  - family-names: Domingos
+    given-names: Ana I
+  - family-names: Velloso
+    given-names: Licio A
+repository-code: "https://github.com/davisidarta/topometry"
 preferred-citation:
   type: article
+  title: >-
+    TopoMetry systematically learns and evaluates the latent geometry of
+    single-cell data
   authors:
-    - family-names: "Oliveira"
-      given-names: "David S"
-    - family-names: "Domingos"
-      given-names: "Ana I."
-    - family-names: "Velloso"
-      given-names: "Licio A"
-  doi: "10.1101/2022.03.14.484134"
-  url: "https://www.biorxiv.org/content/early/2025/10/15/2022.03.14.484134"
-  journal: "bioRxiv"
-  publisher: "Cold Spring Harbor Laboratory"
-  title: "TopoMetry systematically learns and evaluates the latent geometry of single-cell data"
-  year: 2025
+    - family-names: Oliveira
+      given-names: David S
+    - family-names: Domingos
+      given-names: Ana I
+    - family-names: Velloso
+      given-names: Licio A
+  journal: eLife
+  year: 2024
+  volume: 13
+  article-number: RP100361
+  doi: 10.7554/eLife.100361.2
+  url: "https://doi.org/10.7554/eLife.100361.2"

@@ -144,3 +144,34 @@ class TestTopOGraphSaveLoad:
             assert os.path.exists(path)
             loaded = load_topograph(path)
             assert loaded.n == fitted_topograph.n
+
+
+def test_kernel_degree_lazily_builds_adjacency(fitted_topograph):
+    K = fitted_topograph.base_kernel
+    K._A = None
+    K._degree = None
+
+    deg = K.degree
+
+    assert deg is not None
+    assert np.asarray(deg).shape[0] == fitted_topograph.n
+
+
+def test_sparse_umap_knn_conversion_handles_variable_degree():
+    from scipy import sparse
+    from topo.layouts.projector import _csr_to_fixed_knn
+
+    K = sparse.csr_matrix(
+        [
+            [0.0, 1.0, 2.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0, 3.0],
+            [0.0, 0.0, 3.0, 0.0],
+        ]
+    )
+
+    idx, dist = _csr_to_fixed_knn(K, n_neighbors=2)
+
+    assert idx.shape == (4, 2)
+    assert dist.shape == (4, 2)
+    assert np.isfinite(dist[:, 0]).all()

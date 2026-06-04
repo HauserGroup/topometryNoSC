@@ -73,3 +73,13 @@ docs/LBO_Review/
 Thumbs.db
 *.swp
 *.swo
+
+# repomix
+repomix*.xml
+
+# Agents
+GEMINI.md
+CLAUDE.md
+.agents
+.github
+.prompt.md

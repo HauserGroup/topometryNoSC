@@ -29,3 +29,4 @@ repos:
     rev: 0.9.1   # check for latest
     hooks:
     - id: nbstripout
+      exclude: ^notebooks/

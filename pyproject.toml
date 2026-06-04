@@ -76,6 +76,7 @@ Changelog = "https://github.com/HauserGroup/topometryNoSC/blob/master/CHANGELOG.
 
 [dependency-groups]
 dev = [
+    "jupytext>=1.19.3",
     "mypy>=1.13",
     "nbstripout>=0.9.1",
     "pre-commit>=4.5.1",
@@ -144,6 +145,9 @@ warn_redundant_casts = true
 warn_unused_ignores = false
 no_implicit_optional = true
 files = ["src/topo"]
+
+[tool.pyright]
+extraPaths = ["src", "notebooks"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

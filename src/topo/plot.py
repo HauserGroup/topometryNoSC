@@ -31,11 +31,14 @@ def decay_plot(
     A simple plot of the eigenspectrum decay.
 
     """
+    evals = np.asarray(evals, dtype=float).ravel()
+    if evals.size == 0:
+        raise ValueError("evals must contain at least one value.")
     fig, ax = plt.subplots(1, 2, figsize=figsize)
     fig.subplots_adjust(left=0.08, right=0.98, wspace=wspace)
     max_eigs = int(np.sum(evals > 0, axis=0))
     first_diff = np.diff(evals)
-    eigengap = np.argmax(first_diff) + 1
+    eigengap = int(np.argmax(first_diff) + 1) if first_diff.size > 0 else 0
     ax1 = ax[0]
     if title is not None:
         plt.suptitle(title, fontsize=fontsize)
@@ -73,7 +76,8 @@ def decay_plot(
             max_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label="Eigengap"
         )
     plt.tight_layout()
-    return plt.show()
+    plt.show()
+    return fig
 
 
 def eigsorted(cov):
@@ -116,6 +120,8 @@ def scatter(
     -------
 
     """
+    res = _as_2d_array(res, "res")
+    _check_n_columns(res, 2, "res")
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.set_aspect("equal", adjustable="datalim")
@@ -130,14 +136,15 @@ def scatter(
         alpha=opacity,
         **kwargs,
     )
-    return plt.show()
+    plt.show()
+    return fig
 
 
 def scatter3d(res, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
-    if len(res[0]) != 3:
-        raise ValueError(f"Expects array with 3 columns. Input has {int(len(res[0]))}.")
+    res = _as_2d_array(res, "res")
+    _check_n_columns(res, 3, "res")
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
+    ax = cast(Any, fig.add_subplot(111, projection="3d"))
     ax.scatter(
         res[:, 0],
         res[:, 1],
@@ -148,7 +155,8 @@ def scatter3d(res, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral
         marker=marker,
         alpha=opacity,
     )
-    return plt.show()
+    plt.show()
+    return fig
 
 
 def hyperboloid(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
@@ -158,10 +166,13 @@ def hyperboloid(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectr
     ax.scatter(x, y, z, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
     ax.view_init(35, 80)
     ax.set_aspect("equal", adjustable="datalim")
-    return plt.show()
+    plt.show()
+    return fig
 
 
 def two_to_3d_hyperboloid(emb):
+    emb = _as_2d_array(emb, "emb")
+    _check_n_columns(emb, 2, "emb")
     x = emb[:, 0]
     y = emb[:, 1]
     z = np.sqrt(1 + np.sum(emb**2, axis=1))
@@ -169,6 +180,8 @@ def two_to_3d_hyperboloid(emb):
 
 
 def poincare(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
+    emb = _as_2d_array(emb, "emb")
+    _check_n_columns(emb, 2, "emb")
     x = emb[:, 0]
     y = emb[:, 1]
     z = np.sqrt(1 + np.sum(emb**2, axis=1))
@@ -184,43 +197,55 @@ def poincare(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"
     ax.axis("off")
     ax.set_aspect("equal", adjustable="datalim")
     ax.set_box_aspect(1)
-    return plt.show()
+    plt.show()
+    return fig
 
 
 def sphere(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
+    emb = _as_2d_array(emb, "emb")
+    _check_n_columns(emb, 2, "emb")
     x = np.sin(emb[:, 0]) * np.cos(emb[:, 1])
     y = np.sin(emb[:, 0]) * np.sin(emb[:, 1])
     z = np.cos(emb[:, 0])
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
+    ax = cast(Any, fig.add_subplot(111, projection="3d"))
     ax.scatter(x, y, z, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
-    return plt.show()
+    plt.show()
+    return fig
 
 
 def sphere_projection(
     emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"
 ):
+    emb = _as_2d_array(emb, "emb")
+    _check_n_columns(emb, 2, "emb")
     x = np.sin(emb[:, 0]) * np.cos(emb[:, 1])
     y = np.sin(emb[:, 0]) * np.sin(emb[:, 1])
     z = np.cos(emb[:, 0])
     x = np.arctan2(x, y)
     y = -np.arccos(z)
-    plt.scatter(x, y, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
-    return plt.show()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.scatter(x, y, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
+    plt.show()
+    return fig
 
 
 def toroid(
     emb, R=3, r=1, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"
 ):
+    emb = _as_2d_array(emb, "emb")
+    _check_n_columns(emb, 2, "emb")
     x = (R + r * np.cos(emb[:, 0])) * np.cos(emb[:, 1])
     y = (R + r * np.cos(emb[:, 0])) * np.sin(emb[:, 1])
     z = r * np.sin(emb[:, 0])
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
+    ax = cast(Any, fig.add_subplot(111, projection="3d"))
     ax.scatter(x, y, z, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
     ax.set_zlim3d(-3, 3)
     ax.view_init(35, 70)
-    return plt.show()
+    plt.show()
+    return fig
 
 
 def draw_simple_ellipse(
@@ -353,90 +378,91 @@ def get_cmap(n, name="hsv"):
 
 
 def create_density_plot(X, Y, embedding):
-    Z = np.zeros_like(X)
+    X = np.asarray(X, dtype=float)
+    Y = np.asarray(Y, dtype=float)
+    embedding = _as_2d_array(embedding, "embedding")
+    _check_n_columns(embedding, 5, "embedding")
+    if X.shape != Y.shape:
+        raise ValueError("X and Y must have the same shape.")
+    Z = np.zeros_like(X, dtype=float)
     tree = KDTree(embedding[:, :2])
     for i in range(X.shape[0]):
         for j in range(X.shape[1]):
-            nearby_points = embedding[tree.query_radius([[X[i, j], Y[i, j]]], r=2)[0]]
-            Z[i, j] = eval_density_at_point(np.array([X[i, j], Y[i, j]]), nearby_points)
-    return Z / Z.sum()
+            query = np.array([[X[i, j], Y[i, j]]], dtype=float)
+            nearby_idx = tree.query_radius(query, r=2)[0]
+            nearby_points = embedding[nearby_idx]
+            point = np.array([X[i, j], Y[i, j]], dtype=float)
+            Z[i, j] = eval_density_at_point(point, nearby_points)
+    total = Z.sum()
+    if total <= 0 or not np.isfinite(total):
+        return Z
+    return Z / total
 
 
 def plot_bases_scores(bases_scores, return_plot=True, figsize=(20, 8), fontsize=20):
-    keys = bases_scores.keys()
-    values = bases_scores.values()
+    keys = list(bases_scores.keys())
+    values = list(bases_scores.values())
     cmap = get_cmap(len(keys), name="tab20")
-    k_color = list()
-    for k in np.arange(len(keys)):
-        k_color.append(cmap(k))
-    pca_vals = list()
-    r_vals = list()
-    for val in values:
-        pca_vals.append(val[0])
-        r_vals.append(val[1])
-
+    k_color = [cmap(k) for k in range(len(keys))]
+    pca_vals = [val[0] for val in values]
+    r_vals = [val[1] for val in values]
+    x = np.arange(len(keys))
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
     fig.suptitle("Bases scores:", fontsize=fontsize)
-    ax1.bar(keys, pca_vals, color=k_color)
+    ax1.bar(x, pca_vals, color=k_color)
     ax1.set_title("PCA loss", fontsize=fontsize)
-    ax1.set_xticklabels(keys, fontsize=fontsize)
-    ax2.bar(keys, r_vals, color=k_color)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(keys, fontsize=fontsize, rotation=90)
+    ax2.bar(x, r_vals, color=k_color)
     ax2.set_title("Geodesic Spearman R", fontsize=fontsize)
-    ax2.set_xticklabels(keys, fontsize=fontsize)
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(keys, fontsize=fontsize, rotation=90)
     fig.tight_layout()
     if return_plot:
-        return plt.show()
-    else:
-        return fig
+        plt.show()
+    return fig
 
 
 def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20, 8), fontsize=20):
-    keys = graphs_scores.keys()
-    values = graphs_scores.values()
+    keys = list(graphs_scores.keys())
+    values = list(graphs_scores.values())
     cmap = get_cmap(len(keys), name="tab20")
-    k_color = list()
-    for k in np.arange(len(keys)):
-        k_color.append(cmap(k))
-
-    fig, (ax1) = plt.subplots(1, 1, figsize=figsize)
+    k_color = [cmap(k) for k in range(len(keys))]
+    x = np.arange(len(keys))
+    fig, ax1 = plt.subplots(1, 1, figsize=figsize)
     fig.suptitle("Graphs scores:", fontsize=fontsize)
-    ax1.bar(keys, values, color=k_color)
+    ax1.bar(x, values, color=k_color)
     ax1.set_title("Geodesic Spearman R", fontsize=fontsize)
+    ax1.set_xticks(x)
     ax1.set_xticklabels(keys, fontsize=fontsize // 2, rotation=90)
     fig.tight_layout()
-
     if return_plot:
-        return plt.show()
-    else:
-        return fig
+        plt.show()
+    return fig
 
 
 def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20, 8), fontsize=20):
-    keys = layouts_scores.keys()
-    values = layouts_scores.values()
+    keys = list(layouts_scores.keys())
+    values = list(layouts_scores.values())
     cmap = get_cmap(len(keys), name="tab20")
-    k_color = list()
-    for k in np.arange(len(keys)):
-        k_color.append(cmap(k))
-    pca_vals = list()
-    r_vals = list()
-    for val in values:
-        pca_vals.append(val[0])
-        r_vals.append(val[1])
-
+    k_color = [cmap(k) for k in range(len(keys))]
+    pca_vals = [val[0] for val in values]
+    r_vals = [val[1] for val in values]
+    x = np.arange(len(keys))
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
     fig.suptitle("Layouts scores:", fontsize=fontsize)
-    ax1.bar(keys, pca_vals, color=k_color)
+    ax1.bar(x, pca_vals, color=k_color)
     ax1.set_title("PCA loss", fontsize=fontsize)
+    ax1.set_xticks(x)
     ax1.set_xticklabels(keys, fontsize=fontsize // 2, rotation=90)
-    ax2.bar(keys, r_vals, color=k_color)
+    ax2.bar(x, r_vals, color=k_color)
     ax2.set_title("Geodesic Spearman R", fontsize=fontsize)
+    ax2.set_xticks(x)
     ax2.set_xticklabels(keys, fontsize=fontsize // 2, rotation=90)
     fig.tight_layout()
     if return_plot:
-        return plt.show()
-    else:
-        return fig
+        plt.show()
+    return fig
 
 
 def plot_point_cov(points, nstd=2, ax=None, **kwargs):
@@ -446,13 +472,13 @@ def plot_point_cov(points, nstd=2, ax=None, **kwargs):
 
 
 def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
-    # if ax is None:
-    ax = plt.gca()
+    if ax is None:
+        ax = plt.gca()
     vals, vecs = eigsorted(cov)
     theta = np.degrees(np.arctan2(*vecs[:, 0][::-1]))
     # Width and height are "full" widths, not radius
     width, height = 2 * nstd * np.sqrt(np.absolute(vals))
-    ellip = Ellipse(pos, width=width, height=height, angle=theta, **kwargs)
+    ellip = Ellipse(xy=pos, width=width, height=height, angle=theta, **kwargs)
     ax.add_artist(ellip)
     return ellip
 
@@ -533,9 +559,14 @@ def plot_riemann_metric(
     else:
         H = np.asarray(H_emb)
 
-    N = np.shape(emb)[0]
+    if emb.ndim != 2 or emb.shape[1] < 2:
+        raise ValueError("emb must be a 2-D array with at least two columns.")
+    if H.ndim != 3 or H.shape[0] != emb.shape[0] or H.shape[1] < 2 or H.shape[2] < 2:
+        raise ValueError("H_emb must have shape (n_samples, >=2, >=2).")
+    N = emb.shape[0]
+    n_plot = min(int(n_plot), N)
     rng = check_random_state(random_state)
-    sample_points = rng.choice(range(N), n_plot, replace=False)
+    sample_points = rng.choice(np.arange(N), n_plot, replace=False)
     if ax is None:
         f, ax = plt.subplots(figsize=figsize)
     # ax.grid(False)
@@ -561,7 +592,7 @@ def plot_riemann_metric(
 
     for i in range(n_plot):
         ii = sample_points[i]
-        cov = H[ii, :, :]
+        cov = H[ii, :2, :2]
 
         if labels_arr is not None and colors is not None and label_codes is not None:
             plot_cov_ellipse(
@@ -586,6 +617,11 @@ def plot_riemann_metric(
 
 
 def draw_edges(ax, data, kernel, color="black", **kwargs):
+    data = _as_2d_array(data, "data")
+    _check_n_columns(data, 2, "data")
+    kernel = np.asarray(kernel)
+    if kernel.shape[0] != data.shape[0] or kernel.shape[1] != data.shape[0]:
+        raise ValueError("kernel must have shape (n_samples, n_samples).")
     for i in range(data.shape[0] - 1):
         for j in range(i + 1, data.shape[0]):
             affinity = kernel[i, j]
@@ -603,23 +639,22 @@ def draw_edges(ax, data, kernel, color="black", **kwargs):
 def plot_scores(
     scores, return_plot=True, log=True, figsize=(8, 3), fontsize=12, title="Scores"
 ):
-    keys = scores.keys()
-    values = scores.values()
+    keys = list(scores.keys())
+    values = list(scores.values())
     cmap = get_cmap(len(keys), name="tab20")
-    k_color = list()
-    for k in np.arange(len(keys)):
-        k_color.append(cmap(k))
-    fig, (ax1) = plt.subplots(1, 1, figsize=figsize)
+    k_color = [cmap(k) for k in range(len(keys))]
+    x = np.arange(len(keys))
+    fig, ax1 = plt.subplots(1, 1, figsize=figsize)
     fig.suptitle(title, fontsize=round(fontsize * 1.5))
+    ax1.bar(x, values, color=k_color)
+    ax1.set_xticks(x)
     ax1.set_xticklabels(keys, fontsize=fontsize, rotation=90)
-    ax1.bar(keys, values, color=k_color)
     if log:
         ax1.set_yscale("log")
     fig.tight_layout()
     if return_plot:
-        return plt.show()
-    else:
-        return fig
+        plt.show()
+    return fig
 
 
 def plot_all_scores(evaluation_dict, log=False, figsize=(20, 8), fontsize=20):
@@ -642,8 +677,12 @@ def plot_eigenvectors(
     **kwargs,
 ):
     X = np.asarray(eigenvectors)
+    if X.ndim != 2:
+        raise ValueError("eigenvectors must be a 2-D array.")
     n, m = X.shape
     k = int(min(n_eigenvectors, m))
+    if k < 1:
+        raise ValueError("n_eigenvectors must select at least one eigenvector.")
 
     if orientation not in ("horizontal", "vertical"):
         raise ValueError("orientation must be 'horizontal' or 'vertical'.")
@@ -661,7 +700,7 @@ def plot_eigenvectors(
             ax.set_yticks([])
         plt.subplots_adjust(left=0.02, right=0.98, bottom=0.05, top=0.9, wspace=0.05)
         plt.show()
-        return
+        return fig
 
     # --- Vertical (stacked) slender composition ---
     # Compute a sane figure size: width × (rows * row_height)
@@ -709,6 +748,7 @@ def plot_eigenvectors(
     # slim margins; no tight_layout to avoid warnings
     fig.subplots_adjust(left=0.12, right=0.98, top=0.98, bottom=0.04)
     plt.show()
+    return fig
 
 
 def plot_dimensionality_histograms(
@@ -727,7 +767,6 @@ def plot_dimensionality_histograms(
     fig.set_figwidth(6)
     fig.set_figheight(8)
     for key in local_id_dict.keys():
-        i = 0
         x = local_id_dict[key]
         #
         # Make a multiple-histogram of data-sets with different length.
@@ -748,13 +787,13 @@ def plot_dimensionality_histograms(
             log=log,
             label=label,
         )
-        i = i + 1
     ax.set_title(title, fontsize=title_fontsize, pad=10)
     ax.legend(prop={"size": 12}, fontsize=legend_fontsize)
     ax.set_xlabel("Estimated intrinsic dimension", fontsize=legend_fontsize)
     ax.set_ylabel("Frequency", fontsize=legend_fontsize)
     ax.legend(prop={"size": 10})
     plt.show()
+    return fig
 
 
 def plot_dimensionality_histograms_multiple(
@@ -788,6 +827,7 @@ def plot_dimensionality_histograms_multiple(
     ax.legend(prop={"size": 10})
     fig.tight_layout()
     plt.show()
+    return fig
 
 
 def heatmap(
@@ -824,6 +864,7 @@ def heatmap(
         All other arguments are forwarded to `imshow`.
     """
 
+    data = _as_2d_array(data, "data")
     if ax is None:
         ax = plt.gca()
 

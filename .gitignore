@@ -78,7 +78,7 @@ Thumbs.db
 scratch/
 
 # repomix
-repomix*.xml
+*repomix*.xml
 
 # Agents
 GEMINI.md

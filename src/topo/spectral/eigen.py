@@ -30,13 +30,12 @@ except ImportError:
     smoothed_aggregation_solver: Any = None
 
 
-def _diffusion_operator_with_degree(W, alpha, semi_aniso=False) -> tuple[Any, Any]:
+def _diffusion_operator_with_degree(W, alpha) -> tuple[Any, Any]:
     """Return symmetric diffusion operator and D^{-1/2} with explicit tuple validation."""
     result = diffusion_operator(
         W,
         alpha=alpha,
         symmetric=True,
-        semi_aniso=semi_aniso,
         return_D_inv_sqrt=True,
     )
 
@@ -390,22 +389,6 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
                 # Use the symmetric diffusion operator by default. It is numerically
                 # better for eigendecomposition, and the right eigenvectors are
                 # recovered below through D_inv_sqrt_.
-                diffusion_result = diffusion_operator(
-                    X,
-                    alpha=self.anisotropy,
-                    symmetric=True,
-                    return_D_inv_sqrt=True,
-                )
-
-                if (
-                    not isinstance(diffusion_result, tuple)
-                    or len(diffusion_result) != 2
-                ):
-                    raise TypeError(
-                        "diffusion_operator(..., return_D_inv_sqrt=True) must return "
-                        "a tuple of (operator, D_inv_sqrt)."
-                    )
-
                 self.diffusion_operator, self.D_inv_sqrt_ = (
                     _diffusion_operator_with_degree(
                         X,

@@ -19,8 +19,6 @@ Important conventions
 - Returned sparse graphs have shape `(n_query_samples, n_fit_samples)`.
 """
 
-from __future__ import annotations
-
 import logging
 import time
 from warnings import warn
@@ -860,12 +858,9 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         if self.verbose:
             elapsed = time.time() - start
             logger.info(
-                "Index-time parameters",
-                "M:",
+                "HNSWlib index-time parameters M=%s n_threads=%s efConstruction=%s",
                 self.M,
-                "n_threads:",
                 self.n_jobs,
-                "efConstruction:",
                 self.efC,
             )
             logger.info("Indexing time = %f (sec)", elapsed)

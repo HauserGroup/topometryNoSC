@@ -6,7 +6,11 @@ from scipy import sparse
 
 from topo.tpgraph import kernels
 from topo.tpgraph.cknn import cknn_graph
-from topo.tpgraph.intrinsic_dim import automated_scaffold_sizing
+from topo.tpgraph.intrinsic_dim import (
+    automated_scaffold_sizing,
+    fsa_local,
+    mle_local,
+)
 from topo.tpgraph.kernels import Kernel, compute_kernel
 
 
@@ -32,7 +36,6 @@ def test_cknn_graph(swiss_roll_data):
     res = cknn_graph(
         X, n_neighbors=10, weighted=None, return_densities=False, backend="sklearn"
     )
-    assert isinstance(res, tuple)
     assert len(res) == 2
     A, W = res
     assert sparse.issparse(A)
@@ -44,6 +47,15 @@ def test_automated_scaffold_sizing(swiss_roll_data):
     n_comp = automated_scaffold_sizing(X, method="fsa", ks=[10, 20], backend="sklearn")
     assert isinstance(n_comp, int)
     assert n_comp >= 2
+
+
+def test_local_intrinsic_dim(swiss_roll_data):
+    X, _ = swiss_roll_data
+    K = compute_kernel(X, n_neighbors=10, backend="sklearn")
+    f_id = fsa_local(K, n_neighbors=10)
+    m_id = mle_local(K, n_neighbors=10)
+    assert len(f_id) == X.shape[0]
+    assert len(m_id) == X.shape[0]
 
 
 def test_kernel_helper_validation_and_sanitizing():

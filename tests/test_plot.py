@@ -1,6 +1,7 @@
 """Tests for plotting utilities."""
 
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")  # Use headless backend for CI compatibility
 import matplotlib.pyplot as plt
@@ -41,3 +42,12 @@ def test_plot_dimensionality_histograms(swiss_roll_data):
     )
     assert fig is not None
     plt.close(fig)
+
+
+def test_heatmap():
+    data = np.random.rand(5, 5)
+    row_labels = ["a", "b", "c", "d", "e"]
+    col_labels = ["1", "2", "3", "4", "5"]
+    im, cbar = plot.heatmap(data, row_labels, col_labels)
+    assert im is not None
+    assert cbar is not None

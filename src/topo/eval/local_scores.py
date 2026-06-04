@@ -1,9 +1,14 @@
+import logging
+
 import numpy as np
+from scipy.sparse import csgraph, csr_matrix
 from scipy.spatial.distance import squareform
-from scipy.stats import spearmanr, kendalltau
-from scipy.sparse import csr_matrix, csgraph
-from topo.utils._utils import get_landmark_indices
+from scipy.stats import kendalltau, spearmanr
+
 from topo.base.ann import kNN
+from topo.utils._utils import get_landmark_indices
+
+logger = logging.getLogger(__name__)
 
 
 def geodesic_distance(
@@ -88,19 +93,18 @@ def geodesic_distance(
                 G = csgraph.shortest_path(
                     A, method, directed, False, unweighted, False, indices
                 )
-            except csgraph.NegativeCycleError:
+            except csgraph.NegativeCycleError as err:
                 raise ValueError(
                     "The shortest path computation could not be completed because a negative cycle is present."
-                )
+                ) from err
         else:
             try:
                 with mp.Pool(n_jobs) as pool:
                     G = np.array(pool.map(local_function, indices))
-            except csgraph.NegativeCycleError:
-                pool.terminate()
+            except csgraph.NegativeCycleError as err:
                 raise ValueError(
                     "The shortest path computation could not be completed because a negative cycle is present."
-                )
+                ) from err
         if n == 1:
             G = G.ravel()
         # guarantee symmetry
@@ -179,27 +183,18 @@ def geodesic_correlation(
     elif isinstance(random_state, int):
         random_state = np.random.RandomState(random_state)
     else:
-        print("RandomState error! No random state was defined!")
+        raise TypeError(
+            "random_state must be None, an int, or a numpy RandomState, "
+            f"got {type(random_state)!r}."
+        )
     if isinstance(data, csr_matrix):
-        if data.shape[0] == data.shape[1]:
-            DATA_IS_GRAPH = True
-        else:
-            DATA_IS_GRAPH = False
+        DATA_IS_GRAPH = data.shape[0] == data.shape[1]
     else:
-        if np.shape(data)[0] == np.shape(data)[1]:
-            DATA_IS_GRAPH = True
-        else:
-            DATA_IS_GRAPH = False
+        DATA_IS_GRAPH = np.shape(data)[0] == np.shape(data)[1]
     if isinstance(emb, csr_matrix):
-        if emb.shape[0] == emb.shape[1]:
-            EMB_IS_GRAPH = True
-        else:
-            EMB_IS_GRAPH = False
+        EMB_IS_GRAPH = emb.shape[0] == emb.shape[1]
     else:
-        if np.shape(emb)[0] == np.shape(emb)[1]:
-            EMB_IS_GRAPH = True
-        else:
-            EMB_IS_GRAPH = False
+        EMB_IS_GRAPH = np.shape(emb)[0] == np.shape(emb)[1]
     if not DATA_IS_GRAPH:
         data_graph = kNN(
             data,
@@ -225,6 +220,9 @@ def geodesic_correlation(
     else:
         emb_graph = emb.copy()
     # Define landmarks if applicable
+
+    landmark_indices = None
+
     if landmarks is not None:
         if isinstance(landmarks, int):
             landmark_indices = get_landmark_indices(
@@ -239,9 +237,14 @@ def geodesic_correlation(
             landmark_indices = landmarks
         else:
             raise ValueError("'landmarks' must be either an integer or a numpy array.")
-    if landmarks is not None:
+
+    if landmark_indices is not None:
+        data_graph = csr_matrix(data_graph)
         data_graph = data_graph[landmark_indices, :][:, landmark_indices]
+
+        emb_graph = csr_matrix(emb_graph)
         emb_graph = emb_graph[landmark_indices, :][:, landmark_indices]
+
     base_geodesics = squareform(
         geodesic_distance(data_graph, directed=False, n_jobs=n_jobs)
     )
@@ -250,12 +253,16 @@ def geodesic_correlation(
     )
     if cor_method == "spearman":
         if verbose:
-            print("Computing Spearman R...")
-        results = spearmanr(base_geodesics, embedding_geodesics).correlation
+            logger.info("Computing Spearman R...")
+        corr, _pvalue = spearmanr(base_geodesics, embedding_geodesics)
+        results = float(np.asarray(corr).squeeze())
+
     else:
         if verbose:
-            print("Computing Kendall Tau for eigenbasis...")
-        results = kendalltau(base_geodesics, embedding_geodesics).correlation
+            logger.info("Computing Kendall Tau for eigenbasis...")
+        corr, _pvalue = kendalltau(base_geodesics, embedding_geodesics)
+        results = float(np.asarray(corr).squeeze())
+
     if return_graphs:
         return results, data_graph, emb_graph
     return results

@@ -1,8 +1,11 @@
 # topo_metrics.py
+from typing import Any, cast
+
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from scipy.stats import spearmanr, wasserstein_distance
+
 from topo.tpgraph.kernels import Kernel
 
 
@@ -11,7 +14,7 @@ from topo.tpgraph.kernels import Kernel
 # ----------------------------
 def _ensure_csr(P):
     if not sp.isspmatrix_csr(P):
-        P = P.tocsr()
+        P = sp.csr_matrix(P)
     P.eliminate_zeros()
     return P
 
@@ -33,9 +36,29 @@ def _top_eigs_of_P(
     G = (P + P.T) * 0.5 if symmetric_hint else P
     # eigsh works for symmetric; for non-symmetric use eigs
     if symmetric_hint:
-        w, V = spla.eigsh(G, k=r, which="LM", tol=tol, maxiter=maxiter, v0=v0)
+        w, V = cast(
+            tuple[np.ndarray, np.ndarray],
+            spla.eigsh(
+                G,
+                k=r,
+                which="LM",
+                tol=cast(Any, tol),
+                maxiter=maxiter,
+                v0=v0,
+            ),
+        )
     else:
-        w, V = spla.eigs(G, k=r, which="LR", tol=tol, maxiter=maxiter, v0=v0)
+        w, V = cast(
+            tuple[np.ndarray, np.ndarray],
+            spla.eigs(
+                G,
+                k=r,
+                which="LR",
+                tol=cast(Any, tol),
+                maxiter=maxiter,
+                v0=v0,
+            ),
+        )
         w = np.real(w)
         V = np.real(V)
     # sort by magnitude (descending), drop trivial ~1 at index 0 later where needed
@@ -134,9 +157,10 @@ def get_P(Y, **kwargs_for_kernel):
       matrix, convert it to an affinity first or pass the raw data.
     """
     # 1) If user already passed a fitted Kernel, just return its P
+
     if isinstance(Y, Kernel):
         Kobj = Y
-        return Kobj.P.tocsr()
+        return sp.csr_matrix(Kobj.P)
 
     # 2) Prepare defaults and merge user options
     params = dict(
@@ -157,14 +181,14 @@ def get_P(Y, **kwargs_for_kernel):
     except Exception:
         is_square = False
 
-    if is_square and params.get("metric", None) != "precomputed":
+    if is_square and params.get("metric") != "precomputed":
         # Interpret as a precomputed affinity/kernel unless explicitly told otherwise
         params["metric"] = "precomputed"
 
     # 4) Build the Kernel and compute P
-    Kobj = Kernel(**params).fit(Y)
+    Kobj = Kernel(**cast(Any, params)).fit(Y)
     P = Kobj.P  # already symmetrized internally
-    return P.tocsr()
+    return sp.csr_matrix(P)
 
 
 # ----------------------------
@@ -204,8 +228,8 @@ def rank_diffusion_correlation(Px, Py, times=(1, 2, 4, 8), r=64, symmetric_hint=
         Dy = diffusion_distance_from_eigs(wy, Vy, t)
         vx = _upper_triangle_vec(Dx)
         vy = _upper_triangle_vec(Dy)
-        rho, _ = spearmanr(vx, vy)
-        rhos.append(float(rho))
+        stat = cast(Any, spearmanr(vx, vy))
+        rhos.append(float(stat.correlation))
     return np.nanmean(rhos)
 
 
@@ -575,8 +599,8 @@ def spectral_similarity(Px, Py, r=64, symmetric_hint=False, return_details=False
     If return_details=True:
         dict with {'eigenvalue_w1', 'subspace_cos'}.
     """
-    from scipy.stats import wasserstein_distance
     from scipy.linalg import subspace_angles
+    from scipy.stats import wasserstein_distance
 
     wx, Vx = _top_eigs_of_P(Px, r=r, symmetric_hint=symmetric_hint)
     wy, Vy = _top_eigs_of_P(Py, r=r, symmetric_hint=symmetric_hint)
@@ -711,13 +735,16 @@ def commute_time_trace_gap(
         Dm12 = sp.diags(1.0 / np.sqrt(d))
         Lsym = sp.eye(A.shape[0], format="csr") - Dm12 @ A @ Dm12
         k = min(r + 1, A.shape[0] - 1)
-        vals, _ = spla.eigsh(
-            Lsym,
-            k=k,
-            which="SM",
-            tol=1e-4,  # type: ignore
-            maxiter=A.shape[0] * 5,
-            v0=np.ones(A.shape[0]),
+        vals, _ = cast(
+            tuple[np.ndarray, np.ndarray],
+            spla.eigsh(
+                Lsym,
+                k=k,
+                which="SM",
+                tol=cast(Any, 1e-4),
+                maxiter=A.shape[0] * 5,
+                v0=np.ones(A.shape[0]),
+            ),
         )
         vals = np.sort(vals)
         vals = vals[1:]  # drop the 0 eigenvalue
@@ -811,13 +838,16 @@ def topo_preserve_score(
         Lsym = sp.eye(A.shape[0], format="csr") - Dm12 @ A @ Dm12
         # Smallest eigenvalues of Lsym; drop the trivial 0 mode
         k = min(int(r) + 1, A.shape[0] - 1) if A.shape[0] > 2 else 1
-        vals, _ = spla.eigsh(
-            Lsym,
-            k=k,
-            which="SM",
-            tol=1e-4,  # type: ignore
-            maxiter=A.shape[0] * 5,
-            v0=np.ones(A.shape[0]),
+        vals, _ = cast(
+            tuple[np.ndarray, np.ndarray],
+            spla.eigsh(
+                Lsym,
+                k=k,
+                which="SM",
+                tol=cast(Any, 1e-4),
+                maxiter=A.shape[0] * 5,
+                v0=np.ones(A.shape[0]),
+            ),
         )
         vals = np.sort(vals)
         vals = vals[1:]  # drop the 0 eigenvalue
@@ -838,7 +868,11 @@ def topo_preserve_score(
     # SP: spectral Procrustes R^2 over diffusion coordinates
     spR2 = spectral_procrustes(Px, Py, times=times, r=r, symmetric_hint=symmetric_hint)
 
-    parts = dict(PF1=pf1, PJS=pjs, SP=spR2)
+    parts: dict[str, float] = {
+        "PF1": float(pf1),
+        "PJS": float(cast(Any, pjs)),
+        "SP": float(spR2),
+    }
 
     # --- weighted mixture with renormalization over finite components ---
     acc, wsum = 0.0, 0.0

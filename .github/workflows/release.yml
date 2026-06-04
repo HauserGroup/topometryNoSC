@@ -1,0 +1,53 @@
+name: Release
+
+# Builds sdist + wheel on a version tag and uploads them as workflow
+# artifacts. PyPI publishing is intentionally left disabled until the
+# distribution name is finalised — uncomment the `publish` job to enable it
+# (uses PyPI Trusted Publishing / OIDC, no API token required).
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      - name: Check metadata
+        run: uvx twine check dist/*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+
+  # ---------------------------------------------------------------------------
+  # Enable this job to publish to PyPI once the distribution name is settled.
+  # Requires a PyPI Trusted Publisher configured for this repo + environment.
+  # ---------------------------------------------------------------------------
+  # publish:
+  #   name: Publish to PyPI
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   environment: pypi
+  #   permissions:
+  #     id-token: write  # OIDC for Trusted Publishing
+  #   steps:
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         name: dist
+  #         path: dist
+  #     - name: Publish
+  #       uses: pypa/gh-action-pypi-publish@release/v1

@@ -74,6 +74,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Scrach files
+scratch/
+
 # repomix
 repomix*.xml
 
@@ -82,3 +85,5 @@ GEMINI.md
 CLAUDE.md
 .agents
 .prompt.md
+.github/prompts/
+.github/copilot-instructions.md

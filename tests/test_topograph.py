@@ -6,7 +6,7 @@ import tempfile
 import numpy as np
 import pytest
 
-from topo import TopOGraph, save_topograph, load_topograph
+from topo import TopOGraph, load_topograph, save_topograph
 
 
 class TestTopOGraphInit:
@@ -35,6 +35,15 @@ class TestTopOGraphInit:
         tg = TopOGraph()
         r = repr(tg)
         assert "TopOGraph" in r
+
+    def test_repr_accepts_sklearn_char_limit(self):
+        tg = TopOGraph()
+        assert "TopOGraph" in tg.__repr__(N_CHAR_MAX=10)
+
+    def test_empty_projection_methods_are_rejected_on_project(self):
+        tg = TopOGraph(projection_methods=[])
+        with pytest.raises(ValueError, match="No projection methods configured"):
+            tg.project()
 
 
 class TestTopOGraphFit:
@@ -94,6 +103,18 @@ class TestTopOGraphFit:
         assert isinstance(fitted_topograph.runtimes, dict)
         assert len(fitted_topograph.runtimes) > 0
 
+    def test_fit_rejects_too_large_knn(self):
+        X = np.random.RandomState(0).randn(5, 3)
+        tg = TopOGraph(base_knn=5, graph_knn=2, projection_methods=[])
+        with pytest.raises(ValueError, match="base_knn=5 must be smaller"):
+            tg.fit(X)
+
+    def test_fit_rejects_nonsquare_precomputed_input(self):
+        X = np.ones((5, 3))
+        tg = TopOGraph(base_metric="precomputed", projection_methods=[])
+        with pytest.raises(ValueError, match="must be a square"):
+            tg.fit(X)
+
 
 class TestTopOGraphProjections:
     """Test projection / layout methods."""
@@ -120,6 +141,18 @@ class TestTopOGraphProjections:
         assert Y.shape == (n, 2)
         assert np.isfinite(Y).all()
 
+    def test_select_p_operator_rejects_invalid_name(self, fitted_topograph):
+        with pytest.raises(ValueError, match="must be one of"):
+            fitted_topograph._select_P_operator("bad")
+
+    def test_spectral_selectivity_smooths_with_named_operator(self, fitted_topograph):
+        result = fitted_topograph.spectral_selectivity(
+            smooth_P="msZ", smooth_t=1, out_prefix="smoothed"
+        )
+
+        assert "EAS" in result
+        assert "smoothed_EAS" in fitted_topograph.LocalScoresDict
+
 
 class TestTopOGraphSaveLoad:
     """Test save / load roundtrip."""
@@ -145,6 +178,17 @@ class TestTopOGraphSaveLoad:
             loaded = load_topograph(path)
             assert loaded.n == fitted_topograph.n
 
+    def test_save_does_not_mutate_live_neighbor_index(self, fitted_topograph):
+        assert fitted_topograph.base_nbrs_class is not None
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "tg3.pkl")
+            save_topograph(fitted_topograph, path, remove_base_class=True)
+            loaded = load_topograph(path)
+
+        assert fitted_topograph.base_nbrs_class is not None
+        assert loaded.base_nbrs_class is None
+
 
 def test_kernel_degree_lazily_builds_adjacency(fitted_topograph):
     K = fitted_topograph.base_kernel
@@ -154,11 +198,13 @@ def test_kernel_degree_lazily_builds_adjacency(fitted_topograph):
     deg = K.degree
 
     assert deg is not None
-    assert np.asarray(deg).shape[0] == fitted_topograph.n
+    assert K.A is not None
+    assert deg.shape[0] == fitted_topograph.n
 
 
 def test_sparse_umap_knn_conversion_handles_variable_degree():
     from scipy import sparse
+
     from topo.layouts.projector import _csr_to_fixed_knn
 
     K = sparse.csr_matrix(

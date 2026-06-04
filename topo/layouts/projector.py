@@ -3,6 +3,8 @@
 
 import numpy as np
 import warnings
+import importlib
+from typing import Any, cast
 from scipy.sparse import issparse
 from sklearn.utils import check_random_state
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -124,7 +126,7 @@ class Projector(BaseEstimator, TransformerMixin):
         self.Y_aux_ = None
         self.checkpoints_ = None
 
-    def __repr__(self):
+    def __repr__(self, N_CHAR_MAX=700):
         if self.Y_ is not None:
             if self.metric == "precomputed":
                 msg = "Projector() estimator fitted with precomputed distance matrix"
@@ -133,6 +135,8 @@ class Projector(BaseEstimator, TransformerMixin):
                     "Projector() estimator fitted with %i samples and %i observations"
                     % (self.N, self.M)
                 )
+            else:
+                msg = "Projector() estimator fitted"
         else:
             msg = "Kernel() estimator without any fitted data."
 
@@ -244,28 +248,34 @@ class Projector(BaseEstimator, TransformerMixin):
             self.M = X.M
             if self.landmarks_ is not None and self.projection_method != "Isomap":
                 self.N = len(self.landmarks_)
-                K = X.P[np.ix_(self.landmarks_, self.landmarks_)].copy()
+                K = cast(Any, X.P)[np.ix_(self.landmarks_, self.landmarks_)].copy()
             else:
                 self.N = X.N
-                K = X.P.copy()
+                K = cast(Any, X.P).copy()
         else:
             if self.metric != "precomputed":
                 if issparse(X):
-                    X = X.toarray()
+                    X_fit = X.toarray()
+                else:
+                    X_fit = np.asarray(X)
                 if self.landmarks_ is not None and self.projection_method != "Isomap":
-                    X = X[self.landmarks_, :]
-                K = kNN(
-                    X,
-                    metric=self.metric,
-                    n_neighbors=self.n_neighbors,
-                    n_jobs=self.n_jobs,
-                    backend=self.nbrs_backend,
+                    X_fit = cast(Any, X_fit)[self.landmarks_, :]
+                K = cast(
+                    Any,
+                    kNN(
+                        X_fit,
+                        metric=self.metric,
+                        n_neighbors=self.n_neighbors,
+                        n_jobs=self.n_jobs,
+                        backend=self.nbrs_backend,
+                    ),
                 )
             else:
+                X_precomputed = cast(Any, X)
                 if self.landmarks_ is not None and self.projection_method != "Isomap":
-                    K = X[np.ix_(self.landmarks_, self.landmarks_)].copy()
+                    K = X_precomputed[np.ix_(self.landmarks_, self.landmarks_)].copy()
                 else:
-                    K = X.copy()
+                    K = X_precomputed.copy()
 
         if isinstance(self.init, np.ndarray):
             self.init_Y_ = self.init
@@ -305,20 +315,23 @@ class Projector(BaseEstimator, TransformerMixin):
             )
 
         elif self.projection_method == "t-SNE":
-            try:
-                from MulticoreTSNE import MulticoreTSNE as TSNE
-
-                _HAS_MCTSNE = True
-            except ImportError:
-                _HAS_MCTSNE = False
-            if not _HAS_MCTSNE:
+            if importlib.util.find_spec("MulticoreTSNE") is not None:
+                TSNE = importlib.import_module("MulticoreTSNE").MulticoreTSNE
+                self.estimator_ = TSNE(
+                    n_components=self.n_components,
+                    metric="precomputed",
+                    n_iter=self.num_iters,
+                )
+            else:
                 from sklearn.manifold import TSNE
-            self.estimator_ = TSNE(
-                n_components=self.n_components,
-                metric="precomputed",
-                n_iter=self.num_iters,
-            )
-            self.Y_ = self.estimator_.fit_transform(X)
+
+                self.estimator_ = TSNE(
+                    n_components=int(self.n_components),
+                    metric="precomputed",
+                    max_iter=int(self.num_iters),
+                    init="random",
+                )
+            self.Y_ = self.estimator_.fit_transform(K)
 
         elif self.projection_method == "MAP":
             Y, Y_aux = fuzzy_embedding(
@@ -341,6 +354,10 @@ class Projector(BaseEstimator, TransformerMixin):
             )
             self.Y_ = Y
             self.aux_ = Y_aux
+            self.Y_aux_ = Y_aux
+            self.checkpoints_ = (
+                Y_aux.get("checkpoints") if isinstance(Y_aux, dict) else None
+            )
 
         elif self.projection_method == "UMAP":
             try:
@@ -352,15 +369,9 @@ class Projector(BaseEstimator, TransformerMixin):
             # UMAP's precomputed_knn expects a (indices, distances) tuple, not a
             # sparse matrix.  Convert K (CSR) to the required format.
             if issparse(K):
-                n_pts = K.shape[0]
-                k_nbrs = K.getnnz() // n_pts
-                knn_indices = np.zeros((n_pts, k_nbrs), dtype=np.int32)
-                knn_dists = np.zeros((n_pts, k_nbrs), dtype=np.float32)
-                for i in range(n_pts):
-                    start, end = K.indptr[i], K.indptr[i + 1]
-                    knn_indices[i] = K.indices[start:end]
-                    knn_dists[i] = K.data[start:end]
+                knn_indices, knn_dists = _csr_to_fixed_knn(K, self.n_neighbors)
                 precomputed_knn = (knn_indices, knn_dists)
+                k_nbrs = knn_indices.shape[1]
             elif isinstance(K, tuple):
                 precomputed_knn = K
                 k_nbrs = K[0].shape[1]
@@ -478,12 +489,11 @@ class Projector(BaseEstimator, TransformerMixin):
             )
 
         elif self.projection_method == "NCVis":
-            try:
-                import ncvis
-            except ImportError:
+            if importlib.util.find_spec("ncvis") is None:
                 raise ImportError(
                     "ncvis is not installed. Please install ncvis with 'pip install ncvis' before using this method."
                 )
+            ncvis = importlib.import_module("ncvis")
             self.estimator_ = ncvis.NCVis(
                 d=self.n_components,
                 n_neighbors=self.n_neighbors,
@@ -493,6 +503,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 **kwargs,
             )
             self.Y_ = self.estimator_.fit_transform(X)
+        return self
 
     def transform(self, X=None):
         """
@@ -505,27 +516,22 @@ class Projector(BaseEstimator, TransformerMixin):
             Projection results
         """
         if self.projection_method == "UMAP":
-            return self.estimator_.transform(X)
+            return cast(Any, self.estimator_).transform(X)
         else:
             return self.Y_
 
-    def fit_transform(self, X, **kwargs):
+    def fit_transform(self, X, y=None, **kwargs) -> np.ndarray:
         """
         Calls the fit_transform method of the desired method.
         If the desired method does not have a fit_transform method, calls the results from the fit method.
 
         Returns
         ----------
-        For MAP: (Y, aux) tuple.
-        For other methods: Y only.
+        Y : np.ndarray (n_samples, n_components).
+            Projection results.
         """
         self.fit(X, **kwargs)
-
-        # For MAP, return aux so upstream can record checkpoints
-        if self.projection_method == "MAP" and hasattr(self, "aux_"):
-            return self.Y_, getattr(self, "aux_", None)
-        else:
-            return self.Y_
+        return cast(np.ndarray, self.Y_)
 
 
 # Check if pymde is installed
@@ -684,7 +690,9 @@ if _HAS_PYMDE:
                 f"Computing {n_neighbors}-nearest neighbors, with "
                 f"max_distance={max_distance}"
             )
-        knn_graph = preprocess.generic.k_nearest_neighbors(
+        preprocess_generic = cast(Any, preprocess).generic
+        constraint_obj = cast(Any, constraint)
+        knn_graph = preprocess_generic.k_nearest_neighbors(
             data,
             k=n_neighbors,
             max_distance=max_distance,
@@ -693,10 +701,10 @@ if _HAS_PYMDE:
         edges = knn_graph.edges.to(device)
         weights = knn_graph.weights.to(device)
 
-        if isinstance(constraint, constraints.Anchored):
+        if isinstance(constraint_obj, constraints.Anchored):
             # remove anchor-anchor edges before generating intialization
             edges, weights = _remove_anchor_anchor_edges(
-                edges, weights, constraint.anchors
+                edges, weights, constraint_obj.anchors
             )
 
         # DS: add multicomponent spectral initialization
@@ -707,11 +715,11 @@ if _HAS_PYMDE:
                 problem.LOGGER.info("Computing quadratic initialization.")
             X_init = quadratic.spectral(n, embedding_dim, edges, weights, device=device)
             if not isinstance(
-                constraint, (constraints._Centered, constraints._Standardized)
+                constraint_obj, (constraints._Centered, constraints._Standardized)
             ):
-                constraint.project_onto_constraint(X_init, inplace=True)
+                constraint_obj.project_onto_constraint(cast(Any, X_init), inplace=True)
         elif init == "random":
-            X_init = constraint.initialization(n, embedding_dim, device)
+            X_init = constraint_obj.initialization(n, embedding_dim, device)
         else:
             raise ValueError(
                 f"Unsupported value '{init}' for keyword argument `init`; "
@@ -736,19 +744,19 @@ if _HAS_PYMDE:
                 device
             )
 
-            negative_weights = -torch.ones(
+            negative_weights = -cast(Any, torch).ones(
                 negative_edges.shape[0], dtype=X_init.dtype, device=device
             )
 
-            if isinstance(constraint, constraints.Anchored):
+            if isinstance(constraint_obj, constraints.Anchored):
                 negative_edges, negative_weights = _remove_anchor_anchor_edges(
-                    negative_edges, negative_weights, constraint.anchors
+                    negative_edges, negative_weights, constraint_obj.anchors
                 )
 
             edges = torch.cat([edges, negative_edges])
             weights = torch.cat([weights, negative_weights])
 
-            f = penalties.PushAndPull(
+            f = cast(Any, penalties).PushAndPull(
                 weights,
                 attractive_penalty=attractive_penalty,
                 repulsive_penalty=repulsive_penalty,
@@ -763,22 +771,24 @@ if _HAS_PYMDE:
             embedding_dim=embedding_dim,
             edges=edges,
             distortion_function=f,
-            constraint=constraint,
+            constraint=constraint_obj,
             device=device,
         )
-        mde._X_init = X_init
+        mde_any = cast(Any, mde)
+        mde_any._X_init = X_init
 
         # Won't need to cache the graph - we have already computed it and cached with TopoMetry
 
-        distances = mde.distances(mde._X_init)
+        distances = mde.distances(mde_any._X_init)
         if (distances == 0).any():
             # pathological scenario in which at least two points overlap can yield
             # non-differentiable average distortion. perturb the initialization to
             # mitigate.
-            mde._X_init += 1e-4 * torch.randn(
-                mde._X_init.shape,
-                device=mde._X_init.device,
-                dtype=mde._X_init.dtype,
+            x_init = mde_any._X_init
+            mde_any._X_init += 1e-4 * cast(Any, torch).randn(
+                x_init.shape,
+                device=x_init.device,
+                dtype=x_init.dtype,
             )
         return mde
 
@@ -876,7 +886,7 @@ if _HAS_PYMDE:
             edges = data.edges.to(device)
             deviations = data.distances.to(device)
         else:
-            graph = preprocess.generic.distances(
+            graph = cast(Any, preprocess).generic.distances(
                 data, retain_fraction=retain_fraction, verbose=verbose
             )
             edges = graph.edges.to(device)
@@ -902,3 +912,32 @@ if _HAS_PYMDE:
             device=device,
         )
         return mde
+
+
+def _csr_to_fixed_knn(K, n_neighbors):
+    """Convert a CSR sparse graph to UMAP's fixed-width precomputed_knn tuple."""
+    K = K.tocsr()
+    n_pts = K.shape[0]
+    k = min(int(n_neighbors), max(1, K.shape[1] - 1))
+
+    knn_indices = np.full((n_pts, k), -1, dtype=np.int32)
+    knn_dists = np.full((n_pts, k), np.inf, dtype=np.float32)
+
+    for i in range(n_pts):
+        start, end = K.indptr[i], K.indptr[i + 1]
+        row_idx = K.indices[start:end]
+        row_dist = K.data[start:end]
+
+        keep = row_idx != i
+        row_idx = row_idx[keep]
+        row_dist = row_dist[keep]
+
+        if row_idx.size == 0:
+            continue
+
+        order = np.argsort(row_dist, kind="mergesort")[:k]
+        width = order.size
+        knn_indices[i, :width] = row_idx[order].astype(np.int32, copy=False)
+        knn_dists[i, :width] = row_dist[order].astype(np.float32, copy=False)
+
+    return knn_indices, knn_dists

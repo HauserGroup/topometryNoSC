@@ -3,10 +3,9 @@
 # Each function accepts explicit arguments (operators, scaffolds, eigenvalues)
 # rather than relying on a TopOGraph instance's internal state.
 
+
 import numpy as np
 import scipy.sparse as sp
-from typing import Optional
-
 
 # ---------------------------------------------------------------------------
 # Spectral selectivity helpers (module-private)
@@ -68,8 +67,8 @@ def _compute_radiality(Zs, k=30, metric="euclidean", eps=1e-12):
 
 def _compute_lac(Zs, k=30, metric="euclidean", eps=1e-12):
     """Local Axial Coherence = EVR1 of local PCA."""
-    from sklearn.neighbors import NearestNeighbors
     from numpy.linalg import svd
+    from sklearn.neighbors import NearestNeighbors
 
     n = Zs.shape[0]
     nn = NearestNeighbors(n_neighbors=min(k, n - 1), metric=metric).fit(Zs)
@@ -93,13 +92,13 @@ def _compute_lac(Zs, k=30, metric="euclidean", eps=1e-12):
 
 def spectral_selectivity(
     Z: np.ndarray,
-    evals: Optional[np.ndarray] = None,
+    evals: np.ndarray | None = None,
     *,
     weight_mode: str = "lambda_over_one_minus_lambda",
     standardize: bool = True,
     k_neighbors: int = 30,
     metric: str = "euclidean",
-    P: Optional[sp.spmatrix] = None,
+    P: sp.spmatrix | None = None,
     smooth_t: int = 0,
 ) -> dict:
     """

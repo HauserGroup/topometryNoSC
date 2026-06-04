@@ -1,0 +1,757 @@
+# TopoMetry high-level API — the TopOGraph class
+#
+# Author: David S Oliveira <david.oliveira(at)dpag(dot)ox(dot)ac(dot)uk>
+#
+import copy
+import gc
+import logging
+import warnings
+from typing import Any, cast
+
+import numpy as np
+from scipy.sparse import issparse
+from sklearn.base import BaseEstimator, TransformerMixin
+
+from topo import analysis as _analysis
+from topo._pipeline.eigen import EigenBuildMixin
+from topo._pipeline.graph import GraphBuildMixin
+from topo._pipeline.layout import LayoutBuildMixin
+from topo.tpgraph.kernels import Kernel
+from topo.uom import UoMMixin
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Valid kernel versions & data-driven dispatch
+# ---------------------------------------------------------------------------
+
+VALID_KERNEL_VERSIONS = frozenset(
+    [
+        "cknn",
+        "fuzzy",
+        "bw_adaptive",
+        "bw_adaptive_alpha_decaying",
+        "bw_adaptive_nbr_expansion",
+        "bw_adaptive_alpha_decaying_nbr_expansion",
+        "gaussian",
+    ]
+)
+
+# Each entry maps to the Kernel constructor kwargs that *differ* between versions.
+# Common kwargs (metric, n_neighbors, backend, …) are merged at call time.
+_KERNEL_CONFIGS = {
+    "cknn": dict(
+        cknn=True,
+        fuzzy=False,
+        adaptive_bw=True,
+        expand_nbr_search=False,
+        alpha_decaying=False,
+        sigma=None,
+    ),
+    "fuzzy": dict(
+        cknn=False,
+        fuzzy=True,
+        adaptive_bw=True,
+        expand_nbr_search=False,
+        alpha_decaying=False,
+        sigma=None,
+    ),
+    "bw_adaptive": dict(
+        cknn=False,
+        fuzzy=False,
+        adaptive_bw=True,
+        expand_nbr_search=False,
+        alpha_decaying=False,
+        sigma=None,
+    ),
+    "bw_adaptive_alpha_decaying": dict(
+        cknn=False,
+        fuzzy=False,
+        adaptive_bw=True,
+        expand_nbr_search=False,
+        alpha_decaying=True,
+        sigma=None,
+    ),
+    "bw_adaptive_nbr_expansion": dict(
+        cknn=False,
+        fuzzy=False,
+        adaptive_bw=True,
+        expand_nbr_search=True,
+        alpha_decaying=False,
+        sigma=None,
+    ),
+    "bw_adaptive_alpha_decaying_nbr_expansion": dict(
+        cknn=False,
+        fuzzy=False,
+        adaptive_bw=True,
+        expand_nbr_search=True,
+        alpha_decaying=True,
+        sigma=None,
+    ),
+    "gaussian": dict(
+        cknn=False,
+        fuzzy=False,
+        adaptive_bw=False,
+        expand_nbr_search=False,
+        alpha_decaying=False,
+        # sigma is filled dynamically from self.sigma
+    ),
+}
+
+
+# ============================================================================
+# TopOGraph
+# ============================================================================
+
+
+class TopOGraph(
+    GraphBuildMixin,
+    EigenBuildMixin,
+    LayoutBuildMixin,
+    UoMMixin,
+    BaseEstimator,
+    TransformerMixin,
+):
+    """
+    Geometry-aware estimator that learns spectral scaffolds, refined operators,
+    and 2-D layouts.
+
+    Parameters
+    ----------
+    base_knn : int, default 30
+        k-nearest neighbors for the base graph on input space.
+    graph_knn : int, default 30
+        k-nearest neighbors for the refined graph built in spectral scaffold space.
+    min_eigs : int, default 128
+        Minimum number of eigenpairs to compute for the scaffold.
+    base_kernel : topo.tpgraph.Kernel or None, default None
+        Pre-fitted kernel to reuse; if provided, ``fit`` skips base graph construction.
+    laplacian_type : str, default 'normalized'
+        Laplacian normalization for spectral computations.
+    base_kernel_version : str, default 'bw_adaptive'
+        Kernel choice for the base graph.
+    graph_kernel_version : str, default 'bw_adaptive'
+        Kernel choice for scaffold graphs.
+    backend : str, default 'hnswlib'
+        Approximate nearest-neighbor backend.
+    base_metric : str, default 'cosine'
+        Distance metric for the base kNN graph.
+    graph_metric : str, default 'euclidean'
+        Distance metric for kNN in scaffold space.
+    diff_t : int, default 0
+        Diffusion time for single-time scaffold.
+    sigma : float, default 0.1
+        Bandwidth for Gaussian kernels.
+    delta : float, default 1.0
+        Radius parameter for cKNN kernels.
+    n_jobs : int, default -1
+        Threads for kNN searches; -1 uses all cores.
+    low_memory : bool, default False
+        Avoid caching large kernel objects.
+    eigen_tol : float, default 1e-8
+        Tolerance for the eigensolver.
+    eigensolver : str, default 'arpack'
+        Solver for eigendecomposition.
+    projection_methods : list[str], default ['MAP', 'PaCMAP']
+        Layouts to compute during ``fit``.
+    cache : bool, default True
+        Cache kernel / eigen objects in dictionaries for reuse.
+    verbosity : int, default 0
+        Logging verbosity (0=silent, 1=major, 2+=layout, 3=debug).
+    random_state : int or RandomState, default 42
+        Random seed.
+    id_method : str, default 'fsa'
+        Intrinsic-dimensionality estimator for scaffold sizing.
+    id_ks : int or iterable, default 50
+        Neighborhood sizes for I.D. estimation.
+    id_metric : str, default 'euclidean'
+        Metric for I.D. estimation.
+    id_quantile : float, default 0.99
+    id_min_components : int, default 128
+    id_max_components : int, default 1024
+    id_headroom : float, default 0.5
+    uom : bool, default False
+        Enable Union-of-Manifolds (block-diagonal scaffolds).
+    """
+
+    def __init__(
+        self,
+        base_knn: int = 30,
+        graph_knn: int = 30,
+        min_eigs: int = 128,
+        n_jobs: int = -1,
+        projection_methods: list[str] | None = None,
+        base_kernel=None,
+        base_kernel_version: str = "bw_adaptive",
+        graph_kernel_version: str = "bw_adaptive",
+        base_metric: str = "cosine",
+        graph_metric: str = "euclidean",
+        diff_t: int = 0,
+        delta: float = 1.0,
+        sigma: float = 0.1,
+        low_memory: bool = False,
+        eigen_tol: float = 1e-8,
+        eigensolver: str = "arpack",
+        backend: str = "hnswlib",
+        cache: bool = True,
+        verbosity: int = 0,
+        random_state=42,
+        laplacian_type: str = "normalized",
+        # Intrinsic-dimensionality sizing
+        id_method: str = "fsa",
+        id_ks=50,
+        id_metric: str = "euclidean",
+        id_quantile: float = 0.99,
+        id_min_components: int = 128,
+        id_max_components: int = 1024,
+        id_headroom: float = 0.5,
+        # UoM
+        uom: bool = False,
+    ):
+        if projection_methods is None:
+            projection_methods = ["MAP", "PaCMAP"]
+
+        # Core config
+        self.base_knn = base_knn
+        self.graph_knn = graph_knn
+        self.min_eigs = min_eigs
+        self.n_eigs = min_eigs
+        self.n_jobs = n_jobs
+        self.projection_methods = cast(Any, projection_methods)
+        self.base_kernel = base_kernel
+        self.base_kernel_version = base_kernel_version
+        self.graph_kernel_version = graph_kernel_version
+        self.base_metric = base_metric
+        self.graph_metric = graph_metric
+        self.diff_t = diff_t
+        self.delta = delta
+        self.sigma = sigma
+        self.low_memory = low_memory
+        self.eigen_tol = eigen_tol
+        self.eigensolver = eigensolver
+        self.backend = backend
+        self.cache = cache
+        self.verbosity = verbosity
+        self.random_state = random_state
+        self.laplacian_type = laplacian_type
+
+        # ID config
+        self.id_method = id_method
+        self.id_ks = id_ks
+        self.id_metric = id_metric
+        self.id_quantile = id_quantile
+        self.id_min_components = id_min_components
+        self.id_max_components = id_max_components
+        self.id_headroom = id_headroom
+
+        # Fitted state
+        self.n = cast(Any, None)
+        self.m = cast(Any, None)
+        self.base_nbrs_class = None
+        self.base_knn_graph = None
+        self.eigenbasis = None
+        self.current_eigenbasis = cast(Any, None)
+        self.current_graphkernel = cast(Any, None)
+        self.graph_kernel = None
+        self.SpecLayout = None
+        self.global_dimensionality = None
+        self.local_dimensionality = None
+        self._id_details: dict[str, Any] = {"mle": None, "fsa": None}
+        self._scaffold_components_dm = None
+        self._scaffold_components_ms = None
+
+        # Dual-scaffold products
+        self._knn_msZ = None
+        self._knn_Z = None
+        self._kernel_msZ = None
+        self._kernel_Z = None
+
+        # MAP snapshots
+        self.msTopoMAP_snapshots = []
+        self.TopoMAP_snapshots = []
+
+        # Verbosity toggles (derived)
+        self.bases_graph_verbose = False
+        self.layout_verbose = False
+
+        # Legacy / benchmarking dictionaries
+        self.BaseKernelDict = {}
+        self.EigenbasisDict = {}
+        self.GraphKernelDict = {}
+        self.ProjectionDict = {}
+        self.LocalScoresDict = {}
+        self.RiemannMetricDict = {}
+        self.runtimes = {}
+
+        # UoM state (from mixin)
+        self._init_uom_state()
+
+    # ------------------------------------------------------------------
+    # Representation
+    # ------------------------------------------------------------------
+
+    def __repr__(self, N_CHAR_MAX=700):
+        if self.n is None:
+            return "TopOGraph (not fitted)"
+        parts = [f"TopOGraph with {self.n} samples"]
+        if self.m is not None:
+            parts[0] += f" × {self.m} features"
+        for label, d in [
+            ("Base Kernels", self.BaseKernelDict),
+            ("Eigenbases", self.EigenbasisDict),
+            ("Graph Kernels", self.GraphKernelDict),
+            ("Projections", self.ProjectionDict),
+        ]:
+            if d:
+                parts.append(f"  {label}: {', '.join(d.keys())}")
+        return "\n".join(parts)
+
+    # ------------------------------------------------------------------
+    # Backend / random-state helpers
+    # ------------------------------------------------------------------
+
+    def _parse_backend(self):
+        from topo._optional import best_ann_backend
+
+        self.backend = best_ann_backend(self.backend)
+
+    def _parse_random_state(self):
+        if self.random_state is None:
+            self.random_state = np.random.RandomState()
+        elif isinstance(self.random_state, int):
+            self.random_state = np.random.RandomState(self.random_state)
+
+    # ------------------------------------------------------------------
+    # Data-driven kernel builder (Phase 3)
+    # ------------------------------------------------------------------
+
+    def _build_kernel(
+        self,
+        knn,
+        n_neighbors,
+        kernel_version,
+        results_dict,
+        prefix="",
+        suffix="",
+        low_memory=False,
+        base=True,
+        data_for_expansion=None,
+    ) -> tuple[Any, dict]:
+        """
+        Build a :class:`Kernel` from a kNN graph and a named *kernel_version*.
+
+        Returns ``(kernel, results_dict)``.
+        """
+        kernel_key = f"{prefix}{kernel_version}{suffix}"
+        if kernel_key in results_dict:
+            return results_dict[kernel_key], results_dict
+
+        cfg = _KERNEL_CONFIGS[kernel_version].copy()
+
+        # Expansion versions need the original data + correct metric
+        if cfg.get("expand_nbr_search"):
+            metric = self.base_metric if base else self.graph_metric
+            if data_for_expansion is None:
+                raise ValueError(
+                    f"data_for_expansion is required for kernel version '{kernel_version}'."
+                )
+            if metric == "precomputed":
+                raise ValueError(
+                    f"kernel version '{kernel_version}' expands neighbor search and "
+                    "therefore requires raw feature data; it cannot be used with "
+                    "metric='precomputed'. Use a non-expansion kernel version or pass "
+                    "raw data."
+                )
+            if data_for_expansion.shape[0] != knn.shape[0]:
+                raise ValueError(
+                    "data_for_expansion must have the same number of rows as the kNN graph."
+                )
+        else:
+            metric = "precomputed"
+
+        # Gaussian uses self.sigma
+        if kernel_version == "gaussian":
+            cfg["sigma"] = self.sigma
+
+        kernel = Kernel(
+            metric=metric,
+            n_neighbors=n_neighbors,
+            pairwise=False,
+            backend=self.backend,
+            n_jobs=self.n_jobs,
+            laplacian_type=self.laplacian_type,
+            semi_aniso=False,
+            anisotropy=1.0,
+            cache_input=False,
+            verbose=self.bases_graph_verbose,
+            random_state=self.random_state,
+            **cfg,
+        ).fit(knn)
+
+        gc.collect()
+        if not low_memory:
+            results_dict[kernel_key] = kernel
+        return kernel, results_dict
+
+    # ------------------------------------------------------------------
+    # Intrinsic-dimension sizing
+    # ------------------------------------------------------------------
+
+    def fit(self, X=None, **kwargs):
+        """
+        Build base kNN → base kernel P(X) → dual eigenbases (DM + msDM) →
+        refined scaffold graphs → 2-D projections.
+
+        When ``uom=True``, detects disconnected components and builds
+        per-component scaffolds + block-diagonal operators.
+        """
+        self._validate_inputs(X)
+        self._setup_environment()
+        self._build_base_graph(X, **kwargs)
+        self._build_base_kernel(X, **kwargs)
+
+        if self.base_metric != "precomputed":
+            self._automated_sizing(X if X is not None else self.base_kernel.X)
+            if self.verbosity >= 1:
+                logger.info(
+                    f"Automated sizing → target components: {self._scaffold_components_ms} "
+                    f"(n_eigs={self.n_eigs})"
+                )
+
+        self.uom_eigenvalues_dm_list, self.uom_eigenvalues_ms_list = [], []
+
+        if self.uom_enabled:
+            return self._fit_uom(X, **kwargs)
+
+        return self._fit_global(X, **kwargs)
+
+    # -- Stage helpers --
+
+    def _validate_inputs(self, X):
+        if self.base_kernel_version not in VALID_KERNEL_VERSIONS:
+            raise ValueError(f"Invalid base_kernel_version: {self.base_kernel_version}")
+        if self.graph_kernel_version not in VALID_KERNEL_VERSIONS:
+            raise ValueError(
+                f"Invalid graph_kernel_version: {self.graph_kernel_version}"
+            )
+
+        if X is None:
+            if self.base_kernel is None:
+                raise ValueError("X was not passed and no base_kernel was provided.")
+            return
+
+        if not hasattr(X, "shape") or len(X.shape) != 2:
+            raise ValueError("X must be a 2-D array-like or sparse matrix.")
+
+        n_samples, n_features = X.shape
+        if n_samples < 3:
+            raise ValueError("X must contain at least 3 samples.")
+        if n_features < 1:
+            raise ValueError("X must contain at least 1 feature.")
+
+        if self.base_metric == "precomputed":
+            if n_samples != n_features:
+                raise ValueError(
+                    "When base_metric='precomputed', X must be a square "
+                    "(n_samples, n_samples) sparse or dense graph/distance matrix."
+                )
+        else:
+            if issparse(X):
+                if not np.isfinite(X.data).all():
+                    raise ValueError("Sparse X contains NaN or infinite values.")
+            else:
+                X_arr = np.asarray(X)
+                if not np.isfinite(X_arr).all():
+                    raise ValueError("X contains NaN or infinite values.")
+
+        for name in ("base_knn", "graph_knn"):
+            k = int(getattr(self, name))
+            if k < 1:
+                raise ValueError(f"{name} must be >= 1.")
+            if k >= n_samples:
+                raise ValueError(
+                    f"{name}={k} must be smaller than n_samples={n_samples}."
+                )
+
+        max_eigs = max(1, n_samples - 2)
+        if self.n_eigs > max_eigs:
+            self.n_eigs = max_eigs
+            warnings.warn(f"Clamped n_eigs to {max_eigs} (n_samples={n_samples})")
+
+    def _setup_environment(self):
+        from topo._logging import configure
+
+        configure(self.verbosity)
+        self._parse_backend()
+        self._parse_random_state()
+        if self.n_jobs == -1:
+            try:
+                from joblib import cpu_count
+
+                self.n_jobs = cpu_count()
+            except Exception:
+                pass
+        self.layout_verbose = self.verbosity >= 2
+        self.bases_graph_verbose = self.verbosity >= 3
+
+    def spectral_scaffold(self, multiscale: bool = True):
+        """Return scaffold coordinates (n_samples × n_eigs)."""
+        if self.uom_enabled:
+            arr = self.msZ_uom if multiscale else self.Z_uom
+            if arr is None:
+                raise AttributeError(
+                    "UoM scaffold not available. Call .fit(X, uom=True)."
+                )
+            return arr
+        key = f"{'msDM' if multiscale else 'DM'} with {self.base_kernel_version}"
+        if key not in self.EigenbasisDict:
+            raise AttributeError("Scaffold not found. Call .fit() first.")
+        return self.EigenbasisDict[key].transform(X=None)
+
+    # ------------------------------------------------------------------
+    # Properties (public API)
+    # ------------------------------------------------------------------
+
+    @property
+    def eigenvalues(self):
+        """Eigenvalues of the active eigenbasis (dict in UoM mode)."""
+        if getattr(self, "uom_enabled", False) and self.uom_eigenvalues_ms_list:
+            mode = getattr(self, "_uom_active_mode", "msDM")
+            per_comp = (
+                self.uom_eigenvalues_ms_list
+                if mode == "msDM"
+                else self.uom_eigenvalues_dm_list
+            )
+            sizes = [int(ix.size) for ix in (self.uom_components_ or [])]
+            return {"mode": mode, "per_component": per_comp, "component_sizes": sizes}
+        if self.current_eigenbasis is None:
+            raise AttributeError("Eigenvalues unavailable. Call .fit() first.")
+        return self.EigenbasisDict[self.current_eigenbasis].eigenvalues
+
+    @property
+    def knn_msZ(self):
+        """kNN graph in msDM scaffold space."""
+        if self.uom_enabled and self.knn_msZ_uom is not None:
+            return self.knn_msZ_uom
+        if self._knn_msZ is None:
+            raise AttributeError("knn_msZ unavailable. Call .fit() first.")
+        return self._knn_msZ
+
+    @property
+    def knn_Z(self):
+        """kNN graph in DM scaffold space."""
+        if self.uom_enabled and self.knn_Z_uom is not None:
+            return self.knn_Z_uom
+        if self._knn_Z is None:
+            raise AttributeError("knn_Z unavailable. Call .fit() first.")
+        return self._knn_Z
+
+    @property
+    def P_of_msZ(self):
+        """Diffusion operator on the msDM scaffold."""
+        if self.uom_enabled and self.P_of_msZ_uom is not None:
+            return self.P_of_msZ_uom
+        if self._kernel_msZ is None:
+            raise AttributeError("P_of_msZ unavailable. Call .fit() first.")
+        return self._kernel_msZ.P
+
+    @property
+    def P_of_Z(self):
+        """Diffusion operator on the DM scaffold."""
+        if self.uom_enabled and self.P_of_Z_uom is not None:
+            return self.P_of_Z_uom
+        if self._kernel_Z is None:
+            raise AttributeError("P_of_Z unavailable. Call .fit() first.")
+        return self._kernel_Z.P
+
+    @property
+    def knn_X(self):
+        """Base kNN graph in input space."""
+        if self.uom_enabled and self.knn_X_uom is not None:
+            return self.knn_X_uom
+        if self.base_knn_graph is None:
+            raise AttributeError("knn_X unavailable. Call .fit() first.")
+        return self.base_knn_graph
+
+    @property
+    def P_of_X(self):
+        """Diffusion operator on input space."""
+        if self.uom_enabled and self.P_of_X_uom is not None:
+            return self.P_of_X_uom
+        if self.base_kernel is None:
+            raise AttributeError("P_of_X unavailable. Call .fit() first.")
+        return self.base_kernel.P
+
+    @property
+    def global_id(self):
+        """Global intrinsic dimensionality estimate."""
+        return self.global_dimensionality
+
+    @property
+    def intrinsic_dim(self):
+        """Structured intrinsic-dimensionality info (global + local)."""
+        det = (self._id_details or {}).get(self.id_method)
+        return {
+            "method": self.id_method,
+            "global": self.global_dimensionality,
+            "local": self.local_dimensionality,
+            "details": det,
+        }
+
+    # --- Embedding properties ---
+
+    @property
+    def TopoMAP(self):
+        """2-D MAP layout on the DM refined graph."""
+        return self._get_projection("MAP", multiscale=False)
+
+    @property
+    def msTopoMAP(self):
+        """2-D MAP layout on the msDM refined graph."""
+        return self._get_projection("MAP", multiscale=True)
+
+    @property
+    def TopoPaCMAP(self):
+        """2-D PaCMAP layout on the DM refined graph."""
+        return self._get_projection("PaCMAP", multiscale=False)
+
+    @property
+    def msTopoPaCMAP(self):
+        """2-D PaCMAP layout on the msDM refined graph."""
+        return self._get_projection("PaCMAP", multiscale=True)
+
+    # ------------------------------------------------------------------
+    # Analysis convenience wrappers (delegate to topo.analysis)
+    # ------------------------------------------------------------------
+
+    def _select_P_operator(self, which: str = "msZ"):
+        """Resolve a fitted diffusion operator by name."""
+        which = str(which).lower()
+        if which == "x":
+            P = self.P_of_X
+        elif which == "z":
+            P = self.P_of_Z
+        elif which == "msz":
+            P = self.P_of_msZ
+        else:
+            raise ValueError("`which` must be one of {'X', 'Z', 'msZ'}.")
+
+        if P is None:
+            raise ValueError(
+                f"Diffusion operator '{which}' is not available. "
+                "Call fit() first, or choose an operator that was computed."
+            )
+        return P
+
+    def spectral_selectivity(
+        self,
+        Z=None,
+        evals=None,
+        multiscale=True,
+        use_scaffold_components=True,
+        smooth_P=None,
+        smooth_t=0,
+        out_prefix="spectral",
+        return_dict=True,
+        **kwargs,
+    ):
+        """Per-sample spectral selectivity (delegates to ``topo.analysis``)."""
+        if Z is None:
+            Z = self.spectral_scaffold(multiscale=multiscale)
+        if use_scaffold_components and self._scaffold_components_ms is not None:
+            Z = Z[:, : int(self._scaffold_components_ms)]
+        if evals is None:
+            key = f"{'msDM' if multiscale else 'DM'} with {self.base_kernel_version}"
+            ev = self.EigenbasisDict[key].eigenvalues
+            evals = (
+                ev[1 : Z.shape[1] + 1]
+                if ev.shape[0] >= Z.shape[1] + 1
+                else ev[: Z.shape[1]]
+            )
+
+        P = self._select_P_operator(smooth_P) if smooth_P else None
+        result = _analysis.spectral_selectivity(
+            Z,
+            evals,
+            P=cast(Any, P),
+            smooth_t=smooth_t,
+            **kwargs,  # type: ignore
+        )
+
+        for k, v in result.items():
+            self.LocalScoresDict[f"{out_prefix}_{k}"] = v
+        return result if return_dict else None
+
+    def filter_signal(self, signal, t: int = 8, which: str = "msZ"):
+        """Diffusion-filter a 1-D signal."""
+        return _analysis.filter_signal(signal, self._select_P_operator(which), t)
+
+    def impute(self, X, t: int = 8, which: str = "msZ", **kwargs):
+        """Diffusion-based imputation."""
+        return _analysis.impute(X, self._select_P_operator(which), t, **kwargs)
+
+    def riemann_diagnostics(self, Y=None, L=None, diffusion_op=None, **kwargs):
+        """Riemann metric + deformation scalars."""
+        if Y is None:
+            for prop in ("TopoMAP", "msTopoMAP", "TopoPaCMAP", "msTopoPaCMAP"):
+                try:
+                    Y = getattr(self, prop)
+                    break
+                except AttributeError:
+                    continue
+            if Y is None:
+                Y = self.project(projection_method="MAP", multiscale=False)
+        if L is None:
+            if self.base_kernel is None:
+                raise ValueError(
+                    "No base kernel available. Call fit() before riemann_diagnostics()."
+                )
+            L = self.base_kernel.L
+        P = self._select_P_operator(diffusion_op) if diffusion_op else None
+        result = _analysis.riemann_diagnostics(Y, L, diffusion_op=P, **kwargs)
+        self.RiemannMetricDict["last"] = result
+        return result
+
+    # ------------------------------------------------------------------
+    # I/O
+    # ------------------------------------------------------------------
+
+    def save(self, filename: str = "topograph.pkl", remove_base_class: bool = True):
+        """Save this TopOGraph to a pickle file."""
+        save_topograph(self, filename, remove_base_class)
+
+
+# =========================================================================
+# Module-level I/O helpers
+# =========================================================================
+
+
+def save_topograph(
+    tg: TopOGraph, filename: str = "topograph.pkl", remove_base_class: bool = True
+):
+    """Save a TopOGraph object to a pickle file without mutating the live object."""
+    import pickle
+
+    if not isinstance(tg, TopOGraph):
+        raise TypeError("`tg` must be a TopOGraph instance.")
+
+    obj = copy.copy(tg)
+    if remove_base_class:
+        obj.base_nbrs_class = None
+
+    with open(filename, "wb") as f:
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+    if getattr(tg, "verbosity", 0) >= 1:
+        logger.info(f"TopOGraph saved at {filename}")
+
+
+def load_topograph(filename: str) -> TopOGraph:
+    """Load a TopOGraph from a pickle file."""
+    import pickle
+
+    with open(filename, "rb") as f:
+        obj = pickle.load(f)
+    if not isinstance(obj, TopOGraph):
+        warnings.warn("Loaded object is not a TopOGraph.", RuntimeWarning)
+    return obj

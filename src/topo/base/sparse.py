@@ -22,16 +22,17 @@ locale.setlocale(locale.LC_NUMERIC, "C")
 
 # Just reproduce a simpler version of numpy unique (not numba supported yet)
 @numba.njit()
-def arr_unique(arr):
+def arr_unique(arr: np.ndarray) -> np.ndarray:
     """Return the sorted unique values of ``arr`` (numba ``np.unique``)."""
     aux = np.sort(arr)
+    # Boolean mask: True for first element and where consecutive elements differ
     flag = np.concatenate((np.ones(1, dtype=np.bool_), aux[1:] != aux[:-1]))
     return aux[flag]
 
 
 # Just reproduce a simpler version of numpy union1d (not numba supported yet)
 @numba.njit()
-def arr_union(ar1, ar2):
+def arr_union(ar1: np.ndarray, ar2: np.ndarray) -> np.ndarray:
     """Return the sorted union of index arrays ``ar1`` and ``ar2``."""
     if ar1.shape[0] == 0:
         return ar2
@@ -44,7 +45,7 @@ def arr_union(ar1, ar2):
 # Just reproduce a simpler version of numpy intersect1d (not numba supported
 # yet)
 @numba.njit()
-def arr_intersect(ar1, ar2):
+def arr_intersect(ar1: np.ndarray, ar2: np.ndarray) -> np.ndarray:
     """Return the sorted intersection of index arrays ``ar1`` and ``ar2``."""
     aux = np.concatenate((ar1, ar2))
     aux.sort()
@@ -52,7 +53,9 @@ def arr_intersect(ar1, ar2):
 
 
 @numba.njit()
-def sparse_sum(ind1, data1, ind2, data2):
+def sparse_sum(
+    ind1: np.ndarray, data1: np.ndarray, ind2: np.ndarray, data2: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     """Add two sparse vectors, returning combined ``(indices, data)``."""
     result_ind = arr_union(ind1, ind2)
     result_data = np.zeros(result_ind.shape[0], dtype=data1.dtype)

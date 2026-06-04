@@ -74,6 +74,7 @@ def _as_dense_array(data: np.ndarray | csr_matrix | list) -> np.ndarray:
         if isinstance(data, pd.DataFrame):
             return data.to_numpy()
     except ImportError:
+        # pandas is optional; fall back to generic numpy conversion below.
         pass
 
     arr = np.asarray(data)
@@ -93,6 +94,7 @@ def _as_csr_matrix(data: np.ndarray | csr_matrix | list) -> csr_matrix:
         if isinstance(data, pd.DataFrame):
             return csr_matrix(data.to_numpy())
     except ImportError:
+        # pandas is optional; fall back to generic CSR conversion below.
         pass
 
     return csr_matrix(data)

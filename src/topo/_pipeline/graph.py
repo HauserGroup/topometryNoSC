@@ -22,6 +22,25 @@ logger = logging.getLogger(__name__)
 class GraphBuildMixin:
     """Base neighbourhood graph and base kernel construction."""
 
+    # Interface contract — attributes supplied by TopOGraph
+    n: int
+    m: int
+    verbosity: int
+    base_knn: int
+    base_metric: str
+    n_jobs: int
+    backend: str
+    bases_graph_verbose: bool
+    runtimes: dict[str, float]
+    base_kernel_version: str
+    low_memory: bool
+    BaseKernelDict: dict[str, Any]
+    base_kernel: Kernel | None
+    base_nbrs_class: Any
+    base_knn_graph: Any
+
+    def _build_kernel(self, *args: Any, **kwargs: Any) -> tuple[Any, dict]: ...
+
     def _build_base_graph(self, X, **kwargs):
         if X is None:
             if self.base_kernel is None:
@@ -32,6 +51,7 @@ class GraphBuildMixin:
                 raise ValueError("base_kernel has not been fitted.")
             self.n = self.base_kernel.knn_.shape[0]
             self.m = self.base_kernel.knn_.shape[1]
+            self.base_knn_graph = self.base_kernel.knn_
         else:
             self.n, self.m = X.shape
             if self.base_metric == "precomputed":

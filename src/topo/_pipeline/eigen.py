@@ -19,7 +19,53 @@ logger = logging.getLogger(__name__)
 class EigenBuildMixin:
     """Intrinsic-dimension sizing, eigenbasis and scaffold-graph construction."""
 
-    def _automated_sizing(self, X):
+    # Interface contract — attributes supplied by TopOGraph
+    id_max_components: int
+    id_method: str
+    id_ks: Any
+    backend: str
+    id_metric: str
+    n_jobs: int
+    id_quantile: float
+    id_min_components: int
+    id_headroom: float
+    random_state: Any
+    _id_details: dict[str, Any]
+    _scaffold_components_ms: int | None
+    _scaffold_components_dm: int | None
+    n_eigs: int
+    global_dimensionality: Any
+    local_dimensionality: Any
+    verbosity: int
+    base_kernel_version: str
+    EigenbasisDict: dict[str, Any]
+    eigensolver: str
+    eigen_tol: float
+    diff_t: int
+    bases_graph_verbose: bool
+    runtimes: dict[str, float]
+    current_eigenbasis: str
+    eigenbasis: Any
+    graph_knn: int
+    graph_metric: str
+    graph_kernel_version: str
+    GraphKernelDict: dict[str, Any]
+    low_memory: bool
+    graph_kernel: Any
+    current_graphkernel: str
+    _knn_msZ: Any
+    _knn_Z: Any
+    _kernel_msZ: Any
+    _kernel_Z: Any
+    base_kernel: Any
+
+    def _build_kernel(
+        self, *args: Any, **kwargs: Any
+    ) -> tuple[Any, dict[str, Any]]: ...
+    def spectral_layout(self, *args: Any, **kwargs: Any) -> Any: ...
+    def _run_projections(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def _automated_sizing(self, X: Any):
         n = X.shape[0]
         max_cap = min(int(self.id_max_components), max(2, n - 2))
 
@@ -44,13 +90,13 @@ class EigenBuildMixin:
         self._scaffold_components_dm = k_sel
         self.n_eigs = int(max(self.n_eigs, k_sel))
         self.global_dimensionality = k_sel
-        self.local_dimensionality = id_details.get("local_id_mle", None)
+        self.local_dimensionality = id_details.get("local_id", None)
 
     # ------------------------------------------------------------------
     # fit() — decomposed into stages (Phase 4)
     # ------------------------------------------------------------------
 
-    def _fit_global(self, X, **kwargs):
+    def _fit_global(self, X: Any, **kwargs: Any):
         """Global (non-UoM) scaffold construction."""
         if self.verbosity >= 1:
             logger.info("Computing eigenbasis → DM/msDM scaffolds...")
@@ -100,7 +146,9 @@ class EigenBuildMixin:
         self._run_projections()
         return self
 
-    def _build_scaffold_graphs(self, X, dm_eig, ms_eig, dm_key, ms_key, **kwargs):
+    def _build_scaffold_graphs(
+        self, X: Any, dm_eig: Any, ms_eig: Any, dm_key: str, ms_key: str, **kwargs: Any
+    ):
         """Build kNN and refined kernels in both scaffold spaces."""
         # msZ
         if self.verbosity >= 1:

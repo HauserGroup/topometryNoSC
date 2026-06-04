@@ -6,14 +6,22 @@
 ######################################
 # Clearly defining laplacian-type operators and spectral decompositions
 
+import logging
+from typing import Any, cast
 from warnings import warn
+
 import numpy as np
-import pandas as pd
 from scipy import sparse
-from sklearn.utils import check_random_state, as_float_array
+from scipy.linalg import LinAlgError
+from scipy.sparse import csc_matrix
+from sklearn.utils import check_random_state
+
+logger = logging.getLogger(__name__)
+
 
 def _dense_degree(W):
     return np.diag(W.sum(axis=1))
+
 
 def _dense_unnormalized_laplacian(W, return_D=False):
     D = _dense_degree(W)
@@ -28,7 +36,7 @@ def _dense_unnormalized_laplacian(W, return_D=False):
 def _dense_symmetric_normalized_laplacian(W, return_D=False):
     D = _dense_degree(W)
     L = D - W
-    Dinvs = np.diag(1/np.sqrt(D.diagonal()))
+    Dinvs = np.diag(1 / np.sqrt(D.diagonal()))
     # Lsym = D^-1/2 @ L @ D^-1/2 = I - D^-1/2 @ W @ D^-1/2
     Lsym_norm = Dinvs @ (L @ Dinvs)
     if return_D:
@@ -36,39 +44,44 @@ def _dense_symmetric_normalized_laplacian(W, return_D=False):
     else:
         return Lsym_norm
 
+
 def _dense_normalized_random_walk_laplacian(W, return_D=False):
     D = _dense_degree(W)
     # Lr = D^-1@Lr = I - D^-1@W = I - P
-    Lr = np.eye(*W.shape) - (np.diag(1/D.diagonal())@W)
+    Lr = np.eye(*W.shape) - (np.diag(1 / D.diagonal()) @ W)
     if return_D:
         return Lr, D
     else:
         return Lr
 
-def _dense_diffusion(W, alpha=0, semi_aniso=False):
+
+def _dense_diffusion(W, alpha: float = 0, semi_aniso=False):
     D = _dense_degree(W)
     if alpha > 0:
-        Da = np.diag(1/(D.diagonal()**alpha))
+        Da = np.diag(1 / (D.diagonal() ** alpha))
         Wa = Da @ (W @ Da)
         Dd = _dense_degree(Wa)
         if semi_aniso:
-            Pa = (np.diag(1/Dd.diagonal())@W)
+            Pa = np.diag(1 / Dd.diagonal()) @ W
         else:
-            Pa = (np.diag(1/Dd.diagonal())@Wa)
+            Pa = np.diag(1 / Dd.diagonal()) @ Wa
     else:
-        Pa = (np.diag(1/D.diagonal())@W)
+        Pa = np.diag(1 / D.diagonal()) @ W
     return Pa
 
-def _dense_diffusion_symmetric(W, alpha=0, semi_aniso=False, return_D_inv_sqrt=False):
+
+def _dense_diffusion_symmetric(
+    W, alpha: float = 0, semi_aniso=False, return_D_inv_sqrt=False
+):
     if alpha < 0:
         alpha = 0
     D = _dense_degree(W)
     if alpha > 0:
         # Dinva is D^-alpha
-        Dinva = np.diag(1/(D.diagonal()**alpha))
+        Dinva = np.diag(1 / (D.diagonal() ** alpha))
         Wa = Dinva @ (W @ Dinva)
         Da = _dense_degree(Wa)
-        Dalpha_inv = np.diag(1/(Da.diagonal()))
+        Dalpha_inv = np.diag(1 / (Da.diagonal()))
         if semi_aniso:
             Pa = Dalpha_inv @ W
             D_right = _dense_degree(W)
@@ -76,22 +89,24 @@ def _dense_diffusion_symmetric(W, alpha=0, semi_aniso=False, return_D_inv_sqrt=F
             Pa = Dalpha_inv @ Wa
             D_right = _dense_degree(Wa)
     else:
-        Pa = (np.diag(1/D.diagonal())@W)
+        Pa = np.diag(1 / D.diagonal()) @ W
         D_right = _dense_degree(W)
     # Now let's build the symmetrized version Pasym:
     D_left = D_right.copy()
     D_right = np.sqrt(D_right.diagonal())
-    D_left = np.diag(1/np.sqrt(D_left.diagonal()))
+    D_left = np.diag(1 / np.sqrt(D_left.diagonal()))
     Psym = D_right @ (Pa @ D_left)
     if return_D_inv_sqrt:
         return Psym, D_left
     else:
         return Psym
 
+
 def _sparse_degree(W):
     N = np.shape(W)[0]
     D = np.ravel(W.sum(axis=1))
     return sparse.csr_matrix((D, (range(N), range(N))), shape=[N, N])
+
 
 def degree(W):
     if sparse.issparse(W):
@@ -108,6 +123,7 @@ def _sparse_unnormalized_laplacian(W, return_D=False):
     else:
         return L
 
+
 def _sparse_symmetrized_normalized_laplacian(W, return_D=False):
     D = _sparse_degree(W)
     L = D - W
@@ -123,20 +139,22 @@ def _sparse_symmetrized_normalized_laplacian(W, return_D=False):
     else:
         return Lsym_norm
 
+
 def _sparse_normalized_random_walk_laplacian(W, return_D=False):
     N = np.shape(W)[0]
     D = np.ravel(W.sum(axis=1))
     # D ^-1:
     D[D != 0] = 1 / D[D != 0]
     Dinv = sparse.csr_matrix((D, (range(N), range(N))), shape=[N, N])
-    I = sparse.identity(W.shape[0], dtype=np.float32)
+    I = sparse.identity(W.shape[0], dtype="float32")
     Lr = I - Dinv.dot(W)
     if return_D:
         return Lr, Dinv
     else:
         return Lr
-    
-def _sparse_diffusion(W, alpha=0, semi_aniso=False):
+
+
+def _sparse_diffusion(W, alpha: float = 0, semi_aniso=False):
     # Note the resulting operator is not symmetric!
     N = np.shape(W)[0]
     D = np.ravel(W.sum(axis=1))
@@ -159,7 +177,10 @@ def _sparse_diffusion(W, alpha=0, semi_aniso=False):
         P = Dd.dot(W)
     return P
 
-def _sparse_diffusion_symmetric(W, alpha=0, semi_aniso=False, return_D_inv_sqrt=False):
+
+def _sparse_diffusion_symmetric(
+    W, alpha: float = 0, semi_aniso=False, return_D_inv_sqrt=False
+):
     if alpha < 0:
         alpha = 0
     N = np.shape(W)[0]
@@ -196,11 +217,11 @@ def _sparse_diffusion_symmetric(W, alpha=0, semi_aniso=False, return_D_inv_sqrt=
         return Psym
 
 
-def graph_laplacian(W, laplacian_type='normalized', return_D=False):
+def graph_laplacian(W, laplacian_type="normalized", return_D=False):
     """
     Compute the graph Laplacian, given a adjacency or affinity graph W. For a friendly reference,
     see this material from James Melville: https://jlmelville.github.io/smallvis/spectral.html
-    
+
     Parameters
     ----------
     W : scipy.sparse.csr_matrix or np.ndarray
@@ -219,29 +240,43 @@ def graph_laplacian(W, laplacian_type='normalized', return_D=False):
         The graph Laplacian.
     """
     if sparse.issparse(W):
-        if laplacian_type == 'unnormalized':
+        if laplacian_type == "unnormalized":
             lap_fun = _sparse_unnormalized_laplacian
-        elif laplacian_type == 'normalized':
+        elif laplacian_type == "normalized":
             lap_fun = _sparse_symmetrized_normalized_laplacian
-        elif laplacian_type == 'random_walk':
+        elif laplacian_type == "random_walk":
             lap_fun = _sparse_normalized_random_walk_laplacian
         else:
-            raise ValueError('Unknown laplacian type: {}'.format(laplacian_type) + '. Should \
-            be one of \"unnormalized\", \"normalized\", or \"random_walk\".')
+            raise ValueError(
+                f"Unknown laplacian type: {laplacian_type}"
+                + '. Should \
+            be one of "unnormalized", "normalized", or "random_walk".'
+            )
     else:
-        if laplacian_type == 'unnormalized':
+        if laplacian_type == "unnormalized":
             lap_fun = _dense_unnormalized_laplacian
-        elif laplacian_type == 'normalized':
+        elif laplacian_type == "normalized":
             lap_fun = _dense_symmetric_normalized_laplacian
-        elif laplacian_type == 'random_walk':
+        elif laplacian_type == "random_walk":
             lap_fun = _dense_normalized_random_walk_laplacian
         else:
-            raise ValueError('Unknown laplacian type: {}'.format(laplacian_type) + '. Should \
-            be one of \"unnormalized\", \"normalized\", or \"random_walk\".')
+            raise ValueError(
+                f"Unknown laplacian type: {laplacian_type}"
+                + '. Should \
+            be one of "unnormalized", "normalized", or "random_walk".'
+            )
     return lap_fun(W, return_D)
 
 
-def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, return_evals=False, eigen_tol=0, random_state=None):
+def LE(
+    W,
+    n_eigs=10,
+    laplacian_type="random_walk",
+    drop_first=True,
+    return_evals=False,
+    eigen_tol: float = 0,
+    random_state=None,
+):
     """
     Performs [Laplacian Eigenmaps](https://www2.imm.dtu.dk/projects/manifold/Papers/Laplacian.pdf), given a adjacency or affinity graph W.
     The graph W can be a sparse matrix or a dense matrix. It is assumed to be symmetric (no further symmetrization is performed, be sure it is),
@@ -284,12 +319,12 @@ def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, return_evals
     """
     random_state = check_random_state(random_state)
     if n_eigs > np.shape(W)[0]:
-        raise ValueError(
-            'n_eigs must be less than or equal to the number of nodes.')
+        raise ValueError("n_eigs must be less than or equal to the number of nodes.")
     # Compute graph Laplacian
     L = graph_laplacian(W, laplacian_type)
     if not sparse.issparse(L):
         L = sparse.csr_matrix(L)  # for ARPACK efficiency
+    L = cast(sparse.csr_matrix, L)
     # Add one more eig if drop_first is True
     if drop_first:
         n_eigs = n_eigs + 1
@@ -297,17 +332,21 @@ def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, return_evals
     try:
         if L.shape[0] < 1000000:
             evals, evecs = sparse.linalg.eigsh(
-                L, k=n_eigs, which='SM', tol=eigen_tol, maxiter=L.shape[0] * 5)
+                L, k=n_eigs, which="SM", tol=eigen_tol, maxiter=L.shape[0] * 5
+            )
         else:
             evals, evecs = sparse.linalg.lobpcg(
-                L, random_state.normal(size=(L.shape[0], n_eigs)), largest=False, tol=1e-8
-            ) 
-    except sparse.linalg.ArpackError:
-            warn(
-                "WARNING: spectral decomposition FAILED! This is likely due to too small an eigengap. Consider\n"
-                "adding some noise or jitter to your data."
+                L,
+                random_state.normal(size=(L.shape[0], n_eigs)),
+                largest=False,
+                tol=1e-8,
             )
-            return None
+    except sparse.linalg.ArpackError:
+        warn(
+            "WARNING: spectral decomposition FAILED! This is likely due to too small an eigengap. Consider\n"
+            "adding some noise or jitter to your data."
+        )
+        return None
     evals = np.real(evals)
     evecs = np.real(evecs)
     # Sort eigenvalues and eigenvectors in ascending order
@@ -327,7 +366,9 @@ def LE(W, n_eigs=10, laplacian_type='random_walk', drop_first=True, return_evals
         return evecs
 
 
-def diffusion_operator(W, alpha=1.0, symmetric=False, semi_aniso=False, return_D_inv_sqrt=False):
+def diffusion_operator(
+    W, alpha=1.0, symmetric=False, semi_aniso=False, return_D_inv_sqrt=False
+):
     """
     Computes the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
 
@@ -339,7 +380,7 @@ def diffusion_operator(W, alpha=1.0, symmetric=False, semi_aniso=False, return_D
 
     alpha : float (optional, default 1.0).
         Anisotropy to apply. 'Alpha' in the diffusion maps literature.
-    
+
     symmetric : bool (optional, default True).
         Whether to use a symmetric version of the diffusion operator. This is particularly useful to yield a symmetric operator
         when using anisotropy (alpha > 0), as the diffusion operator P would be assymetric otherwise, which can be problematic
@@ -360,24 +401,29 @@ def diffusion_operator(W, alpha=1.0, symmetric=False, semi_aniso=False, return_D
 
     """
     # Compute diffusion operator
+    D_left: Any = None
     if sparse.issparse(W):
         if symmetric:
             if return_D_inv_sqrt:
                 P, D_left = _sparse_diffusion_symmetric(
-                W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt)
+                    W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt
+                )
             else:
                 P = _sparse_diffusion_symmetric(
-                W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt)
+                    W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt
+                )
         else:
             P = _sparse_diffusion(W, alpha, semi_aniso)
     else:
         if symmetric:
             if return_D_inv_sqrt:
                 P, D_left = _dense_diffusion_symmetric(
-                W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt)
+                    W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt
+                )
             else:
                 P = _dense_diffusion_symmetric(
-                W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt)
+                    W, alpha, semi_aniso=semi_aniso, return_D_inv_sqrt=return_D_inv_sqrt
+                )
         else:
             P = _dense_diffusion(W, alpha, semi_aniso)
     if symmetric:
@@ -389,10 +435,9 @@ def diffusion_operator(W, alpha=1.0, symmetric=False, semi_aniso=False, return_D
         return P
 
 
-
-
-
-def spectral_clustering(init, max_svd_restarts=50, n_iter_max=50, random_state=None, copy=True):
+def spectral_clustering(
+    init, max_svd_restarts=50, n_iter_max=50, random_state=None, copy=True
+):
     """
     Search for a partition matrix (clustering) which is closest to the eigenvector embedding.
 
@@ -423,8 +468,8 @@ def spectral_clustering(init, max_svd_restarts=50, n_iter_max=50, random_state=N
     - Multiclass spectral clustering, 2003
       Stella X. Yu, Jianbo Shi
       https://www1.icsi.berkeley.edu/~stellayu/publication/doc/2003kwayICCV.pdf
-   
-   
+
+
     Notes
     -----
     The eigenvector embedding is used to iteratively search for the
@@ -439,52 +484,45 @@ def spectral_clustering(init, max_svd_restarts=50, n_iter_max=50, random_state=N
     initialization than k-means.
     """
 
-    from scipy.sparse import csc_matrix
-    from scipy.linalg import LinAlgError
-    
     random_state = check_random_state(random_state)
-    vectors = as_float_array(init, copy=copy)
+
+    vectors = (
+        np.asarray(init, dtype=float).copy() if copy else np.asarray(init, dtype=float)
+    )
+    if vectors.ndim != 2:
+        raise ValueError(
+            "init must be a 2-D dense array of shape (n_samples, n_clusters)."
+        )
 
     eps = np.finfo(float).eps
     n_samples, n_components = vectors.shape
 
-    # Normalize the eigenvectors to an equal length of a vector of ones.
-    # Reorient the eigenvectors to point in the negative direction with respect
-    # to the first element.  This may have to do with constraining the
-    # eigenvectors to lie in a specific quadrant to make the discretization
-    # search easier.
     norm_ones = np.sqrt(n_samples)
-    for i in range(vectors.shape[1]):
-        vectors[:, i] = (vectors[:, i] / np.linalg.norm(vectors[:, i])) \
-            * norm_ones
-    if vectors[0, i] != 0:
-        vectors[:, i] = -1 * vectors[:, i] * np.sign(vectors[0, i])
 
-    # Normalize the rows of the eigenvectors.  Samples should lie on the unit
-    # hypersphere centered at the origin.  This transforms the samples in the
-    # embedding space to the space of partition matrices.
-    vectors = vectors / np.sqrt((vectors ** 2).sum(axis=1))[:, np.newaxis]
+    for i in range(n_components):
+        col_norm = np.linalg.norm(vectors[:, i])
+        if col_norm == 0:
+            raise ValueError("init contains a zero-norm eigenvector column.")
+        vectors[:, i] = (vectors[:, i] / col_norm) * norm_ones
+
+        if vectors[0, i] != 0:
+            vectors[:, i] *= -np.sign(vectors[0, i])
+
+    row_norms = np.sqrt((vectors**2).sum(axis=1))
+    if np.any(row_norms == 0):
+        raise ValueError("init contains a zero-norm row after column normalization.")
+    vectors = vectors / row_norms[:, np.newaxis]
 
     svd_restarts = 0
     has_converged = False
-
-    # If there is an exception we try to randomize and rerun SVD again
-    # do this max_svd_restarts times.
+    labels: np.ndarray = np.zeros(0, dtype=int)
 
     while (svd_restarts < max_svd_restarts) and not has_converged:
-
-        # Initialize first column of rotation matrix with a row of the
-        # eigenvectors
         rotation = np.zeros((n_components, n_components))
         rotation[:, 0] = vectors[random_state.randint(n_samples), :].T
 
-        # To initialize the rest of the rotation matrix, find the rows
-        # of the eigenvectors that are as orthogonal to each other as
-        # possible
         c = np.zeros(n_samples)
         for j in range(1, n_components):
-            # Accumulate c to ensure row is as orthogonal as possible to
-            # previous picks as well as current one
             c += np.abs(np.dot(vectors, rotation[:, j - 1]))
             rotation[:, j] = vectors[c.argmin(), :].T
 
@@ -499,26 +537,26 @@ def spectral_clustering(init, max_svd_restarts=50, n_iter_max=50, random_state=N
             labels = t_discrete.argmax(axis=1)
             vectors_discrete = csc_matrix(
                 (np.ones(len(labels)), (np.arange(0, n_samples), labels)),
-                shape=(n_samples, n_components))
+                shape=(n_samples, n_components),
+            )
 
-            t_svd = vectors_discrete.T * vectors
+            t_svd = vectors_discrete.T @ vectors
 
             try:
                 U, S, Vh = np.linalg.svd(t_svd)
                 svd_restarts += 1
             except LinAlgError:
-                print("SVD did not converge, randomizing and trying again")
+                logger.warning("SVD did not converge, randomizing and trying again")
                 break
 
             ncut_value = 2.0 * (n_samples - S.sum())
-            if ((abs(ncut_value - last_objective_value) < eps) or
-                    (n_iter > n_iter_max)):
+            if (abs(ncut_value - last_objective_value) < eps) or (n_iter > n_iter_max):
                 has_converged = True
             else:
-                # otherwise calculate rotation and continue
                 last_objective_value = ncut_value
                 rotation = np.dot(Vh.T, U.T)
 
     if not has_converged:
-        raise LinAlgError('SVD did not converge')
+        raise LinAlgError("SVD did not converge")
+
     return labels

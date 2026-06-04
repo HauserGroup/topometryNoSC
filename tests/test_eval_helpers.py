@@ -65,7 +65,7 @@ class TestLocalScores:
 
     def test_geodesic_correlation_return_graphs_and_landmarks(self):
         graph = _cycle_graph(6)
-        corr, data_graph, emb_graph = local_scores.geodesic_correlation(
+        res = local_scores.geodesic_correlation(
             graph,
             graph,
             landmarks=np.array([0, 1, 2, 3]),
@@ -73,6 +73,8 @@ class TestLocalScores:
             return_graphs=True,
             random_state=0,
         )
+        assert isinstance(res, tuple)
+        corr, data_graph, emb_graph = res
 
         assert np.isfinite(corr)
         assert data_graph.shape == (4, 4)
@@ -99,8 +101,16 @@ class TestRiemannMetric:
         assert Sinv.shape == (4, 2)
 
         rm = rmetric.RiemannMetric(Y, L)
-        assert rm.get_dual_rmetric().shape == (4, 2, 2)
-        G2, vectors, hvals, gvals = rm.get_rmetric(return_svd=True)
+        dual = rm.get_dual_rmetric()
+        assert isinstance(dual, np.ndarray)
+        assert dual.shape == (4, 2, 2)
+        res = rm.get_rmetric(return_svd=True)
+        assert isinstance(res, tuple)
+        G2, vectors, hvals, gvals = res
+        assert G2 is not None
+        assert vectors is not None
+        assert hvals is not None
+        assert gvals is not None
         assert G2.shape == (4, 2, 2)
         assert vectors.shape == (4, 2, 2)
         assert hvals.shape == (4, 2)
@@ -135,7 +145,9 @@ class TestRiemannMetric:
         L = sparse.csgraph.laplacian(_cycle_graph(4), normed=False)
         G = np.repeat(np.eye(2)[None], 4, axis=0)
 
-        vals, limits = rmetric.calculate_deformation(Y, L, G_emb=G)
+        res = rmetric.calculate_deformation(Y, L, G_emb=G)
+        assert isinstance(res, tuple)
+        vals, limits = res
         np.testing.assert_allclose(vals, np.zeros(4))
         assert limits == pytest.approx((-0.0, 0.0))
 

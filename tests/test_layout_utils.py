@@ -116,14 +116,21 @@ class TestFuzzyGraphHelpers:
             ]
         )
 
-        fss, sigmas, rhos, dists = fuzzy.fuzzy_simplicial_set(
+        res = fuzzy.fuzzy_simplicial_set(
             graph,
             n_neighbors=2,
             metric="precomputed",
             return_dists=True,
             apply_set_operations=True,
         )
+        assert isinstance(res, tuple)
+        assert len(res) == 4
+        fss, sigmas, rhos, dists = res
 
+        assert isinstance(fss, sparse.coo_matrix)
+        assert isinstance(sigmas, np.ndarray)
+        assert isinstance(rhos, np.ndarray)
+        assert isinstance(dists, np.ndarray)
         assert fss.shape == (3, 3)
         assert sigmas.shape == (3,)
         assert rhos.shape == (3,)

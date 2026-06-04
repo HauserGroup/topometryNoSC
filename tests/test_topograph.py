@@ -60,7 +60,7 @@ class TestTopOGraphFit:
         assert len(fitted_topograph.eigenvalues) > 0
 
     def test_eigenvalues_reasonable(self, fitted_topograph):
-        evals = fitted_topograph.eigenvalues
+        evals = np.asarray(fitted_topograph.eigenvalues)
         # Raw eigenvalues from ARPACK may include small negative floating-point artifacts.
         # The positive eigenvalues (used for DM/msDM scaffolds) should be in (0, 1].
         pos_evals = evals[evals > 0]
@@ -195,6 +195,7 @@ class TestTopOGraphSaveLoad:
 
 def test_kernel_degree_lazily_builds_adjacency(fitted_topograph):
     K = fitted_topograph.base_kernel
+    assert K is not None
     K._A = None
     K._degree = None
 

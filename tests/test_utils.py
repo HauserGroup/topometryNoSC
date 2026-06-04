@@ -109,8 +109,16 @@ class TestUmapUtilities:
 
     def test_csr_unique_reports_unique_sparse_rows(self):
         mat = sparse.csr_matrix([[1.0, 0.0], [1.0, 0.0], [0.0, 2.0]])
-        index, inverse, counts = umap_utils.csr_unique(mat)
+        n_rows = 3
+        index, inverse, counts = umap_utils.csr_unique(
+            mat,
+            return_index=True,
+            return_inverse=True,
+            return_counts=True,
+        )
 
         assert index.ndim == 1
-        assert inverse.shape[0] == mat.shape[0]
+        assert isinstance(inverse, np.ndarray)
+        assert isinstance(counts, np.ndarray)
+        assert inverse.shape[0] == n_rows
         assert counts.sum() == inverse.size

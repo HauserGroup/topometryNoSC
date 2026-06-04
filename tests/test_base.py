@@ -177,7 +177,7 @@ class TestSparseDistanceHelpers:
 
 class TestANNHelpers:
     def test_neighbor_count_validation(self):
-        assert ann._validate_n_neighbors("3") == 3
+        assert ann._validate_n_neighbors(3) == 3
         assert ann._query_k(3, 3) == 3
         with pytest.raises(ValueError, match="n_neighbors"):
             ann._validate_n_neighbors(0)
@@ -203,7 +203,7 @@ class TestANNHelpers:
         assert graph.shape == (2, 2)
         np.testing.assert_allclose(graph.toarray(), [[0.0, 2.0], [2.0, 0.0]])
         with pytest.raises(ValueError, match="same shape"):
-            ann._build_sparse_knn_graph([[0]], [[0, 1]], 1, 2)
+            ann._build_sparse_knn_graph(np.array([[0]]), np.array([[0, 1]]), 1, 2)
 
     def test_backend_metric_mapping(self):
         assert ann._nmslib_sparse_space("euclidean") == "l2_sparse"
@@ -221,11 +221,13 @@ class TestANNHelpers:
         Y = np.array([[2.0], [9.0]])
 
         graph = ann.kNN(X, n_neighbors=2, backend="sklearn")
+        assert sparse.isspmatrix_csr(graph)
         assert graph.shape == (4, 4)
         assert graph.getnnz(axis=1).tolist() == [2, 2, 2, 2]
 
         with pytest.warns(UserWarning, match="Falling back to sklearn"):
             query_graph = ann.kNN(X, Y=Y, n_neighbors=1, backend="hnswlib")
+        assert sparse.isspmatrix_csr(query_graph)
         assert query_graph.shape == (2, 4)
 
     def test_transformers_fail_helpfully_when_not_fitted_or_missing_backend(self):

@@ -1,7 +1,5 @@
 """Tests for topo.analysis standalone functions."""
 
-from typing import cast
-
 import numpy as np
 from scipy import sparse
 
@@ -44,7 +42,7 @@ class TestSpectralSelectivity:
 
     def test_selectivity_returns_dict(self, fitted_topograph):
         Z = fitted_topograph.spectral_scaffold(multiscale=True)
-        evals = fitted_topograph.eigenvalues
+        evals = np.asarray(fitted_topograph.eigenvalues)
         # Only pass eigenvalues matching scaffold width
         pos_evals = evals[evals > 0][: Z.shape[1]]
         result = analysis.spectral_selectivity(Z, evals=pos_evals, k_neighbors=10)
@@ -56,7 +54,7 @@ class TestSpectralSelectivity:
         X, _ = swiss_roll_data
         n = X.shape[0]
         Z = fitted_topograph.spectral_scaffold(multiscale=True)
-        evals = fitted_topograph.eigenvalues
+        evals = np.asarray(fitted_topograph.eigenvalues)
         pos_evals = evals[evals > 0][: Z.shape[1]]
         result = analysis.spectral_selectivity(Z, evals=pos_evals, k_neighbors=10)
         assert result["EAS"].shape == (n,)
@@ -110,7 +108,7 @@ class TestSpectralLayout:
             dim=2,
             random_state=42,
         )
-        embedding = cast(np.ndarray, embedding)
+        assert isinstance(embedding, np.ndarray)
 
         assert embedding.shape == (7, 2)
         assert np.isfinite(embedding).all()

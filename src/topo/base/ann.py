@@ -548,7 +548,10 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         start = time.time()
         query_data = self._prepare_query_data(data)
-        n_query_samples = query_data.shape[0]
+        query_shape = query_data.shape
+        if query_shape is None:
+            raise ValueError("Query data must have a 2-D shape.")
+        n_query_samples = int(query_shape[0])
         query_qty = n_query_samples
         query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
 
@@ -605,7 +608,10 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         start = time.time()
         query_data = self._prepare_query_data(data)
-        n_query_samples = query_data.shape[0]
+        query_shape = query_data.shape
+        if query_shape is None:
+            raise ValueError("Query data must have a 2-D shape.")
+        n_query_samples = int(query_shape[0])
         query_qty = n_query_samples
         query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
 
@@ -656,6 +662,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
         query_data = self._prepare_query_data(data)
 
         _, test = train_test_split(query_data, test_size=data_use)
+        test = cast(Any, test)
         query_qty = test.shape[0]
         query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
 
@@ -1048,6 +1055,7 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         _check_2d_data(data)
 
         _, test = train_test_split(data, test_size=percent_use)
+        test = cast(np.ndarray, test)
         query_qty = test.shape[0]
         query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
 

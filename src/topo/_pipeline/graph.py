@@ -7,9 +7,10 @@ kernel construction steps. Methods operate on ``self`` and call the shared
 
 import logging
 import time
-from typing import Any, cast
 
-from scipy.sparse import csr_matrix, issparse
+import numpy as np
+from scipy.sparse import csr_matrix
+from sklearn.base import BaseEstimator
 
 from topo.base.ann import kNN
 from topo.tpgraph.kernels import Kernel
@@ -32,14 +33,15 @@ class GraphBuildMixin:
     runtimes: dict[str, float]
     base_kernel_version: str
     low_memory: bool
-    BaseKernelDict: dict[str, Any]
+    BaseKernelDict: dict[str, Kernel]
     base_kernel: Kernel | None
-    base_nbrs_class: Any
-    base_knn_graph: Any
+    base_nbrs_class: BaseEstimator | None
+    base_knn_graph: csr_matrix | None
 
-    def _build_kernel(self, *args: Any, **kwargs: Any) -> tuple[Any, dict]: ...
+    def _build_kernel(self, *args, **kwargs) -> tuple[Kernel, dict[str, Kernel]]:
+        raise NotImplementedError
 
-    def _build_base_graph(self, X, **kwargs):
+    def _build_base_graph(self, X: np.ndarray | csr_matrix | None, **kwargs):
         if X is None:
             if self.base_kernel is None:
                 raise ValueError("X was not passed and no base_kernel provided.")
@@ -51,32 +53,34 @@ class GraphBuildMixin:
             self.m = self.base_kernel.knn_.shape[1]
             self.base_knn_graph = self.base_kernel.knn_
         else:
-            self.n, self.m = X.shape
+            shape = X.shape
+            if shape is None:
+                raise ValueError("X must have a 2-D shape.")
+            self.n, self.m = int(shape[0]), int(shape[1])
             if self.base_metric == "precomputed":
                 if self.n != self.m:
                     raise ValueError(
                         "When base_metric='precomputed', X must be square."
                     )
                 self.base_knn_graph = (
-                    X.tocsr(copy=True) if issparse(X) else csr_matrix(X)
+                    X.tocsr(copy=True) if isinstance(X, csr_matrix) else csr_matrix(X)
                 )
 
         if self.base_knn_graph is None:
+            if X is None:
+                raise ValueError("X was not passed and no base graph could be built.")
             if self.verbosity >= 1:
                 logger.info("Computing neighborhood graph (X space)...")
             t0 = time.time()
-            self.base_nbrs_class, self.base_knn_graph = cast(
-                tuple[Any, Any],
-                kNN(
-                    X,
-                    n_neighbors=self.base_knn,
-                    metric=self.base_metric,
-                    n_jobs=self.n_jobs,
-                    backend=self.backend,
-                    return_instance=True,
-                    verbose=self.bases_graph_verbose,
-                    **kwargs,
-                ),
+            self.base_nbrs_class, self.base_knn_graph = kNN(
+                X,
+                n_neighbors=self.base_knn,
+                metric=self.base_metric,
+                n_jobs=self.n_jobs,
+                backend=self.backend,
+                return_instance=True,
+                verbose=self.bases_graph_verbose,
+                **kwargs,
             )
             self.runtimes["kNN_X"] = time.time() - t0
             if self.verbosity >= 1:

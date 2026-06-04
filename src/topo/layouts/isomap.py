@@ -2,14 +2,24 @@
 
 import numpy as np
 from sklearn.preprocessing import KernelCenterer
-from topo.eval.local_scores import geodesic_distance
-from topo.utils._utils import get_landmark_indices
+
 from topo.base.ann import kNN
+from topo.eval.local_scores import geodesic_distance
 from topo.spectral.eigen import eigendecompose
+from topo.utils._utils import get_landmark_indices
 
 
-def Isomap(X, n_components=2, n_neighbors=50, metric='cosine', landmarks=None,
-           landmark_method='kmeans', eig_tol=0, n_jobs=1, **kwargs):
+def Isomap(
+    X,
+    n_components=2,
+    n_neighbors=50,
+    metric="cosine",
+    landmarks=None,
+    landmark_method="kmeans",
+    eig_tol=0,
+    n_jobs=1,
+    **kwargs,
+):
     """
     Isomap embedding of a dataset or precomputed graph.
 
@@ -62,19 +72,25 @@ def Isomap(X, n_components=2, n_neighbors=50, metric='cosine', landmarks=None,
         if isinstance(landmarks, np.ndarray):
             pass  # use as-is
         elif isinstance(landmarks, int):
-            landmarks = get_landmark_indices(X, n_landmarks=landmarks,
-                                             method=landmark_method)
+            landmarks = get_landmark_indices(
+                X, n_landmarks=landmarks, method=landmark_method
+            )
 
     # Build kNN graph
-    if metric != 'precomputed':
-        K = kNN(X, metric=metric, n_neighbors=n_neighbors,
-                n_jobs=n_jobs, **kwargs)
+    if metric != "precomputed":
+        K = kNN(X, metric=metric, n_neighbors=n_neighbors, n_jobs=n_jobs, **kwargs)
     else:
         K = X.copy()
 
     # Pairwise geodesic distances
-    G = geodesic_distance(K, method='D', unweighted=False, directed=False,
-                          indices=landmarks, n_jobs=n_jobs)
+    G = geodesic_distance(
+        K,
+        method="D",
+        unweighted=False,
+        directed=False,
+        indices=landmarks,
+        n_jobs=n_jobs,
+    )
     if landmarks is not None:
         G = G.T[landmarks].T
 
@@ -90,14 +106,18 @@ def Isomap(X, n_components=2, n_neighbors=50, metric='cosine', landmarks=None,
 
     # Standard Isomap: double-center the squared geodesic distance matrix
     # (equivalent to the MDS kernel -½ H D² H)
-    D2 = G ** 2
+    D2 = G**2
     K_matrix = KernelCenterer().fit_transform(-0.5 * D2)
 
     # Eigendecompose for the largest eigenpairs
     evals, evecs = eigendecompose(
-        K_matrix, n_components=n_components,
-        eigensolver='arpack', largest=True,
-        eigen_tol=eig_tol, random_state=None, verbose=False,
+        K_matrix,
+        n_components=n_components,
+        eigensolver="arpack",
+        largest=True,
+        eigen_tol=eig_tol,
+        random_state=None,
+        verbose=False,
     )
 
     # Keep only positive eigenvalues

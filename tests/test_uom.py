@@ -3,7 +3,7 @@
 import numpy as np
 import scipy.sparse as sp
 
-from topo.uom import find_components, louvain_micro, consolidate_macros, mbkm
+from topo.uom import consolidate_macros, find_components, louvain_micro, mbkm
 
 
 class TestLouvainMicro:

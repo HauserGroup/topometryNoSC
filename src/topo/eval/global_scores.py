@@ -1,7 +1,7 @@
 import numpy as np
-from scipy.sparse import csr_matrix, issparse
-from sklearn.manifold import SpectralEmbedding
+from scipy.sparse import issparse
 from sklearn.decomposition import PCA, TruncatedSVD
+from sklearn.manifold import SpectralEmbedding
 
 
 def global_loss_(X, Y):
@@ -51,7 +51,9 @@ def global_score_pca(X, Y, Y_pca=None):
     return GSP
 
 
-def global_score_laplacian(X, Y, k=10, data_is_graph=False, n_jobs=12, random_state=None):
+def global_score_laplacian(
+    X, Y, k=10, data_is_graph=False, n_jobs=12, random_state=None
+):
     """
     Compute the global score comparing an embedding to a Laplacian Eigenmap baseline.
 
@@ -87,6 +89,7 @@ def global_score_laplacian(X, Y, k=10, data_is_graph=False, n_jobs=12, random_st
         X = X.toarray()
     elif not isinstance(X, np.ndarray):
         import pandas as pd
+
         if isinstance(X, pd.DataFrame):
             X = np.array(X.values.T)
 
@@ -94,10 +97,13 @@ def global_score_laplacian(X, Y, k=10, data_is_graph=False, n_jobs=12, random_st
     if random_state is None:
         random_state = np.random.RandomState()
 
-    affinity = 'precomputed' if data_is_graph else 'nearest_neighbors'
+    affinity = "precomputed" if data_is_graph else "nearest_neighbors"
     Y_lap = SpectralEmbedding(
-        n_components=n_dims, n_neighbors=k, n_jobs=n_jobs,
-        affinity=affinity, random_state=random_state,
+        n_components=n_dims,
+        n_neighbors=k,
+        n_jobs=n_jobs,
+        affinity=affinity,
+        random_state=random_state,
     ).fit_transform(X)
     Y_lap /= Y_lap.max()
 

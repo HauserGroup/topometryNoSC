@@ -1,8 +1,9 @@
 """Tests for topo.analysis standalone functions."""
 
+from typing import cast
+
 import numpy as np
 from scipy import sparse
-from typing import cast
 
 from topo import analysis
 from topo.spectral.eigen import spectral_layout

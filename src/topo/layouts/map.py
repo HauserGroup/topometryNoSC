@@ -36,7 +36,8 @@
 
 
 from numpy import random
-from topo.layouts.graph_utils import simplicial_set_embedding, find_ab_params
+
+from topo.layouts.graph_utils import find_ab_params, simplicial_set_embedding
 
 
 def fuzzy_embedding(

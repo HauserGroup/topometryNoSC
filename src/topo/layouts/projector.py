@@ -1,31 +1,27 @@
 ######################################
 # Defining a projection class in a scikit-learn fashion to handle all projection methods
 
-import numpy as np
-import warnings
 import importlib
+import importlib.util
+import logging
+import warnings
 from typing import Any, cast
-from scipy.sparse import issparse
-from sklearn.utils import check_random_state
+
+import numpy as np
+
+# dumb warning, suggests lilmatrix but it doesnt work
+from scipy.sparse import SparseEfficiencyWarning, issparse
 from sklearn.base import BaseEstimator, TransformerMixin
-from topo.utils._utils import get_landmark_indices
+from sklearn.utils import check_random_state
+
+from topo.base.ann import kNN
 from topo.layouts.isomap import Isomap
 from topo.layouts.map import fuzzy_embedding
 from topo.spectral.eigen import spectral_layout
-from topo.base.ann import kNN
 from topo.tpgraph.kernels import Kernel
-import logging
-
-# dumb warning, suggests lilmatrix but it doesnt work
-from scipy.sparse import SparseEfficiencyWarning
-import importlib.util
+from topo.utils._utils import get_landmark_indices
 
 warnings.simplefilter("ignore", SparseEfficiencyWarning)
-
-_have_hnswlib = importlib.util.find_spec("hnswlib") is not None
-_have_nmslib = importlib.util.find_spec("nmslib") is not None
-_have_annoy = importlib.util.find_spec("annoy") is not None
-_have_faiss = importlib.util.find_spec("faiss") is not None
 
 
 class Projector(BaseEstimator, TransformerMixin):
@@ -146,22 +142,17 @@ class Projector(BaseEstimator, TransformerMixin):
         return msg
 
     def _parse_backend(self):
-        _fallback_order = [
-            ("hnswlib", _have_hnswlib),
-            ("nmslib", _have_nmslib),
-            ("annoy", _have_annoy),
-            ("faiss", _have_faiss),
-        ]
-        _have = {name: avail for name, avail in _fallback_order}
-        if not _have.get(self.nbrs_backend, False):
-            for name, avail in _fallback_order:
-                if avail and name != self.nbrs_backend:
-                    self.nbrs_backend = name
-                    return
+        from topo._optional import best_ann_backend
+
+        resolved = best_ann_backend(self.nbrs_backend)
+        if resolved == "sklearn" and self.nbrs_backend != "sklearn":
             warnings.warn(
-                "No approximate nearest-neighbor library found. Falling back to sklearn."
+                "No approximate nearest-neighbor backend found; falling back to "
+                "scikit-learn. Install one with `pip install topometry[ann]` for "
+                "faster neighbor search.",
+                stacklevel=2,
             )
-            self.nbrs_backend = "sklearn"
+        self.nbrs_backend = resolved
 
     def fit(self, X, **kwargs):
         """
@@ -343,9 +334,9 @@ class Projector(BaseEstimator, TransformerMixin):
                 metric=self.metric,
                 verbose=self.verbose,
                 # --- pass checkpointing settings (from kwargs or constructor) ---
-                save_every=map_checkpointing.get("save_every", None),
-                save_limit=map_checkpointing.get("save_limit", None),
-                save_callback=map_checkpointing.get("save_callback", None),
+                save_every=map_checkpointing.get("save_every"),
+                save_limit=map_checkpointing.get("save_limit"),
+                save_callback=map_checkpointing.get("save_callback"),
                 include_init_snapshot=map_checkpointing.get(
                     "include_init_snapshot", True
                 ),
@@ -645,9 +636,9 @@ if _HAS_PYMDE:
         pymde.MDE
             A ``pymde.MDE`` object, based on the original data.
         """
+        import torch
         from pymde import constraints, preprocess, problem, quadratic
         from pymde.functions import penalties
-        import torch
 
         if attractive_penalty is None:
             attractive_penalty = penalties.Log1p
@@ -669,10 +660,8 @@ if _HAS_PYMDE:
 
         if n_neighbors > n:
             problem.LOGGER.warning(
-                (
-                    "Requested n_neighbors {0} > number of items {1}."
-                    " Setting n_neighbors to {2}"
-                ).format(n_neighbors, n, n - 1)
+                f"Requested n_neighbors {n_neighbors} > number of items {n}."
+                f" Setting n_neighbors to {n - 1}"
             )
             n_neighbors = n - 1
 
@@ -859,9 +848,9 @@ if _HAS_PYMDE:
         pymde.MDE
             A ``pymde.MDE`` instance, based on preserving the original distances.
         """
+        import torch
         from pymde import constraints, preprocess, problem
         from pymde.functions import losses
-        import torch
         from scipy.sparse import issparse
 
         if loss is None:

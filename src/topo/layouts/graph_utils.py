@@ -35,18 +35,23 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import logging
+
 import numpy as np
 from scipy.optimize import curve_fit
 from sklearn.neighbors import KDTree
+
 from topo.base import dists as dist
+from topo.spectral.eigen import spectral_layout
 from topo.spectral.umap_layouts import (
+    _optimize_layout_euclidean_single_epoch,
     optimize_layout_euclidean,
     optimize_layout_generic,
-    _optimize_layout_euclidean_single_epoch,
 )
-from topo.spectral.eigen import spectral_layout
 from topo.tpgraph.fuzzy import fuzzy_simplicial_set
-from topo.utils.umap_utils import ts, fast_knn_indices
+from topo.utils.umap_utils import fast_knn_indices
+
+logger = logging.getLogger(__name__)
 
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
@@ -213,7 +218,7 @@ def simplicial_set_embedding(
     # ----- densMAP original densities (unchanged) -----
     if densmap or output_dens:
         if verbose:
-            print(ts() + " Computing original densities")
+            logger.info("Computing original densities")
         dists = densmap_kwds["graph_dists"]
 
         mu_sum = np.zeros(n_vertices, dtype=np.float32)
@@ -257,7 +262,7 @@ def simplicial_set_embedding(
                 save_callback(int(epoch), Y)
             except Exception as _e:
                 if verbose:
-                    print(ts() + f" save_callback failed at epoch {epoch}: {_e}")
+                    logger.warning("save_callback failed at epoch %s: %s", epoch, _e)
         if save_every is not None or include_init_snapshot:
             # Keep an in-memory copy (can be limited)
             snap = {"epoch": int(epoch), "embedding": Y.copy()}
@@ -382,7 +387,7 @@ def simplicial_set_embedding(
     # ----- (unchanged) optional embedding densities -----
     if output_dens:
         if verbose:
-            print(ts() + " Computing embedding densities")
+            logger.info("Computing embedding densities")
 
         (
             knn_indices,

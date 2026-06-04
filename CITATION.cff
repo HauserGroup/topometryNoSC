@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+message: >-
+  This is an independently maintained fork. If you use it, please cite this
+  fork and also cite the original TopOMetry work listed under references.
+type: software
+title: topometry-nosc
+version: 0.1.0
+authors:
+  - family-names: Madsen
+    given-names: Jakob
+repository-code: "https://github.com/HauserGroup/topometryNoSC"
+references:
+  - type: software
+    title: TopOMetry
+    authors:
+      - family-names: Oliveira
+        given-names: David S
+      - family-names: Domingos
+        given-names: Ana I
+      - family-names: Velloso
+        given-names: Licio A
+    repository-code: "https://github.com/davisidarta/topometry"
+  - type: article
+    title: >-
+      TopoMetry systematically learns and evaluates the latent geometry of
+      single-cell data
+    authors:
+      - family-names: Oliveira
+        given-names: David S
+      - family-names: Domingos
+        given-names: Ana I
+      - family-names: Velloso
+        given-names: Licio A
+    journal: eLife
+    year: 2024
+    volume: 13
+    article-number: RP100361
+    doi: 10.7554/eLife.100361.2
+    url: "https://doi.org/10.7554/eLife.100361.2"

@@ -57,7 +57,7 @@ class TestOptionalHelpers:
         monkeypatch.setattr(importlib, "import_module", fake_import)
         with pytest.raises(ImportError) as exc:
             _optional.require("matplotlib", purpose="plotting")
-        assert "topometry[plot]" in str(exc.value)
+        assert "topometry-nosc[plot]" in str(exc.value)
 
 
 class TestBackendSelection:

@@ -3,17 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "topometry"
+name = "topometry-nosc"
 dynamic = ["version"]
-description = "Geometry-first topological dimensionality reduction and manifold learning."
+description = "An independently maintained, heavily modified fork of TopOMetry: geometry-first topological dimensionality reduction and manifold learning."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
-    { name = "Davi Sidarta-Oliveira", email = "davisidarta@gmail.com" },
-    { name = "Ana I. Domingos" },
-    { name = "Licio A. Velloso" },
+    { name = "J. Madsen", email = "jsmadsen@sund.ku.dk" },
 ]
 maintainers = [
     { name = "J. Madsen", email = "jsmadsen@sund.ku.dk" },
@@ -28,10 +26,9 @@ keywords = [
     "machine-learning",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -68,14 +65,14 @@ notebooks = [
     "ipywidgets",
     "jupyterlab",
 ]
-all = ["topometry[plot,pandas,ann,layouts]"]
+all = ["topometry-nosc[plot,pandas,ann,layouts]"]
 
 [project.urls]
-Homepage = "https://github.com/davisidarta/topometry"
-Documentation = "https://topometry.readthedocs.io"
-Repository = "https://github.com/davisidarta/topometry"
-Issues = "https://github.com/davisidarta/topometry/issues"
-Changelog = "https://github.com/davisidarta/topometry/blob/master/CHANGELOG.md"
+Homepage = "https://github.com/HauserGroup/topometryNoSC"
+Repository = "https://github.com/HauserGroup/topometryNoSC"
+Issues = "https://github.com/HauserGroup/topometryNoSC/issues"
+Changelog = "https://github.com/HauserGroup/topometryNoSC/blob/master/CHANGELOG.md"
+"Original project" = "https://github.com/davisidarta/topometry"
 
 [dependency-groups]
 dev = [
@@ -96,14 +93,14 @@ path = "src/topo/version.py"
 packages = ["src/topo"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/topo", "tests", "LICENSE", "README.md", "CHANGELOG.md", "citation.cff"]
+include = ["src/topo", "tests", "LICENSE", "README.md", "CHANGELOG.md", "CITATION.cff"]
 
 [tool.ruff]
 line-length = 88
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "NPY"]
+select = ["E", "F", "I", "UP", "B", "SIM", "NPY", "D"]
 # This is a scientific codebase with numba-jitted hot loops; several lint rules
 # are either opinionated or actively incompatible with numba typing. The set
 # below documents pragmatic exclusions; the remaining rules still catch real
@@ -128,10 +125,17 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["topo"]
 
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B"]
-# Star-imports intentionally re-export the public helper API.
-"src/topo/utils/__init__.py" = ["F403"]
+"tests/*" = ["B", "D"]
+# numba-jitted internals: agreed bar is a concise one-line summary, not full
+# NumPy sections. Keep presence rules (D1xx); drop the section-content rules.
+"src/topo/base/sparse.py" = ["D205", "D400", "D401", "D415"]
+"src/topo/base/dists.py" = ["D205", "D400", "D401", "D415"]
+"src/topo/spectral/umap_layouts.py" = ["D205", "D400", "D401", "D415"]
+"src/topo/utils/umap_utils.py" = ["D205", "D400", "D401", "D415"]
 
 [tool.mypy]
 python_version = "3.10"

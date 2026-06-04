@@ -18,6 +18,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   optional extras: `plot`, `pandas`, `ann`, `layouts`, `notebooks`, and `all`.
 
 ### Changed
+- Split the monolithic `TopOGraph` (≈1370 → ≈750 lines) into focused mixins
+  under `topo._pipeline` (`GraphBuildMixin`, `EigenBuildMixin`,
+  `LayoutBuildMixin`), mirroring the existing `UoMMixin` pattern. Public API,
+  attributes and method-resolution order are unchanged.
 - Centralised optional-dependency and ANN-backend detection in
   `topo._optional` (single source of truth replacing duplicated `_have_*`
   flags). Missing optional dependencies now raise a clear

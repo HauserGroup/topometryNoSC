@@ -150,11 +150,18 @@ class EigenBuildMixin:
         self, X: Any, dm_eig: Any, ms_eig: Any, dm_key: str, ms_key: str, **kwargs: Any
     ):
         """Build kNN and refined kernels in both scaffold spaces."""
+        ms_components = self._scaffold_components_ms
+        if ms_components is None:
+            ms_components = int(self.n_eigs)
+        dm_components = self._scaffold_components_dm
+        if dm_components is None:
+            dm_components = int(self.n_eigs)
+
         # msZ
         if self.verbosity >= 1:
             logger.info("Computing kNN (msZ space)...")
         t0 = time.time()
-        ms_target = ms_eig.transform(X)[:, : self._scaffold_components_ms]
+        ms_target = ms_eig.transform(X)[:, :ms_components]
         self._knn_msZ = kNN(
             ms_target,
             n_neighbors=self.graph_knn,
@@ -171,7 +178,7 @@ class EigenBuildMixin:
         if self.verbosity >= 1:
             logger.info("Computing kNN (Z/DM space)...")
         t0 = time.time()
-        dm_target = dm_eig.transform(X)[:, : self._scaffold_components_dm]
+        dm_target = dm_eig.transform(X)[:, :dm_components]
         self._knn_Z = kNN(
             dm_target,
             n_neighbors=self.graph_knn,

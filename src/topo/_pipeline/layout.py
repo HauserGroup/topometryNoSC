@@ -13,6 +13,7 @@ from typing import Any, cast
 
 import numpy as np
 from scipy.sparse import csr_matrix, issparse
+from sklearn.utils import check_random_state
 
 from topo.layouts.projector import Projector
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
@@ -102,18 +103,23 @@ class LayoutBuildMixin:
             else:
                 raise ValueError("No graph kernel available. Call .fit() first.")
         t0 = time.time()
+        rng = check_random_state(self.random_state)
         try:
-            spt = spectral_layout(
-                graph,
-                n_components,
-                self.random_state,
-                laplacian_type=self.laplacian_type,
-                eigen_tol=self.eigen_tol,
-                return_evals=False,
+            spt = cast(
+                Any,
+                spectral_layout(
+                    graph,
+                    n_components,
+                    rng,
+                    laplacian_type=self.laplacian_type,
+                    eigen_tol=self.eigen_tol,
+                    return_evals=False,
+                ),
             )
-            expansion = 10.0 / np.abs(spt).max()
-            spt = (spt * expansion).astype(np.float32) + self.random_state.normal(
-                scale=0.0001, size=[graph.shape[0], n_components]
+            scale = float(np.abs(spt).max())
+            expansion = 10.0 / scale if np.isfinite(scale) and scale > 0 else 1.0
+            spt = (spt * expansion).astype(np.float32) + rng.normal(
+                scale=0.0001, size=(graph.shape[0], n_components)
             ).astype(np.float32)
         except Exception:
             spt = EigenDecomposition(n_components=n_components).fit_transform(graph)

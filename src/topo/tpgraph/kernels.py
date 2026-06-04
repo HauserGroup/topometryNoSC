@@ -949,19 +949,17 @@ class Kernel(BaseEstimator, TransformerMixin):
                     alpha=anisotropy,
                     semi_aniso=self.semi_aniso,
                 )
-                self._P = cast(csr_matrix, P)
+                self._P = _as_csr_matrix(P)
                 self.D_inv_sqrt_ = D_inv_sqrt
-                self._P = cast(csr_matrix, (self._P + self._P.T) / 2)
+                self._P = ((self._P + self._P.T) / 2).tocsr()
             else:
-                self._P = cast(
-                    csr_matrix,
-                    diffusion_operator(
-                        self.K,
-                        alpha=anisotropy,
-                        semi_aniso=self.semi_aniso,
-                        symmetric=False,
-                    ),
+                result = diffusion_operator(
+                    self.K,
+                    alpha=anisotropy,
+                    semi_aniso=self.semi_aniso,
+                    symmetric=False,
                 )
+                self._P = _as_csr_matrix(result)
 
         return self._P
 
@@ -1393,18 +1391,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         if not 1.0 / np.sqrt(self.N) <= epsilon < 1:
             raise ValueError("Epsilon out of required range!")
 
-        if random_state is None:
-            rng = np.random.default_rng()
-        elif isinstance(random_state, (int, np.integer)):
-            rng = np.random.default_rng(int(random_state))
-        elif isinstance(random_state, np.random.Generator):
-            rng = random_state
-        elif isinstance(random_state, np.random.RandomState):
-            rng = np.random.default_rng(random_state.randint(0, np.iinfo(np.int32).max))
-        else:
-            raise TypeError(
-                "random_state must be None, int, RandomState, or Generator."
-            )
+        rng = check_random_state(random_state)
 
         # Not sparse
         rd = self.resistance_distance()
@@ -1431,6 +1418,7 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         Pe = Pe / total
 
+        sparserW = None
         sparserL = None
         for i in range(maxiter):
             # Rudelson, 1996 Random Vectors in the Isotropic Position
@@ -1465,6 +1453,8 @@ class Kernel(BaseEstimator, TransformerMixin):
             else:
                 epsilon -= (epsilon - 1 / np.sqrt(self.N)) / 2.0
 
+        if sparserW is None:
+            raise RuntimeError("Sparsification did not run; maxiter must be >= 1.")
         if sparserL is not None:
             sparserW = diags(sparserL.diagonal(), 0) - sparserL  # type: ignore
             sparserW = (sparserW + sparserW.T) / 2.0  # type: ignore

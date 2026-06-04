@@ -610,6 +610,10 @@ def spectral_similarity(Px, Py, r=64, symmetric_hint=False, return_details=False
     wy = wy[1:]
 
     r_pair = min(len(wx), len(wy))
+    if r_pair < 1:
+        if return_details:
+            return {"eigenvalue_w1": np.nan, "subspace_cos": np.nan}
+        return np.nan
     # Wasserstein-1 between (absolute) leading spectra (lower is better)
     w1 = wasserstein_distance(
         np.arange(r_pair),
@@ -630,68 +634,7 @@ def spectral_similarity(Px, Py, r=64, symmetric_hint=False, return_details=False
 
     if return_details:
         return {"eigenvalue_w1": float(w1), "subspace_cos": cos_largest}
-    else:
-        return cos_largest
-    """
-    Operator-level spectral agreement via eigenvalues and subspaces.
-
-    Parameters
-    ----------
-    Px, Py : (n, n) csr_matrix or ndarray
-        Diffusion operators.
-    r : int, default=64
-        Number of leading eigenpairs to consider.
-    symmetric_hint : bool, default=False
-        See `diffusion_eigs`.
-    return_details : bool, default=False
-        If True, return a dict with components.
-
-    Returns
-    -------
-    sim : dict or float
-        If return_details=False:
-            cos_theta : float in [0,1]
-                Cosine of the largest principal angle between top-r eigenspaces
-                (closer to 1 is better).
-        If return_details=True:
-            {
-              'cos_principal_angle': float in [0,1],
-              'wasserstein_eigs': float >= 0,
-              'evals_x': (r,) ndarray,
-              'evals_y': (r,) ndarray
-            }
-
-    Notes
-    -----
-    - Subspace angle uses principal angles between spans of leading eigenvectors.
-    - 'wasserstein_eigs' is a 1-Wasserstein distance between sorted spectra
-      (smaller is better); not normalized to [0,1].
-    """
-
-    wx, Vx = _top_eigs_of_P(Px, r=r, symmetric_hint=symmetric_hint)
-    wy, Vy = _top_eigs_of_P(Py, r=r, symmetric_hint=symmetric_hint)
-    # drop trivial ~1
-    wx = wx[1:]
-    wy = wy[1:]
-    r_pair = min(len(wx), len(wy))
-    # eigenvalue W1 (on real lines)
-    w1 = wasserstein_distance(
-        np.arange(r_pair),
-        np.arange(r_pair),
-        u_weights=np.abs(wx[:r_pair]),
-        v_weights=np.abs(wy[:r_pair]),
-    )
-    # principal angles (use same r_use)
-    if r_use is None:
-        r_use = min(Vx.shape[1] - 1, Vy.shape[1] - 1, 32)
-    U = Vx[:, 1 : 1 + r_use]
-    V = Vy[:, 1 : 1 + r_use]
-    # orthonormalize columns (QR) to be safe
-    U, _ = np.linalg.qr(U)
-    V, _ = np.linalg.qr(V)
-    ang = subspace_angles(U, V)  # ascending angles
-    cos_largest = float(np.cos(ang[-1])) if ang.size > 0 else np.nan
-    return {"eigenvalue_w1": float(w1), "subspace_cos": cos_largest}
+    return cos_largest
 
 
 def commute_time_trace_gap(

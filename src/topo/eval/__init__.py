@@ -1,3 +1,10 @@
+"""Evaluation metrics for embeddings and operators.
+
+Global and local geometry-preservation scores, topological/operator-native
+metrics and the :class:`~topo.eval.rmetric.RiemannMetric` distortion diagnostic.
+Members are imported lazily.
+"""
+
 from importlib import import_module
 from typing import TYPE_CHECKING
 

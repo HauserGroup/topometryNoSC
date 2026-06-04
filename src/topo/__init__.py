@@ -1,3 +1,21 @@
+"""TopOMetry — geometry-first topological dimensionality reduction.
+
+`topo` learns the latent geometry of high-dimensional data through a pipeline
+of neighborhood graphs, Laplace-Beltrami-type operators, spectral scaffolds and
+refined graphs, then builds low-dimensional layouts for analysis and
+visualization. The high-level entry point is the :class:`~topo.topograph.TopOGraph`
+orchestrator, which wraps the scikit-learn-style transformers in
+:mod:`topo.tpgraph`, :mod:`topo.spectral` and :mod:`topo.layouts`::
+
+    import topo
+
+    tg = topo.TopOGraph()
+    embedding = tg.fit_transform(X)
+
+Submodules are imported lazily, so importing :mod:`topo` is cheap and optional
+dependencies are only required when the features that use them are called.
+"""
+
 from importlib import import_module
 from typing import TYPE_CHECKING
 

@@ -2,6 +2,15 @@
 #
 # Author: David S Oliveira <david.oliveira(at)dpag(dot)ox(dot)ac(dot)uk>
 #
+"""High-level :class:`TopOGraph` orchestrator.
+
+The user-facing entry point that ties the pipeline together: base graph and
+kernel construction, the dual (DM / msDM) spectral scaffold, refined graphs and
+2-D projections. Composes the mixins in :mod:`topo._pipeline` and
+:mod:`topo.uom`, exposing scikit-learn-style ``fit``/``transform`` plus
+``save``/``load`` helpers.
+"""
+
 import copy
 import gc
 import logging
@@ -112,9 +121,9 @@ class TopOGraph(
     BaseEstimator,
     TransformerMixin,
 ):
-    """
-    Geometry-aware estimator that learns spectral scaffolds, refined operators,
-    and 2-D layouts.
+    """Geometry-aware estimator for spectral scaffolds, operators and layouts.
+
+    Learns spectral scaffolds, refined operators and 2-D layouts from data.
 
     Parameters
     ----------
@@ -291,6 +300,7 @@ class TopOGraph(
     # ------------------------------------------------------------------
 
     def __repr__(self, N_CHAR_MAX=700):
+        """Return a short summary of the fitted state and active scaffold."""
         if self.n is None:
             return "TopOGraph (not fitted)"
         parts = [f"TopOGraph with {self.n} samples"]
@@ -398,12 +408,12 @@ class TopOGraph(
     # ------------------------------------------------------------------
 
     def fit(self, X=None, **kwargs):
-        """
-        Build base kNN → base kernel P(X) → dual eigenbases (DM + msDM) →
-        refined scaffold graphs → 2-D projections.
+        """Run the full pipeline on ``X``.
 
-        When ``uom=True``, detects disconnected components and builds
-        per-component scaffolds + block-diagonal operators.
+        Builds base kNN → base kernel P(X) → dual eigenbases (DM + msDM) →
+        refined scaffold graphs → 2-D projections. When ``uom=True``, detects
+        disconnected components and builds per-component scaffolds and
+        block-diagonal operators.
         """
         self._validate_inputs(X)
         self._setup_environment()
@@ -530,7 +540,7 @@ class TopOGraph(
 
     @property
     def knn_msZ(self):
-        """kNN graph in msDM scaffold space."""
+        """KNN graph in msDM scaffold space."""
         if self.uom_enabled and self.knn_msZ_uom is not None:
             return self.knn_msZ_uom
         if self._knn_msZ is None:
@@ -539,7 +549,7 @@ class TopOGraph(
 
     @property
     def knn_Z(self):
-        """kNN graph in DM scaffold space."""
+        """KNN graph in DM scaffold space."""
         if self.uom_enabled and self.knn_Z_uom is not None:
             return self.knn_Z_uom
         if self._knn_Z is None:

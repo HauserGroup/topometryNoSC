@@ -1,3 +1,9 @@
+"""Local geometry-preservation scores.
+
+Geodesic-distance computation and neighborhood-based correlation scores
+(Spearman/Kendall) that quantify how well an embedding preserves local structure.
+"""
+
 import logging
 
 import numpy as np
@@ -20,8 +26,8 @@ def geodesic_distance(
     n_jobs=-1,
     random_state=None,
 ):
-    """
-    Compute the geodesic distance matrix from an adjacency (or an affinity) matrix.
+    """Compute the geodesic distance matrix from an adjacency (or affinity) matrix.
+
     The default behavior is to subset the geodesic distance matrix to only include distances up
     to the k-th nearest neighbor distance for each point. This is to ensure we are only assessing
     the performance of the embedding on the local structure of the data.
@@ -124,6 +130,7 @@ def knn_spearman_r(
     unweighted=False,
     n_jobs=1,
 ):
+    """Spearman correlation between reference and embedding geodesic distances."""
     # data_graph is a (N,N) similarity matrix from the reference high-dimensional data
     # embedding_graph is a (N,N) similarity matrix from the lower dimensional embedding
     geodesic_dist = geodesic_distance(
@@ -148,6 +155,7 @@ def knn_kendall_tau(
     unweighted=False,
     n_jobs=1,
 ):
+    """Kendall's tau between reference and embedding geodesic distances."""
     geodesic_dist = geodesic_distance(
         data_graph, method=path_method, unweighted=unweighted, n_jobs=n_jobs
     )
@@ -176,6 +184,11 @@ def geodesic_correlation(
     verbose=False,
     **kwargs,
 ):
+    """Correlate geodesic distances of ``data`` and embedding ``emb``.
+
+    Builds neighborhood graphs for both, computes geodesic distances (optionally
+    on landmarks) and returns their rank correlation under ``cor_method``.
+    """
     if random_state is None:
         random_state = np.random.RandomState()
     elif isinstance(random_state, np.random.RandomState):

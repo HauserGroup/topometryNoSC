@@ -1,4 +1,10 @@
-# topo_metrics.py
+"""Operator-native topological metrics.
+
+Diffusion-operator-based comparisons between representations: diffusion-distance
+rank correlation, spectral similarity, commute-time gaps and the composite
+topology-preservation score used to compare embeddings and parameter choices.
+"""
+
 from typing import Any, cast
 
 import numpy as np
@@ -22,8 +28,8 @@ def _ensure_csr(P):
 def _top_eigs_of_P(
     P, r=64, which="LM", tol=1e-4, maxiter=None, v0=None, symmetric_hint=False
 ):
-    """
-    Compute top-r eigenpairs of P (row-stochastic Markov operator).
+    """Compute the top-``r`` eigenpairs of ``P`` (row-stochastic Markov operator).
+
     If you used a symmetric diffusion operator earlier, set symmetric_hint=True for
     improved stability (we then eigendecompose the symmetrized operator).
     Returns evals (r,), evecs (n,r). Sorted by |lambda| desc.
@@ -70,9 +76,7 @@ def _top_eigs_of_P(
 def diffusion_coordinates(
     evals, evecs, t, drop_first=True, r_use=None, normalize_cols=True
 ):
-    """
-    Phi_t(P) = [lambda_1^t psi_1, ..., lambda_r^t psi_r], optionally skipping the trivial first.
-    """
+    """Return diffusion coordinates ``[lambda_l^t psi_l]``, optionally skipping the trivial first."""
     lam = np.array(evals, dtype=float)
     Psi = np.array(evecs, dtype=float)
     start = 1 if drop_first else 0
@@ -91,9 +95,9 @@ def diffusion_coordinates(
 def diffusion_distance_from_eigs(
     evals, evecs, t, r_use=None, drop_first=True, squared=False
 ):
-    """
-    Compute diffusion distance matrix (via truncated eigendecomposition).
-    D^2(i,j) = sum_l lambda_l^{2t} (psi_l(i)-psi_l(j))^2
+    """Compute the diffusion-distance matrix via truncated eigendecomposition.
+
+    ``D^2(i,j) = sum_l lambda_l^{2t} (psi_l(i) - psi_l(j))^2``.
     Returns a dense (n,n) matrix for convenience; for large n use sampling.
     """
     Phi = diffusion_coordinates(
@@ -121,8 +125,7 @@ def _topk_support_from_row(data, ind, k):
 
 
 def get_P(Y, **kwargs_for_kernel):
-    """
-    Convenience: build a diffusion operator P from data or a precomputed graph.
+    """Build a diffusion operator ``P`` from data or a precomputed graph.
 
     Parameters
     ----------
@@ -565,7 +568,6 @@ def sparse_neighborhood_f1(Px, Py, k=None):
       F1 = 2 |∩| / (|Sx| + |Sy|).
     - Complements JS: insensitive to weights but sensitive to support overlap.
     """
-
     Px = _ensure_csr(Px)
     Py = _ensure_csr(Py)
     n = Px.shape[0]
@@ -713,9 +715,9 @@ def topo_preserve_score(
     k_for_pf1: int | None = None,
     weights: dict = dict(PF1=0.30, PJS=0.30, SP=0.30),
 ):
-    """
-    Composite **TopoPreserve score** using four operator-aware metrics
-    (higher is better; returns ≈[0,1] after internal normalizations).
+    """Composite **TopoPreserve score** from four operator-aware metrics.
+
+    Higher is better; returns ≈[0, 1] after internal normalizations.
 
     Components
     ----------

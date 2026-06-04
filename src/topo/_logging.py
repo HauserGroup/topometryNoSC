@@ -7,8 +7,6 @@ log level and attaches a handler the first time it is called, so the familiar
 ``verbose=True`` behaviour is preserved without polluting stdout by default.
 """
 
-from __future__ import annotations
-
 import logging
 
 #: Root logger for the package; every module logger is a child of this one.

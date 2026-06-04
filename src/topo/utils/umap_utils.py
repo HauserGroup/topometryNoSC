@@ -34,6 +34,13 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+"""Utility functions adapted from UMAP.
+
+A small grab-bag of numba-accelerated helpers reused across the package:
+fast k-nearest-neighbor indices, the Tausworthe RNG, vector norms, submatrix
+extraction, Gaussian-density evaluation and sparse-row uniquing.
+"""
+
 import time
 
 import numba
@@ -43,6 +50,7 @@ from sklearn.neighbors import KDTree
 
 @numba.njit(fastmath=True)
 def eval_gaussian(x, pos=np.array([0, 0]), cov=np.eye(2, dtype=np.float32)):
+    """Evaluate a 2-D Gaussian with mean ``pos`` and covariance ``cov`` at ``x``."""
     det = cov[0, 0] * cov[1, 1] - cov[0, 1] * cov[1, 0]
     if det > 1e-16:
         cov_inv = (
@@ -61,6 +69,7 @@ def eval_gaussian(x, pos=np.array([0, 0]), cov=np.eye(2, dtype=np.float32)):
 
 @numba.njit(fastmath=True)
 def eval_density_at_point(x, embedding):
+    """Sum per-point Gaussian densities of ``embedding`` evaluated at ``x``."""
     result = 0.0
     for i in range(embedding.shape[0]):
         pos = embedding[i, :2]
@@ -72,6 +81,7 @@ def eval_density_at_point(x, embedding):
 
 
 def create_density_plot(X, Y, embedding):
+    """Evaluate a normalized Gaussian-mixture density over a meshgrid ``(X, Y)``."""
     Z = np.zeros_like(X)
     tree = KDTree(embedding[:, :2])
     for i in range(X.shape[0]):
@@ -105,12 +115,14 @@ def torus_euclidean_grad(x, y, torus_dimensions=(2 * np.pi, 2 * np.pi)):
 @numba.njit(parallel=True)
 def fast_knn_indices(X, n_neighbors):
     """A fast computation of knn indices.
+
     Parameters
     ----------
     X: array of shape (n_samples, n_features)
         The input data to compute the k-neighbor indices of.
     n_neighbors: int
         The number of nearest neighbors to compute for each sample in ``X``.
+
     Returns
     -------
     knn_indices: array of shape (n_samples, n_neighbors)
@@ -128,10 +140,12 @@ def fast_knn_indices(X, n_neighbors):
 @numba.njit("i4(i8[:])")
 def tau_rand_int(state):
     """A fast (pseudo)-random number generator.
+
     Parameters
     ----------
     state: array of int64, shape (3,)
         The internal state of the rng
+
     Returns
     -------
     A (pseudo)-random int32 value
@@ -152,10 +166,12 @@ def tau_rand_int(state):
 @numba.njit("f4(i8[:])")
 def tau_rand(state):
     """A fast (pseudo)-random number generator for floats in the range [0,1]
+
     Parameters
     ----------
     state: array of int64, shape (3,)
         The internal state of the rng
+
     Returns
     -------
     A (pseudo)-random float32 in the interval [0, 1]
@@ -167,9 +183,11 @@ def tau_rand(state):
 @numba.njit()
 def norm(vec):
     """Compute the (standard l2) norm of a vector.
+
     Parameters
     ----------
     vec: array of shape (dim,)
+
     Returns
     -------
     The l2 norm of vec.
@@ -183,6 +201,7 @@ def norm(vec):
 @numba.njit(parallel=True)
 def submatrix(dmat, indices_col, n_neighbors):
     """Return a submatrix given an orginal matrix and the indices to keep.
+
     Parameters
     ----------
     dmat: array, shape (n_samples, n_samples)
@@ -191,6 +210,7 @@ def submatrix(dmat, indices_col, n_neighbors):
         Indices to keep. Each row consists of the indices of the columns.
     n_neighbors: int
         Number of neighbors.
+
     Returns
     -------
     submat: array, shape (n_samples, n_neighbors)
@@ -204,8 +224,8 @@ def submatrix(dmat, indices_col, n_neighbors):
     return submat
 
 
-# Generates a timestamp for use in logging messages when verbose=True
 def ts():
+    """Return a human-readable timestamp for verbose logging messages."""
     return time.ctime(time.time())
 
 

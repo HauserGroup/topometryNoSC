@@ -1,4 +1,11 @@
 ## Algorithms intrinsic dimensionality estimation
+"""Intrinsic-dimension estimation.
+
+Local and global intrinsic-dimension estimators (FSA / MLE-style) via the
+:class:`IntrinsicDim` transformer, plus helpers to automatically size the
+spectral scaffold from the estimated dimension.
+"""
+
 import numpy as np
 from scipy.sparse import csr_matrix
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -8,8 +15,8 @@ from topo.utils._utils import get_indices_distances_from_sparse_matrix
 
 
 class IntrinsicDim(BaseEstimator, TransformerMixin):
-    """
-    Scikit-learn flavored class for estimating the intrinsic dimensionalities of high-dimensional data.
+    """Scikit-learn flavored estimator of intrinsic dimensionality.
+
     This class iterates over a range of possible values of k-nearest-neighbors to consider in calculations
     using two different methods: the Farahmand-Szepesvári-Audibert (FSA) dimension estimator and the Maximum Likelihood Estimator (MLE).
 
@@ -103,6 +110,7 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
         self.global_id = {}
 
     def __repr__(self, N_CHAR_MAX=700):
+        """Return a short summary of the estimator and its configuration."""
         msg = "IntrinsicDim estimator"
         msg = msg + "\nMethods: " + str(self.methods)
         msg = msg + "\nk: " + str(self.use_k)
@@ -180,6 +188,7 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
     def plot_id(
         self, bins=30, figsize=(6, 8), titlesize=22, labelsize=16, legendsize=10
     ):
+        """Plot histograms of the estimated local intrinsic dimensions."""
         self._parse_random_state()
         colors = []
         from random import randint
@@ -325,8 +334,7 @@ def _get_dist_to_median_nearest_neighbor(K, n_neighbors=10):
 
 
 def fsa_local(K, n_neighbors=10):
-    """
-    Measure local dimensionality using the Farahmand-Szepesvári-Audibert (FSA) dimension estimator
+    """Measure local dimensionality with the Farahmand-Szepesvári-Audibert (FSA) estimator.
 
     Parameters
     ----------
@@ -349,6 +357,7 @@ def fsa_local(K, n_neighbors=10):
 
 
 def fsa_global(K, id_local=None, **kwargs):
+    """Aggregate FSA local estimates into a single global dimension (median-based)."""
     from statistics import median
 
     if id_local is None:
@@ -359,7 +368,7 @@ def fsa_global(K, id_local=None, **kwargs):
 
 
 def mle_local(K, n_neighbors=10, k1=1):
-    """Maximum likelihood estimator af intrinsic dimension (Levina-Bickel)"""
+    """Estimate local intrinsic dimension via maximum likelihood (Levina-Bickel)."""
     inds, dists = get_indices_distances_from_sparse_matrix(K, n_neighbors)
     norm_dists = dists / dists[:, -1:]
     dims = -1.0 / np.nanmean(np.log(norm_dists[:, k1:-1]), axis=1)
@@ -367,6 +376,7 @@ def mle_local(K, n_neighbors=10, k1=1):
 
 
 def mle_global(K, id_local=None, n_neighbors=15, k1=1):
+    """Aggregate MLE local estimates into a single global dimension (harmonic mean)."""
     if id_local is None:
         id_local, _, _ = mle_local(K, n_neighbors, k1)
     return 1.0 / np.mean(1.0 / id_local)

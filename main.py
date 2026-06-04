@@ -1,5 +1,9 @@
+"""Command-line entry point for topometry-nosc."""
+
+
 def main():
-    print("Hello from topometry!")
+    """Run the topometry-nosc command-line entry point."""
+    print("Hello from topometry-nosc!")
 
 
 if __name__ == "__main__":

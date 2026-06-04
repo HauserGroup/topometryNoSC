@@ -1,3 +1,11 @@
+"""Topological graph kernels and intrinsic-dimension estimation.
+
+Neighborhood-graph kernels (adaptive-bandwidth, fuzzy simplicial sets,
+continuous k-nearest-neighbors) via :class:`~topo.tpgraph.kernels.Kernel`, plus
+intrinsic-dimension tools used to size the spectral scaffold. Members are
+imported lazily.
+"""
+
 from importlib import import_module
 from typing import TYPE_CHECKING
 

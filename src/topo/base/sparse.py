@@ -2,6 +2,14 @@
 # Enough simple sparse operations in numba to enable sparse UMAP
 #
 # License: BSD 3 clause
+"""Numba-accelerated sparse-vector operations and distance kernels.
+
+Low-level helpers that operate directly on ``(indices, data)`` representations
+of sparse rows: set-like combinations, elementwise arithmetic and a family of
+sparse distance functions registered in :data:`sparse_named_distances`. Adapted
+from UMAP to support sparse inputs throughout the package.
+"""
+
 import locale
 
 import numba
@@ -15,6 +23,7 @@ locale.setlocale(locale.LC_NUMERIC, "C")
 # Just reproduce a simpler version of numpy unique (not numba supported yet)
 @numba.njit()
 def arr_unique(arr):
+    """Return the sorted unique values of ``arr`` (numba ``np.unique``)."""
     aux = np.sort(arr)
     flag = np.concatenate((np.ones(1, dtype=np.bool_), aux[1:] != aux[:-1]))
     return aux[flag]
@@ -23,6 +32,7 @@ def arr_unique(arr):
 # Just reproduce a simpler version of numpy union1d (not numba supported yet)
 @numba.njit()
 def arr_union(ar1, ar2):
+    """Return the sorted union of index arrays ``ar1`` and ``ar2``."""
     if ar1.shape[0] == 0:
         return ar2
     elif ar2.shape[0] == 0:
@@ -35,6 +45,7 @@ def arr_union(ar1, ar2):
 # yet)
 @numba.njit()
 def arr_intersect(ar1, ar2):
+    """Return the sorted intersection of index arrays ``ar1`` and ``ar2``."""
     aux = np.concatenate((ar1, ar2))
     aux.sort()
     return aux[:-1][aux[1:] == aux[:-1]]
@@ -42,6 +53,7 @@ def arr_intersect(ar1, ar2):
 
 @numba.njit()
 def sparse_sum(ind1, data1, ind2, data2):
+    """Add two sparse vectors, returning combined ``(indices, data)``."""
     result_ind = arr_union(ind1, ind2)
     result_data = np.zeros(result_ind.shape[0], dtype=data1.dtype)
 
@@ -103,11 +115,13 @@ def sparse_sum(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_diff(ind1, data1, ind2, data2):
+    """Subtract two sparse vectors, returning combined ``(indices, data)``."""
     return sparse_sum(ind1, data1, ind2, -data2)
 
 
 @numba.njit()
 def sparse_mul(ind1, data1, ind2, data2):
+    """Elementwise-multiply two sparse vectors over their shared indices."""
     result_ind = arr_intersect(ind1, ind2)
     result_data = np.zeros(result_ind.shape[0], dtype=data1.dtype)
 
@@ -154,7 +168,7 @@ def general_sset_intersection(
     right_complement=False,
     mix_weight=0.5,
 ):
-
+    """Write the fuzzy-set intersection of two sparse graphs into ``result_val``."""
     left_min = max(data1.min() / 2.0, 1.0e-8)
     if right_complement:
         right_min = min(
@@ -204,6 +218,7 @@ def general_sset_union(
     result_col,
     result_val,
 ):
+    """Write the fuzzy-set union of two sparse graphs into ``result_val``."""
     left_min = max(data1.min() / 2.0, 1.0e-8)
     right_min = max(data2.min() / 2.0, 1.0e-8)
 
@@ -228,6 +243,7 @@ def general_sset_union(
 
 @numba.njit()
 def sparse_euclidean(ind1, data1, ind2, data2):
+    """Euclidean (L2) distance between two sparse vectors."""
     aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
     result = 0.0
     for i in range(aux_data.shape[0]):
@@ -237,6 +253,7 @@ def sparse_euclidean(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_manhattan(ind1, data1, ind2, data2):
+    """Manhattan (L1) distance between two sparse vectors."""
     aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
     result = 0.0
     for i in range(aux_data.shape[0]):
@@ -246,6 +263,7 @@ def sparse_manhattan(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_chebyshev(ind1, data1, ind2, data2):
+    """Chebyshev (L-infinity) distance between two sparse vectors."""
     aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
     result = 0.0
     for i in range(aux_data.shape[0]):
@@ -255,6 +273,7 @@ def sparse_chebyshev(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_minkowski(ind1, data1, ind2, data2, p=2.0):
+    """Minkowski-``p`` distance between two sparse vectors."""
     aux_inds, aux_data = sparse_diff(ind1, data1, ind2, data2)
     result = 0.0
     for i in range(aux_data.shape[0]):
@@ -264,12 +283,14 @@ def sparse_minkowski(ind1, data1, ind2, data2, p=2.0):
 
 @numba.njit()
 def sparse_hamming(ind1, data1, ind2, data2, n_features):
+    """Hamming distance (fraction of differing features) between sparse vectors."""
     num_not_equal = sparse_diff(ind1, data1, ind2, data2)[0].shape[0]
     return float(num_not_equal) / n_features
 
 
 @numba.njit()
 def sparse_canberra(ind1, data1, ind2, data2):
+    """Canberra distance between two sparse vectors."""
     dtype = data1.dtype
     abs_data1 = np.abs(data1)
     abs_data2 = np.abs(data2)
@@ -285,6 +306,7 @@ def sparse_canberra(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_bray_curtis(ind1, data1, ind2, data2):  # pragma: no cover
+    """Bray-Curtis dissimilarity between two sparse vectors."""
     denom_inds, denom_data = sparse_sum(ind1, data1, ind2, data2)
     denom_data = np.abs(denom_data)
 
@@ -306,6 +328,7 @@ def sparse_bray_curtis(ind1, data1, ind2, data2):  # pragma: no cover
 
 @numba.njit()
 def sparse_jaccard(ind1, data1, ind2, data2):
+    """Jaccard distance over the support of two sparse vectors."""
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_equal = arr_intersect(ind1, ind2).shape[0]
 
@@ -317,6 +340,7 @@ def sparse_jaccard(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_matching(ind1, data1, ind2, data2, n_features):
+    """Matching dissimilarity (fraction of mismatched features) between sparse vectors."""
     num_true_true = arr_intersect(ind1, ind2).shape[0]
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_not_equal = num_non_zero - num_true_true
@@ -326,6 +350,7 @@ def sparse_matching(ind1, data1, ind2, data2, n_features):
 
 @numba.njit()
 def sparse_dice(ind1, data1, ind2, data2):
+    """Dice dissimilarity between two sparse binary vectors."""
     num_true_true = arr_intersect(ind1, ind2).shape[0]
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_not_equal = num_non_zero - num_true_true
@@ -338,6 +363,7 @@ def sparse_dice(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_kulsinski(ind1, data1, ind2, data2, n_features):
+    """Kulsinski dissimilarity between two sparse binary vectors."""
     num_true_true = arr_intersect(ind1, ind2).shape[0]
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_not_equal = num_non_zero - num_true_true
@@ -352,6 +378,7 @@ def sparse_kulsinski(ind1, data1, ind2, data2, n_features):
 
 @numba.njit()
 def sparse_rogers_tanimoto(ind1, data1, ind2, data2, n_features):
+    """Rogers-Tanimoto dissimilarity between two sparse binary vectors."""
     num_true_true = arr_intersect(ind1, ind2).shape[0]
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_not_equal = num_non_zero - num_true_true
@@ -361,6 +388,7 @@ def sparse_rogers_tanimoto(ind1, data1, ind2, data2, n_features):
 
 @numba.njit()
 def sparse_russellrao(ind1, data1, ind2, data2, n_features):
+    """Russell-Rao dissimilarity between two sparse binary vectors."""
     if ind1.shape[0] == ind2.shape[0] and np.all(ind1 == ind2):
         return 0.0
 
@@ -374,6 +402,7 @@ def sparse_russellrao(ind1, data1, ind2, data2, n_features):
 
 @numba.njit()
 def sparse_sokal_michener(ind1, data1, ind2, data2, n_features):
+    """Sokal-Michener dissimilarity between two sparse binary vectors."""
     num_true_true = arr_intersect(ind1, ind2).shape[0]
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_not_equal = num_non_zero - num_true_true
@@ -383,6 +412,7 @@ def sparse_sokal_michener(ind1, data1, ind2, data2, n_features):
 
 @numba.njit()
 def sparse_sokal_sneath(ind1, data1, ind2, data2):
+    """Sokal-Sneath dissimilarity between two sparse binary vectors."""
     num_true_true = arr_intersect(ind1, ind2).shape[0]
     num_non_zero = arr_union(ind1, ind2).shape[0]
     num_not_equal = num_non_zero - num_true_true
@@ -395,6 +425,7 @@ def sparse_sokal_sneath(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_cosine(ind1, data1, ind2, data2):
+    """Cosine distance (``1 - cosine similarity``) between two sparse vectors."""
     aux_inds, aux_data = sparse_mul(ind1, data1, ind2, data2)
     result = 0.0
     norm1 = norm(data1)
@@ -413,6 +444,7 @@ def sparse_cosine(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_poincare(ind1, data1, ind2, data2):
+    """Hyperbolic (Poincare-disk) distance between two sparse vectors."""
     uu = 0.0
     for i in range(data1.shape[0]):
         uu += data1[i] * data1[i]
@@ -442,6 +474,7 @@ def sparse_poincare(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_hellinger(ind1, data1, ind2, data2):
+    """Hellinger distance between two sparse non-negative (count) vectors."""
     aux_inds, aux_data = sparse_mul(ind1, data1, ind2, data2)
     result = 0.0
     norm1 = np.sum(data1)
@@ -463,6 +496,7 @@ def sparse_hellinger(ind1, data1, ind2, data2):
 
 @numba.njit()
 def sparse_correlation(ind1, data1, ind2, data2, n_features):
+    """Pearson-correlation distance between two sparse vectors."""
     dtype = data1.dtype
     zero = dtype.type(0.0)
     one = dtype.type(1.0)
@@ -528,6 +562,7 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
 
 @numba.njit()
 def approx_log_Gamma(x):
+    """Stirling-series approximation of ``log(Gamma(x))``."""
     if x == 1:
         return 0
     #    x2= 1/(x*x);
@@ -542,6 +577,7 @@ def approx_log_Gamma(x):
 
 @numba.njit()
 def log_beta(x, y):
+    """Logarithm of the Beta function ``B(x, y)``."""
     a = min(x, y)
     b = max(x, y)
     if b < 5:
@@ -555,6 +591,7 @@ def log_beta(x, y):
 
 @numba.njit()
 def log_single_beta(x):
+    """Logarithm of the single-argument Beta function ``B(x, x)``."""
     return (
         np.log(2.0) * (-2.0 * x + 0.5) + 0.5 * np.log(2.0 * np.pi / x) + 0.125 / x
     )  # + x2*(-1.0/192.0 + x2* (1.0/640.0 + x2*(-17.0/(14336.0)
@@ -566,6 +603,7 @@ def log_single_beta(x):
 
 @numba.njit()
 def sparse_ll_dirichlet(ind1, data1, ind2, data2):
+    """Symmetric log-likelihood Dirichlet distance between sparse count vectors."""
     # The probability of rolling data2 in sum(data2) trials on a die that rolled data1 in sum(data1) trials
     n1 = np.sum(data1)
     n2 = np.sum(data2)

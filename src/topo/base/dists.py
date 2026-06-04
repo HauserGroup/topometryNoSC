@@ -58,10 +58,13 @@ if _have_numba:
     from numba import set_num_threads as _numba_set_num_threads
 
     def set_num_threads(_n_jobs):
+        """Set the number of numba threads used by the parallel kernels."""
         return _numba_set_num_threads(_n_jobs)
 else:
 
     def njit(*_args, **_kwargs):
+        """No-op ``numba.njit`` replacement used when numba is unavailable."""
+
         def _decorator(func):
             return func
 
@@ -70,13 +73,13 @@ else:
     prange = range
 
     def set_num_threads(_n_jobs):
+        """No-op thread-count setter used when numba is unavailable."""
         return None
 
 
 @njit(fastmath=True)
 def euclidean(x, y):
     """Standard Euclidean distance."""
-
     diff = x - y
     return np.sqrt(np.dot(diff, diff))
 
@@ -84,7 +87,6 @@ def euclidean(x, y):
 @njit(fastmath=True)
 def euclidean_grad(x, y):
     """Euclidean distance and gradient with respect to ``x``."""
-
     diff = x - y
     dist = np.sqrt(np.dot(diff, diff))
     grad = diff / (1e-8 + dist)
@@ -94,7 +96,6 @@ def euclidean_grad(x, y):
 @njit(fastmath=True)
 def poincare(u, v):
     """Poincaré ball distance."""
-
     uu = np.dot(u, u)
     vv = np.dot(v, v)
     diff = u - v
@@ -106,7 +107,6 @@ def poincare(u, v):
 @njit(fastmath=True)
 def poincare_grad(u, v):
     """Poincaré distance and gradient with respect to ``u``."""
-
     uu = np.dot(u, u)
     vv = np.dot(v, v)
     diff = u - v
@@ -123,7 +123,6 @@ def poincare_grad(u, v):
 @njit(fastmath=True)
 def cosine(x, y):
     """Cosine distance."""
-
     num = np.dot(x, y)
     norm_x = np.sqrt(np.dot(x, x))
     norm_y = np.sqrt(np.dot(y, y))
@@ -137,7 +136,6 @@ def cosine(x, y):
 @njit(fastmath=True)
 def cosine_grad(x, y):
     """Cosine distance and gradient with respect to ``x``."""
-
     num = np.dot(x, y)
     norm_x = np.sqrt(np.dot(x, x))
     norm_y = np.sqrt(np.dot(y, y))
@@ -152,6 +150,7 @@ def cosine_grad(x, y):
 
 @njit(parallel=True, fastmath=True)
 def _pairwise_euclidean(X, Y):
+    """Numba kernel: Euclidean distances between all rows of ``X`` and ``Y``."""
     result = np.empty((X.shape[0], Y.shape[0]), dtype=np.float32)
     for i in prange(X.shape[0]):
         for j in range(Y.shape[0]):
@@ -162,6 +161,7 @@ def _pairwise_euclidean(X, Y):
 
 @njit(parallel=True, fastmath=True)
 def _pairwise_poincare(X, Y):
+    """Numba kernel: Poincaré distances between all rows of ``X`` and ``Y``."""
     result = np.empty((X.shape[0], Y.shape[0]), dtype=np.float32)
     for i in prange(X.shape[0]):
         for j in range(Y.shape[0]):
@@ -171,6 +171,7 @@ def _pairwise_poincare(X, Y):
 
 @njit(parallel=True, fastmath=True)
 def _pairwise_cosine(X, Y):
+    """Numba kernel: cosine distances between all rows of ``X`` and ``Y``."""
     result = np.empty((X.shape[0], Y.shape[0]), dtype=np.float32)
     for i in prange(X.shape[0]):
         xi = X[i]
@@ -188,6 +189,7 @@ def _pairwise_cosine(X, Y):
 
 
 def pairwise_euclidean(X, Y=None, n_jobs=-1):
+    """Euclidean distance matrix between ``X`` and ``Y`` (``Y=X`` if omitted)."""
     if not _have_numba:
         return sklearn_pairwise_distances(X, Y, metric="euclidean")
     if Y is None:
@@ -198,6 +200,7 @@ def pairwise_euclidean(X, Y=None, n_jobs=-1):
 
 
 def pairwise_poincare(X, Y=None, n_jobs=-1):
+    """Poincaré distance matrix between ``X`` and ``Y`` (``Y=X`` if omitted)."""
     if Y is None:
         Y = X
     if _have_numba:
@@ -212,6 +215,7 @@ def pairwise_poincare(X, Y=None, n_jobs=-1):
 
 
 def pairwise_cosine(X, Y=None, n_jobs=-1):
+    """Cosine distance matrix between ``X`` and ``Y`` (``Y=X`` if omitted)."""
     if not _have_numba:
         return sklearn_pairwise_distances(X, Y, metric="cosine")
     if Y is None:
@@ -223,6 +227,7 @@ def pairwise_cosine(X, Y=None, n_jobs=-1):
 
 @njit(parallel=True, fastmath=True)
 def _matrix_pairwise_distance(a, metric):
+    """Numba kernel: all-pairs distances within ``a`` under callable ``metric``."""
     n = a.shape[0]
     out = np.empty((n, n), dtype=np.float32)
     for i in prange(n):
@@ -234,6 +239,7 @@ def _matrix_pairwise_distance(a, metric):
 
 @njit(parallel=True, fastmath=True)
 def _matrix_to_matrix_distance(a, b, metric):
+    """Numba kernel: distances between rows of ``a`` and ``b`` under ``metric``."""
     n, m = a.shape[0], b.shape[0]
     out = np.empty((n, m), dtype=np.float32)
     for i in prange(n):
@@ -245,6 +251,7 @@ def _matrix_to_matrix_distance(a, b, metric):
 
 @njit(parallel=True, fastmath=True)
 def _cosine_vector_to_matrix(u, m):
+    """Numba kernel: cosine distances from vector ``u`` to each row of ``m``."""
     out = np.empty(m.shape[0], dtype=np.float32)
     norm_u = np.sqrt(np.dot(u, u))
     for i in prange(m.shape[0]):
@@ -260,12 +267,14 @@ def _cosine_vector_to_matrix(u, m):
 
 
 def cosine_vector_to_matrix(u, m, n_jobs=-1):
+    """Cosine distances from vector ``u`` to each row of matrix ``m``."""
     if n_jobs != -1:
         set_num_threads(n_jobs)
     return _cosine_vector_to_matrix(u, m)
 
 
 def cosine_pairwise_distance(a, n_jobs=-1):
+    """All-pairs cosine distance matrix for the rows of ``a``."""
     if n_jobs != -1:
         set_num_threads(n_jobs)
     return _pairwise_cosine(a, a)
@@ -280,6 +289,7 @@ named_distances = {
 
 
 def matrix_pairwise_distance(a, metric, n_jobs=-1):
+    """All-pairs distance matrix for ``a`` under a named or callable ``metric``."""
     metric_func = named_distances[metric] if isinstance(metric, str) else metric
     if n_jobs != -1:
         set_num_threads(n_jobs)
@@ -287,6 +297,7 @@ def matrix_pairwise_distance(a, metric, n_jobs=-1):
 
 
 def matrix_to_matrix_distance(a, b, metric, n_jobs=-1):
+    """Distance matrix between rows of ``a`` and ``b`` under named/callable ``metric``."""
     metric_func = named_distances[metric] if isinstance(metric, str) else metric
     if n_jobs != -1:
         set_num_threads(n_jobs)
@@ -295,7 +306,6 @@ def matrix_to_matrix_distance(a, b, metric, n_jobs=-1):
 
 def pairwise_distances(X, Y=None, metric="euclidean", n_jobs=-1):
     """Compute pairwise distances between rows of ``X`` and ``Y``."""
-
     if metric in ("euclidean", "l2"):
         return pairwise_euclidean(X, Y, n_jobs=n_jobs)
     if metric == "poincare":

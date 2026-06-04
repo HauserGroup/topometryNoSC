@@ -33,7 +33,11 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Fuzzy simplicial-set embedding (MAP).
 
+UMAP-derived routine that optimizes a low-dimensional layout from a fuzzy
+simplicial set, used as the ``MAP`` projection backend.
+"""
 
 from numpy import random
 
@@ -68,12 +72,13 @@ def fuzzy_embedding(
     save_callback=None,
     include_init_snapshot=True,
 ):
-    """
-    Perform a fuzzy simplicial set embedding, using a specified
-    initialisation method and then minimizing the fuzzy set cross entropy
-    between the 1-skeletons of the high and low dimensional fuzzy simplicial
-    sets. The fuzzy simplicial set embedding was proposed and implemented by
-    Leland McInnes in UMAP (see `umap-learn <https://github.com/lmcinnes/umap>`).
+    """Perform a fuzzy simplicial-set embedding.
+
+    Uses a specified initialisation method and then minimizes the fuzzy set
+    cross entropy between the 1-skeletons of the high and low dimensional fuzzy
+    simplicial sets. The fuzzy simplicial set embedding was proposed and
+    implemented by Leland McInnes in UMAP (see
+    `umap-learn <https://github.com/lmcinnes/umap>`).
     Here we're using it only for the projection (layout optimization).
 
     Parameters
@@ -157,6 +162,7 @@ def fuzzy_embedding(
         Parameter of differentiable approximation of right adjoint functor
     b : float
         Parameter of differentiable approximation of right adjoint functor
+
     Returns
     -------
     embedding : array of shape (n_samples, n_components)
@@ -170,7 +176,6 @@ def fuzzy_embedding(
                 The spectral initialization of ``graph`` into an ``n_components`` dimensional
                 euclidean space.
     """
-
     if random_state is None:
         random_state = random.RandomState()
     if metric_kwds is None:

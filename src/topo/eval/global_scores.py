@@ -1,3 +1,9 @@
+"""Global geometry-preservation scores.
+
+Linear-reconstruction (PCA-style) and spectral global scores that compare a
+low-dimensional embedding against the original feature space or operator.
+"""
+
 import numpy as np
 from scipy.sparse import issparse
 from sklearn.decomposition import PCA, TruncatedSVD
@@ -5,6 +11,7 @@ from sklearn.manifold import SpectralEmbedding
 
 
 def global_loss_(X, Y):
+    """Return the linear-reconstruction loss between ``X`` and embedding ``Y``."""
     X = X - np.mean(X, axis=0)
     Y = Y - np.mean(Y, axis=0)
     A = X.T @ (Y @ np.linalg.inv(Y.T @ Y))

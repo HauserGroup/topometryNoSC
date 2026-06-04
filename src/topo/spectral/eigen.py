@@ -2,6 +2,13 @@
 # Author: David S Oliveira
 ######################################
 # Defining eigendecomposition routines for kernels in a scikit-learn fashion
+"""Eigendecomposition transformers for kernels and operators.
+
+Provides :func:`eigendecompose` and the scikit-learn-style
+:class:`EigenDecomposition` transformer, which turns a kernel, Laplacian or
+diffusion operator into a (multiscale) diffusion-map / Laplacian-eigenmap
+embedding, plus spectral-layout helpers for disconnected graphs.
+"""
 
 import logging
 from typing import Any
@@ -204,9 +211,9 @@ def eigendecompose(
 
 
 class EigenDecomposition(BaseEstimator, TransformerMixin):
-    """
-    Scikit-learn flavored class for computing eigendecompositions of sparse symmetric matrices.
-    and exploring the associated eigenvectors and eigenvalues.
+    """Scikit-learn flavored transformer for eigendecomposing sparse symmetric matrices.
+
+    Computes and explores the associated eigenvectors and eigenvalues.
     Takes as main input a `topo.tpgraph.Kernel()` object or a symmetric matrix, which can be either an adjacency/affinity matrix,
     a kernel, a graph laplacian, or a diffusion operator.
 
@@ -306,6 +313,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         self.enforce_min_eigs = enforce_min_eigs
 
     def __repr__(self, N_CHAR_MAX: int = 700) -> str:  # type: ignore[override]
+        """Return a short summary of the fitted state and decomposition method."""
         if self.eigenvectors is not None:
             if self.N is not None:
                 msg = "EigenDecomposition() estimator fitted with %i samples" % (self.N)
@@ -330,8 +338,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         return msg
 
     def fit(self, X):
-        """
-        Computes the eigendecomposition of the kernel matrix X following the organization set by 'method'.
+        """Compute the eigendecomposition of kernel matrix ``X`` per ``method``.
 
         Parameters
         ----------
@@ -495,9 +502,9 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         return self.eigenvectors
 
     def transform(self, X=None):
-        """
-        Return the current representation. For DM/msDM, compute the embedding
-        from stored eigenpairs:
+        """Return the current representation.
+
+        For DM/msDM, compute the embedding from stored eigenpairs:
 
         * ``DM``  : ``evecs * (evals ** t)``
         * ``msDM``: ``evecs[:, :use] * (λ / (1 - λ))`` where *use* counts
@@ -538,16 +545,15 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             return self.embedding
 
     def fit_transform(self, X=None, y=None, **fit_params):  # type: ignore[override]
-        """
-        Fit the model on X and return the resulting representation.
-        """
+        """Fit the model on ``X`` and return the resulting representation."""
         if X is None:
             raise ValueError("X is required for fit_transform().")
         return self.fit(X).transform()
 
     def spectral_layout(self, X, laplacian_type="normalized", return_evals=False):
-        """Given a graph compute the spectral embedding of the graph. This function calls specialized
-        routines if the graph has several connected components.
+        """Compute the spectral embedding of a graph.
+
+        Calls specialized routines if the graph has several connected components.
 
         Parameters
         ----------
@@ -566,7 +572,6 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         evals: array of shape (dim,)
             The eigenvalues of the laplacian of the graph. Only returned if return_evals is True.
         """
-
         if sparse.issparse(X):
             graph = X.tocsr()
         else:
@@ -600,9 +605,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         return result
 
     def plot_eigenspectrum(self):
-        """
-        Plots the eigenspectrum.
-        """
+        """Plot the eigenspectrum (eigenvalue versus index)."""
         if self.eigenvalues is None:
             raise ValueError("The estimator has not been fitted yet.")
         try:
@@ -623,9 +626,10 @@ def spectral_layout(
     eigen_tol=10e-4,
     return_evals=False,
 ):
-    """Given a graph compute the spectral embedding of the graph. This is
-    simply the eigenvectors of the laplacian of the graph. Here we use the
-    normalized laplacian.
+    """Compute the spectral embedding of a graph.
+
+    This is simply the eigenvectors of the (normalized) Laplacian of the graph.
+
     Parameters
     ----------
     graph: sparse matrix
@@ -634,6 +638,7 @@ def spectral_layout(
         The dimension of the space into which to embed.
     random_state: numpy RandomState or equivalent
         A state capable being used as a numpy random state.
+
     Returns
     -------
     embedding: array of shape (n_vertices, dim)

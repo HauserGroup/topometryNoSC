@@ -5,6 +5,12 @@
 # https://github.com/lmcinnes/umap, and https://umap-learn.readthedocs.io/  .
 
 # This is included here for MAP compatibility
+"""Numba SGD kernels for graph-layout optimization (MAP).
+
+Stochastic-gradient routines that minimize the fuzzy-set cross-entropy between
+the high- and low-dimensional simplicial sets, adapted from UMAP. Includes the
+Euclidean, generic-metric, inverse and aligned variants used by the layout step.
+"""
 
 import numba
 import numpy as np
@@ -17,10 +23,12 @@ from topo.utils.umap_utils import tau_rand_int
 def clip(val):
     """Standard clamping of a value into a fixed range (in this case -4.0 to
     4.0)
+
     Parameters
     ----------
     val: float
         The value to be clamped.
+
     Returns
     -------
     The clamped value, now fixed to be in the range -4.0 to 4.0.
@@ -45,10 +53,12 @@ def clip(val):
 )
 def rdist(x, y):
     """Reduced Euclidean distance.
+
     Parameters
     ----------
     x: array of shape (embedding_dim,)
     y: array of shape (embedding_dim,)
+
     Returns
     -------
     The squared euclidean distance between x and y
@@ -91,6 +101,7 @@ def _optimize_layout_euclidean_single_epoch(
     dens_mu,
     dens_mu_tot,
 ):
+    """Run one SGD epoch of the Euclidean MAP objective (optionally densMAP)."""
     for i in numba.prange(epochs_per_sample.shape[0]):
         if epoch_of_next_sample[i] <= n:
             j = head[i]
@@ -197,6 +208,7 @@ def _optimize_layout_euclidean_densmap_epoch_init(
     re_sum,
     phi_sum,
 ):
+    """Initialize densMAP per-epoch local radius and phi-sum accumulators."""
     re_sum.fill(0)
     phi_sum.fill(0)
 
@@ -244,6 +256,7 @@ def optimize_layout_euclidean(
     and low dimensional fuzzy simplicial sets. In practice this is done by
     sampling edges based on their membership strength (with the (1-p) terms
     coming from negative sampling similar to word2vec).
+
     Parameters
     ----------
     head_embedding: array of shape (n_samples, n_components)
@@ -286,12 +299,12 @@ def optimize_layout_euclidean(
         Whether to use the density-augmented densMAP objective
     densmap_kwds: dict (optional, default {})
         Auxiliary data for densMAP
+
     Returns
     -------
     embedding: array of shape (n_samples, n_components)
         The optimized embedding.
     """
-
     dim = head_embedding.shape[1]
     move_other = head_embedding.shape[0] == tail_embedding.shape[0]
     alpha = initial_alpha
@@ -418,6 +431,7 @@ def optimize_layout_generic(
     and low dimensional fuzzy simplicial sets. In practice this is done by
     sampling edges based on their membership strength (with the (1-p) terms
     coming from negative sampling similar to word2vec).
+
     Parameters
     ----------
     head_embedding: array of shape (n_samples, n_components)
@@ -454,12 +468,12 @@ def optimize_layout_generic(
         Number of negative samples to use per positive sample.
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
+
     Returns
     -------
     embedding: array of shape (n_samples, n_components)
         The optimized embedding.
     """
-
     dim = head_embedding.shape[1]
     move_other = head_embedding.shape[0] == tail_embedding.shape[0]
     alpha = initial_alpha
@@ -566,6 +580,7 @@ def optimize_layout_inverse(
     and low dimensional fuzzy simplicial sets. In practice this is done by
     sampling edges based on their membership strength (with the (1-p) terms
     coming from negative sampling similar to word2vec).
+
     Parameters
     ----------
     head_embedding: array of shape (n_samples, n_components)
@@ -602,12 +617,12 @@ def optimize_layout_inverse(
         Number of negative samples to use per positive sample.
     verbose: bool (optional, default False)
         Whether to report information on the current progress of the algorithm.
+
     Returns
     -------
     embedding: array of shape (n_samples, n_components)
         The optimized embedding.
     """
-
     dim = head_embedding.shape[1]
     move_other = head_embedding.shape[0] == tail_embedding.shape[0]
     alpha = initial_alpha
@@ -696,6 +711,7 @@ def _optimize_layout_aligned_euclidean_single_epoch(
     epoch_of_next_sample,
     n,
 ):
+    """Run one SGD epoch of the aligned (multi-embedding) Euclidean objective."""
     n_embeddings = len(heads)
     window_size = (relations.shape[1] - 1) // 2
 
@@ -856,6 +872,42 @@ def optimize_layout_aligned_euclidean(
     parallel=True,
     verbose=False,
 ):
+    """Optimize a set of aligned embeddings with the Euclidean MAP objective.
+
+    Parameters
+    ----------
+    head_embeddings, tail_embeddings : list of ndarray
+        Per-slice embeddings to optimize and to embed against.
+    heads, tails : list of ndarray
+        Edge endpoint indices for each slice's 1-skeleton.
+    n_epochs : int
+        Number of SGD epochs.
+    epochs_per_sample : list of ndarray
+        Per-edge sampling schedule for each slice.
+    regularisation_weights, relations : ndarray
+        Cross-slice alignment weights and the index relations between slices.
+    rng_state : ndarray of int64, shape (3,)
+        Internal RNG state.
+    a, b : float
+        Differentiable-approximation parameters of the low-dimensional kernel.
+    gamma : float, default 1.0
+        Negative-sample weight.
+    lambda_ : float, default 5e-3
+        Alignment regularization strength.
+    initial_alpha : float, default 1.0
+        Initial SGD learning rate.
+    negative_sample_rate : float, default 5.0
+        Negative samples drawn per positive sample.
+    parallel : bool, default True
+        Whether to run the numba kernel in parallel.
+    verbose : bool, default False
+        Whether to print progress.
+
+    Returns
+    -------
+    list of ndarray
+        The optimized aligned embeddings.
+    """
     dim = head_embeddings[0].shape[1]
     move_other = head_embeddings[0].shape[0] == tail_embeddings[0].shape[0]
     alpha = initial_alpha

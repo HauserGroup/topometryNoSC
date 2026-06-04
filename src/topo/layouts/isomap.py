@@ -1,4 +1,9 @@
 # Isomap implementation
+"""Isomap embedding.
+
+Classical Isomap: geodesic distances on a neighborhood graph followed by
+eigendecomposition of the centered distance matrix, with optional landmarks.
+"""
 
 import numpy as np
 from sklearn.preprocessing import KernelCenterer

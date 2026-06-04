@@ -34,6 +34,12 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Graph utilities for layout optimization.
+
+UMAP-derived helpers that turn fuzzy simplicial sets into the edge sampling
+schedules and spectral initializations consumed by the SGD layout kernels,
+including ``a``/``b`` curve fitting and checkpoint-aware simplicial embedding.
+"""
 
 import logging
 
@@ -58,14 +64,15 @@ INT32_MAX = np.iinfo(np.int32).max - 1
 
 
 def make_epochs_per_sample(weights, n_epochs):
-    """Given a set of weights and number of epochs generate the number of
-    epochs per sample for each weight.
+    """Generate the number of epochs per sample for each edge weight.
+
     Parameters
     ----------
     weights: array of shape (n_1_simplices)
         The weights ofhow much we wish to sample each 1-simplex.
     n_epochs: int
         The total number of epochs we want to train for.
+
     Returns
     -------
     An array of number of epochs per sample, one for each 1-simplex.
@@ -102,8 +109,9 @@ def simplicial_set_embedding(
     save_callback=None,  # optional callable(epoch:int, Y:np.ndarray) -> None
     include_init_snapshot=True,  # store epoch=0 (post-init) snapshot
 ):
-    """Perform a fuzzy simplicial set embedding (UMAP/MAP), optionally saving
-    intermediate embeddings every few epochs.
+    """Perform a fuzzy simplicial-set embedding (UMAP/MAP).
+
+    Optionally saves intermediate embeddings every few epochs for checkpointing.
 
     Parameters
     ----------
@@ -449,10 +457,11 @@ def simplicial_set_embedding(
 
 
 def find_ab_params(spread, min_dist):
-    """Fit a, b params for the differentiable curve used in lower
-    dimensional fuzzy simplicial complex construction. We want the
-    smooth curve (from a pre-defined family with simple gradient) that
-    best matches an offset exponential decay.
+    """Fit the ``a``, ``b`` parameters of the low-dimensional membership curve.
+
+    Finds the smooth curve (from a pre-defined family with simple gradient) that
+    best matches an offset exponential decay, used in lower-dimensional fuzzy
+    simplicial complex construction.
     """
 
     def curve(x, a, b):

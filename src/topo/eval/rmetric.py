@@ -12,6 +12,12 @@
 #         University of Oxford
 # License: MIT
 ######################################
+"""Riemannian-metric estimation and visualization.
+
+Estimates the dual Riemann metric of an embedding from its graph Laplacian
+(after Perrault-Joncas & Meila) and provides the :class:`RiemannMetric` helper
+plus utilities to visualize local distortion as ellipses.
+"""
 
 import warnings
 from typing import Any, cast
@@ -51,6 +57,27 @@ def _center(Y):
 
 
 def riemann_metric(Y, laplacian, n_dim=None):
+    """Estimate the dual Riemann metric of embedding ``Y`` from its Laplacian.
+
+    Parameters
+    ----------
+    Y : ndarray of shape (n_samples, n_dim_Y)
+        Embedding coordinates.
+    laplacian : ndarray or sparse matrix of shape (n_samples, n_samples)
+        Graph Laplacian of the embedding's neighborhood graph.
+    n_dim : int, optional
+        Intrinsic dimension to retain; defaults to ``Y.shape[1]``.
+
+    Returns
+    -------
+    H : ndarray of shape (n_samples, n_dim_Y, n_dim_Y)
+        The dual (inverse) Riemann metric at each point.
+    G : ndarray
+        The Riemann metric (pseudo-inverse of ``H``) at each point.
+    Vh, S, Sinv : ndarray
+        Right singular vectors, singular values and inverted singular values
+        of ``H`` from its per-point SVD.
+    """
     Y = _center(Y)
     L = _symmetrize(laplacian)
 
@@ -82,6 +109,19 @@ def riemann_metric(Y, laplacian, n_dim=None):
 
 
 class RiemannMetric:
+    """Estimate and cache the Riemann metric of an embedding.
+
+    Wraps :func:`riemann_metric` with lazy, cached computation of the dual
+    metric ``H``, the metric ``G``, their SVD factors and the metric determinant.
+
+    Parameters
+    ----------
+    Y : ndarray of shape (n_samples, n_dim)
+        Embedding coordinates.
+    L : ndarray or sparse matrix of shape (n_samples, n_samples)
+        Graph Laplacian of the embedding.
+    """
+
     def __init__(self, Y, L):
         self.Y = _center(Y)
         self.L = _symmetrize(L)
@@ -90,6 +130,7 @@ class RiemannMetric:
         self.H = self.G = self.Hvv = self.Hsvals = self.Gsvals = self.detG = None
 
     def get_dual_rmetric(self, invert_h=False):
+        """Return the dual metric ``H`` (and ``G`` if ``invert_h``), computing it once."""
         if self.H is None:
             self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(
                 self.Y, self.L, self.mdimG
@@ -97,6 +138,7 @@ class RiemannMetric:
         return (self.H, self.G) if invert_h else self.H
 
     def get_rmetric(self, return_svd=False):
+        """Return the metric ``G`` (and SVD factors if ``return_svd``), computing it once."""
         if self.G is None:
             self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(
                 self.Y, self.L, self.mdimG
@@ -104,9 +146,11 @@ class RiemannMetric:
         return (self.G, self.Hvv, self.Hsvals, self.Gsvals) if return_svd else self.G
 
     def get_mdimG(self):
+        """Return the dimensionality of the estimated metric."""
         return self.mdimG
 
     def get_detG(self, use_log=True):
+        """Return the per-point metric determinant (log-determinant if ``use_log``)."""
         if self.G is None:
             self.H, self.G, self.Hvv, self.Hsvals, self.Gsvals = riemann_metric(
                 self.Y, self.L, self.mdimG
@@ -122,6 +166,7 @@ class RiemannMetric:
             return self.detG
 
     def fit(self, Y, L=None):
+        """Recompute the metric for embedding ``Y`` (and optional Laplacian ``L``)."""
         self.Y = _center(Y)
         if L is not None:
             self.L = _symmetrize(L)
@@ -133,10 +178,12 @@ class RiemannMetric:
         return self.get_rmetric()
 
     def transform(self, Y, L=None):
+        """Alias of :meth:`fit` for scikit-learn-style call sites."""
         return self.fit(Y, L)
 
 
 def eigsorted(cov):
+    """Return eigenvalues/eigenvectors of ``cov`` sorted by descending eigenvalue."""
     vals, vecs = np.linalg.eigh(cov)
     idx = np.argsort(vals)[::-1]
     return vals[idx], vecs[:, idx]
@@ -335,7 +382,6 @@ def plot_riemann_metric_localized(
     - Ellipses are clipped to remain within axes limits via a conservative
       circumscribed-circle scaling.
     """
-
     if plt is None or Ellipse is None:
         raise RuntimeError("matplotlib is required for plotting.")
     plt_mod = cast(Any, plt)
@@ -561,7 +607,6 @@ def plot_riemann_metric_global(
     - Ellipses are scaled so their circumscribed circle fits within the axes box.
     - The deformation field is averaged over `k_avg` neighbors per grid site.
     """
-
     if plt is None or Ellipse is None:
         raise RuntimeError("matplotlib is required for plotting.")
     plt_mod = cast(Any, plt)
@@ -823,7 +868,6 @@ def calculate_deformation(
     - Eigenvalues are clipped away from 0 before taking logs for numerical stability.
     - When building P from L, a random-walk normalization (row-stochastic) is used.
     """
-
     """
     Returns:
         vals : (n,) centered log-det(G) [<0 contraction, >0 expansion]
@@ -992,7 +1036,6 @@ def plot_metric_contraction_expansion(
     -----
     - Axes limits are padded by 6% of the embedding span and aspect is set to 1:1.
     """
-
     if plt is None:
         raise RuntimeError("matplotlib is required for plotting.")
     plt_mod = cast(Any, plt)
@@ -1069,6 +1112,7 @@ def plot_metric_contraction_expansion(
 
 # Backward-compatibility shim (kept to avoid import errors in older code)
 def get_eccentricity(emb, laplacian, G_emb=None):
+    """Return per-point metric eccentricity (deprecated; use ``scale_mode='anisotropy'``)."""
     warnings.warn(
         "get_eccentricity is deprecated. Use plot_riemann_metric_localized/global with scale_mode='anisotropy' instead.",
         DeprecationWarning,

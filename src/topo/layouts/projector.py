@@ -1,5 +1,11 @@
 ######################################
 # Defining a projection class in a scikit-learn fashion to handle all projection methods
+"""Unified projection interface.
+
+The :class:`Projector` dispatches to the available projection backends
+(MAP, Isomap, t-SNE, UMAP, PaCMAP, TriMAP, MDE, …) behind a single
+scikit-learn-style estimator, with optional landmarks and checkpointing.
+"""
 
 import importlib
 import importlib.util
@@ -25,8 +31,8 @@ warnings.simplefilter("ignore", SparseEfficiencyWarning)
 
 
 class Projector(BaseEstimator, TransformerMixin):
-    """
-    A scikit-learn compatible class that handles all projection methods.
+    """Scikit-learn compatible class that handles all projection methods.
+
     Ideally, it takes in either a orthonormal eigenbasis or a graph kernel learned from such an eigenbasis.
     It is included in TopoMetry to allow custom `TopOGraph`-like pipelines (projection is the final step).
 
@@ -123,6 +129,7 @@ class Projector(BaseEstimator, TransformerMixin):
         self.checkpoints_ = None
 
     def __repr__(self, N_CHAR_MAX=700):
+        """Return a short summary of the fitted state and projection method."""
         if self.Y_ is not None:
             if self.metric == "precomputed":
                 msg = "Projector() estimator fitted with precomputed distance matrix"
@@ -148,18 +155,17 @@ class Projector(BaseEstimator, TransformerMixin):
         if resolved == "sklearn" and self.nbrs_backend != "sklearn":
             warnings.warn(
                 "No approximate nearest-neighbor backend found; falling back to "
-                "scikit-learn. Install one with `pip install topometry[ann]` for "
+                "scikit-learn. Install one with `pip install topometry-nosc[ann]` for "
                 "faster neighbor search.",
                 stacklevel=2,
             )
         self.nbrs_backend = resolved
 
     def fit(self, X, **kwargs):
-        """
-        Calls the desired projection method on the specified data.
+        """Run the desired projection method on the specified data.
 
         Parameters
-        -----------
+        ----------
         X : array-like, shape (n_samples, n_features) or topo.Kernel() class.
             The set of points to compute the kernel matrix for. Accepts np.ndarrays and scipy.sparse matrices or a `topo.Kernel()` object.
             If precomputed, assumed to be a square symmetric semidefinite matrix.
@@ -168,7 +174,7 @@ class Projector(BaseEstimator, TransformerMixin):
             Additional keyword arguments for the desired projection method.
 
         Returns
-        -----------
+        -------
         Projector() class with populated Projector.Y_ attribute.
 
         """
@@ -497,12 +503,12 @@ class Projector(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X=None):
-        """
-        Calls the transform method of the desired method.
-        If the desired method does not have a transform method, calls the results from the fit method.
+        """Return the projection, using the backend's transform when available.
+
+        If the desired method does not have a transform method, returns the results from the fit method.
 
         Returns
-        ----------
+        -------
         Y : np.ndarray (n_samples, n_components).
             Projection results
         """
@@ -512,12 +518,12 @@ class Projector(BaseEstimator, TransformerMixin):
             return self.Y_
 
     def fit_transform(self, X, y=None, **kwargs) -> np.ndarray:
-        """
-        Calls the fit_transform method of the desired method.
-        If the desired method does not have a fit_transform method, calls the results from the fit method.
+        """Fit the projection and return the embedding.
+
+        If the desired method does not have a fit_transform method, returns the results from the fit method.
 
         Returns
-        ----------
+        -------
         Y : np.ndarray (n_samples, n_components).
             Projection results.
         """
@@ -563,8 +569,8 @@ if _HAS_PYMDE:
         **kwargs,
     ):
         # Inherits from pymde.recipes.preserve_neighbors()
-        """
-        Construct an MDE problem designed to preserve local structure.
+        """Construct an MDE problem designed to preserve local structure.
+
         This function constructs an MDE problem for preserving the
         local structure of original data. This MDE problem is well-suited for
         visualization (using ``embedding_dim`` 2 or 3), but can also be used to
@@ -631,6 +637,7 @@ if _HAS_PYMDE:
             Device for the embedding (eg, 'cpu', 'cuda').
         verbose: bool
             If ``True``, print verbose output.
+
         Returns
         -------
         pymde.MDE
@@ -791,8 +798,8 @@ if _HAS_PYMDE:
         verbose=False,
     ):
         # Inherits from pymde.recipes.preserve_distances()
-        """
-        Construct an MDE problem based on original distances.
+        """Construct an MDE problem based on original distances.
+
         This function constructs an MDE problem for preserving pairwise
         distances between items. This can be useful for preserving the global
         structure of the data.
@@ -843,6 +850,7 @@ if _HAS_PYMDE:
             Device for the embedding (eg, 'cpu', 'cuda').
         verbose: bool
             If ``True``, print verbose output.
+
         Returns
         -------
         pymde.MDE

@@ -6,12 +6,10 @@ nearest-neighbour backends and the third-party layout libraries) is optional and
 gated through the helpers in this module so that:
 
 * a missing optional dependency raises a single, actionable error message that
-  names the ``pip install topometry[...]`` extra to install, and
+  names the ``pip install topometry-nosc[...]`` extra to install, and
 * detection of available backends lives in *one* place instead of being
   duplicated across :mod:`topo.tpgraph.kernels` and :mod:`topo.layouts.projector`.
 """
-
-from __future__ import annotations
 
 import importlib
 import importlib.util
@@ -79,13 +77,15 @@ def require(name: str, *, purpose: str | None = None) -> ModuleType:
     ------
     ImportError
         If the module is not installed, with a hint naming the relevant
-        ``pip install topometry[<extra>]`` command.
+        ``pip install topometry-nosc[<extra>]`` command.
     """
     try:
         return importlib.import_module(name)
     except ImportError as exc:
         extra = _EXTRA_FOR.get(name)
-        hint = f"pip install topometry[{extra}]" if extra else f"pip install {name}"
+        hint = (
+            f"pip install topometry-nosc[{extra}]" if extra else f"pip install {name}"
+        )
         reason = f" ({purpose})" if purpose else ""
         raise ImportError(
             f"Optional dependency '{name}' is required{reason} but is not "

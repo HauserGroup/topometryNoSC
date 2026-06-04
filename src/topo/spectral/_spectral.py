@@ -5,6 +5,12 @@
 # License: MIT
 ######################################
 # Clearly defining laplacian-type operators and spectral decompositions
+"""Laplacian-type operators and spectral decompositions.
+
+Dense and sparse implementations of graph degree, the (un)normalized /
+random-walk graph Laplacians, anisotropic diffusion operators and the
+Laplacian-eigenmaps (``LE``) layout that the rest of the package builds on.
+"""
 
 import logging
 from typing import Any, cast
@@ -218,9 +224,10 @@ def _sparse_diffusion_symmetric(
 
 
 def graph_laplacian(W, laplacian_type="normalized", return_D=False):
-    """
-    Compute the graph Laplacian, given a adjacency or affinity graph W. For a friendly reference,
-    see this material from James Melville: https://jlmelville.github.io/smallvis/spectral.html
+    """Compute the graph Laplacian of an adjacency/affinity graph ``W``.
+
+    For a friendly reference, see this material from James Melville:
+    https://jlmelville.github.io/smallvis/spectral.html
 
     Parameters
     ----------
@@ -277,8 +284,8 @@ def LE(
     eigen_tol: float = 0,
     random_state=None,
 ):
-    """
-    Performs [Laplacian Eigenmaps](https://www2.imm.dtu.dk/projects/manifold/Papers/Laplacian.pdf), given a adjacency or affinity graph W.
+    """Compute [Laplacian Eigenmaps](https://www2.imm.dtu.dk/projects/manifold/Papers/Laplacian.pdf) of an adjacency or affinity graph W.
+
     The graph W can be a sparse matrix or a dense matrix. It is assumed to be symmetric (no further symmetrization is performed, be sure it is),
     and with zero diagonal (all diagonal elements are 0). The eigenvectors associated with the smallest eigenvalues
     form a new orthonormal basis which represents the graph in the feature space and are useful for denoising and clustering.
@@ -308,7 +315,7 @@ def LE(
         a million samples.
 
     Returns
-    -----------
+    -------
     evecs : np.ndarray of shape (W.shape[0], n_eigs)
         The eigenvectors of the graph Laplacian, sorted by ascending eigenvalues.
 
@@ -369,8 +376,7 @@ def LE(
 def diffusion_operator(
     W, alpha=1.0, symmetric=False, semi_aniso=False, return_D_inv_sqrt=False
 ):
-    """
-    Computes the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
+    """Compute the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
 
     Parameters
     ----------
@@ -483,7 +489,6 @@ def spectral_clustering(
     clustering, this method tends to be faster and more robust to random
     initialization than k-means.
     """
-
     random_state = check_random_state(random_state)
 
     vectors = (

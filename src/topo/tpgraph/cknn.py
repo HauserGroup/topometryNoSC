@@ -6,7 +6,11 @@
 ######################################
 # This is a highly performant python implementation of the Ck-NN graph construction algorithm
 # CkNN was developed by Tyrus Berry and Timothy Sauer [http://dx.doi.org/10.3934/fods.2019001]
+"""Continuous k-nearest-neighbors (CkNN) graph construction.
 
+Builds the continuous k-nearest-neighbors graph of Berry & Sauer, a
+density-adaptive alternative to fixed-``k`` kNN graphs.
+"""
 
 import numpy as np
 from scipy.sparse import csr_matrix, find
@@ -27,8 +31,8 @@ def cknn_graph(
     verbose=False,
     **kwargs,
 ):
-    """
-    Function-oriented implementation of Continuous k-Nearest-Neighbors (CkNN).
+    """Build a Continuous k-Nearest-Neighbors (CkNN) graph.
+
     An efficient implementation of [CkNN](https://arxiv.org/pdf/1606.02353.pdf).
     CkNN is the only unweighted graph construction that
     can be used to approximate the Laplace-Beltrami Operator via the unnormalized graph Laplacian.
@@ -36,7 +40,6 @@ def cknn_graph(
 
     Parameters
     ----------
-
     n_neighbors : int (optional, default=5).
         Number of neighbors to compute. The actual number of k-nearest neighbors
         to be used in the CkNN normalization is half of it.

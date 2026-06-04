@@ -1,4 +1,10 @@
 # Some other utility functions
+"""Internal conversion and landmark-selection helpers.
+
+Functions to convert between sparse neighbor graphs and dense index/distance
+arrays, and to select landmark points for the layout and evaluation routines.
+"""
+
 import numpy as np
 from scipy.sparse import coo_matrix, issparse
 from sklearn.utils import check_random_state

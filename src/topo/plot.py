@@ -1,3 +1,11 @@
+"""Plotting helpers for embeddings, spectra and diagnostics.
+
+Scatter plots for 2-D/3-D and manifold embeddings (hyperboloid, Poincaré disk,
+sphere, toroid), eigenspectrum decay plots, score bar charts, Riemann-metric
+ellipses, heatmaps and a training-animation writer. Requires the optional
+``matplotlib`` dependency (``pip install topometry-nosc[plot]``).
+"""
+
 from collections.abc import Sequence
 from typing import Any, Literal, cast
 
@@ -27,7 +35,6 @@ def decay_plot(
 
     Returns
     -------
-
     A simple plot of the eigenspectrum decay.
 
     """
@@ -104,21 +111,29 @@ def _check_n_columns(X, n_cols, name):
 def scatter(
     res, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral", **kwargs
 ):
-    """
-    Basic scatter plot function.
+    """Draw a 2-D scatter plot of an embedding.
 
     Parameters
     ----------
-
-    labels
-    pt_size
-    marker
-    opacity
-    cmap
+    res : array-like of shape (n_samples, >=2)
+        Embedding coordinates; the first two columns are plotted.
+    labels : array-like, optional
+        Per-point values mapped through ``cmap``.
+    pt_size : float, default 5
+        Marker size.
+    marker : str, default "o"
+        Marker style.
+    opacity : float, default 1
+        Marker alpha.
+    cmap : str, default "Spectral"
+        Colormap name.
+    **kwargs
+        Forwarded to ``matplotlib.axes.Axes.scatter``.
 
     Returns
     -------
-
+    matplotlib.figure.Figure
+        The created figure.
     """
     res = _as_2d_array(res, "res")
     _check_n_columns(res, 2, "res")
@@ -141,6 +156,7 @@ def scatter(
 
 
 def scatter3d(res, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
+    """Draw a 3-D scatter plot of an embedding (first three columns)."""
     res = _as_2d_array(res, "res")
     _check_n_columns(res, 3, "res")
     fig = plt.figure()
@@ -160,6 +176,7 @@ def scatter3d(res, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral
 
 
 def hyperboloid(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
+    """Plot a 2-D embedding on the hyperboloid (Lorentz) model."""
     x, y, z = two_to_3d_hyperboloid(emb)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
@@ -171,6 +188,7 @@ def hyperboloid(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectr
 
 
 def two_to_3d_hyperboloid(emb):
+    """Lift 2-D coordinates onto the 3-D hyperboloid surface ``(x, y, z)``."""
     emb = _as_2d_array(emb, "emb")
     _check_n_columns(emb, 2, "emb")
     x = emb[:, 0]
@@ -180,6 +198,7 @@ def two_to_3d_hyperboloid(emb):
 
 
 def poincare(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
+    """Plot a 2-D embedding on the Poincaré disk model."""
     emb = _as_2d_array(emb, "emb")
     _check_n_columns(emb, 2, "emb")
     x = emb[:, 0]
@@ -202,6 +221,7 @@ def poincare(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"
 
 
 def sphere(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
+    """Plot a 2-D (angular) embedding on the surface of a 3-D sphere."""
     emb = _as_2d_array(emb, "emb")
     _check_n_columns(emb, 2, "emb")
     x = np.sin(emb[:, 0]) * np.cos(emb[:, 1])
@@ -217,6 +237,7 @@ def sphere(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
 def sphere_projection(
     emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"
 ):
+    """Plot a 2-D spherical embedding as a flat (azimuth/elevation) projection."""
     emb = _as_2d_array(emb, "emb")
     _check_n_columns(emb, 2, "emb")
     x = np.sin(emb[:, 0]) * np.cos(emb[:, 1])
@@ -234,6 +255,7 @@ def sphere_projection(
 def toroid(
     emb, R=3, r=1, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"
 ):
+    """Plot a 2-D (angular) embedding on the surface of a torus."""
     emb = _as_2d_array(emb, "emb")
     _check_n_columns(emb, 2, "emb")
     x = (R + r * np.cos(emb[:, 0])) * np.cos(emb[:, 1])
@@ -260,6 +282,7 @@ def draw_simple_ellipse(
     alpha=0.1,
     color=None,
 ):
+    """Draw a nested family of ellipses at ``position`` for a Gaussian potential."""
     ax = ax or plt.gca()
     angle = (angle / np.pi) * 180
     width, height = np.sqrt(width + 10e-4), np.sqrt(height + 10e-4)
@@ -287,6 +310,7 @@ def gaussian_potential(
     opacity=1,
     cmap="Spectral",
 ):
+    """Scatter a 2-D embedding overlaid with per-point Gaussian-potential ellipses."""
     emb = np.asarray(emb)
 
     if emb.ndim != 2:
@@ -345,6 +369,7 @@ def gaussian_potential(
 
 @numba.njit(fastmath=True)
 def eval_gaussian(x, pos=np.array([0, 0]), cov=np.eye(2, dtype=np.float32)):
+    """Evaluate a 2-D Gaussian with mean ``pos`` and covariance ``cov`` at ``x``."""
     det = cov[0, 0] * cov[1, 1] - cov[0, 1] * cov[1, 0]
     if det > 1e-16:
         cov_inv = (
@@ -363,6 +388,7 @@ def eval_gaussian(x, pos=np.array([0, 0]), cov=np.eye(2, dtype=np.float32)):
 
 @numba.njit(fastmath=True)
 def eval_density_at_point(x, embedding):
+    """Sum per-point Gaussian densities of ``embedding`` evaluated at ``x``."""
     result = 0.0
     for i in range(embedding.shape[0]):
         pos = embedding[i, :2]
@@ -374,10 +400,12 @@ def eval_density_at_point(x, embedding):
 
 
 def get_cmap(n, name="hsv"):
+    """Return a colormap with ``n`` discrete colors from the named colormap."""
     return plt.cm.get_cmap(name, n)
 
 
 def create_density_plot(X, Y, embedding):
+    """Evaluate a normalized Gaussian-mixture density over a meshgrid ``(X, Y)``."""
     X = np.asarray(X, dtype=float)
     Y = np.asarray(Y, dtype=float)
     embedding = _as_2d_array(embedding, "embedding")
@@ -400,6 +428,7 @@ def create_density_plot(X, Y, embedding):
 
 
 def plot_bases_scores(bases_scores, return_plot=True, figsize=(20, 8), fontsize=20):
+    """Bar-plot PCA-loss and geodesic Spearman R for each candidate base."""
     keys = list(bases_scores.keys())
     values = list(bases_scores.values())
     cmap = get_cmap(len(keys), name="tab20")
@@ -424,6 +453,7 @@ def plot_bases_scores(bases_scores, return_plot=True, figsize=(20, 8), fontsize=
 
 
 def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20, 8), fontsize=20):
+    """Bar-plot geodesic Spearman R for each candidate graph."""
     keys = list(graphs_scores.keys())
     values = list(graphs_scores.values())
     cmap = get_cmap(len(keys), name="tab20")
@@ -442,6 +472,7 @@ def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20, 8), fontsiz
 
 
 def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20, 8), fontsize=20):
+    """Bar-plot PCA-loss and geodesic Spearman R for each candidate layout."""
     keys = list(layouts_scores.keys())
     values = list(layouts_scores.values())
     cmap = get_cmap(len(keys), name="tab20")
@@ -466,12 +497,14 @@ def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20, 8), fonts
 
 
 def plot_point_cov(points, nstd=2, ax=None, **kwargs):
+    """Draw the ``nstd``-sigma covariance ellipse of a point cloud."""
     pos = points.mean(axis=0)
     cov = np.cov(points, rowvar=False)
     return plot_cov_ellipse(cov, pos, nstd, ax, **kwargs)
 
 
 def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
+    """Draw the ``nstd``-sigma ellipse of covariance ``cov`` centered at ``pos``."""
     if ax is None:
         ax = plt.gca()
     vals, vecs = eigsorted(cov)
@@ -505,7 +538,6 @@ def plot_riemann_metric(
 
     Parameters
     ----------
-
     emb: numpy.ndarray, shape = (n, n_dim)
         Embedding matrix.
 
@@ -548,7 +580,6 @@ def plot_riemann_metric(
 
 
     """
-
     emb = np.asarray(emb)
 
     if H_emb is None:
@@ -617,6 +648,7 @@ def plot_riemann_metric(
 
 
 def draw_edges(ax, data, kernel, color="black", **kwargs):
+    """Draw graph edges between points, with alpha proportional to kernel affinity."""
     data = _as_2d_array(data, "data")
     _check_n_columns(data, 2, "data")
     kernel = np.asarray(kernel)
@@ -639,6 +671,7 @@ def draw_edges(ax, data, kernel, color="black", **kwargs):
 def plot_scores(
     scores, return_plot=True, log=True, figsize=(8, 3), fontsize=12, title="Scores"
 ):
+    """Bar-plot a dictionary of named scores, optionally on a log scale."""
     keys = list(scores.keys())
     values = list(scores.values())
     cmap = get_cmap(len(keys), name="tab20")
@@ -658,6 +691,7 @@ def plot_scores(
 
 
 def plot_all_scores(evaluation_dict, log=False, figsize=(20, 8), fontsize=20):
+    """Bar-plot each score group in an evaluation dictionary as a separate figure."""
     for key, value in evaluation_dict.items():
         plot_scores(value, figsize=figsize, log=log, fontsize=fontsize, title=key)
 
@@ -676,6 +710,11 @@ def plot_eigenvectors(
     marker_base=6,  # base marker size; auto-scales in vertical mode
     **kwargs,
 ):
+    """Plot the first ``n_eigenvectors`` diffusion components as scatter strips.
+
+    Lays out one panel per component, either horizontally or as vertically
+    stacked slender rows (``orientation``).
+    """
     X = np.asarray(eigenvectors)
     if X.ndim != 2:
         raise ValueError("eigenvectors must be a 2-D array.")
@@ -763,6 +802,7 @@ def plot_dimensionality_histograms(
     title_fontsize=22,
     legend_fontsize=15,
 ):
+    """Overlay per-``k`` local intrinsic-dimension histograms with global estimates."""
     fig, ax = plt.subplots(1, 1)
     fig.set_figwidth(6)
     fig.set_figheight(8)
@@ -805,6 +845,7 @@ def plot_dimensionality_histograms_multiple(
     log=False,
     title="I.D. estimates",
 ):
+    """Overlay intrinsic-dimension histograms for multiple estimates on shared bins."""
     fig, ax = plt.subplots(1, 1)
     # data
     current_bins: int | Sequence[float] | str | None = bins
@@ -863,7 +904,6 @@ def heatmap(
     **kwargs
         All other arguments are forwarded to `imshow`.
     """
-
     data = _as_2d_array(data, "data")
     if ax is None:
         ax = plt.gca()
@@ -909,8 +949,7 @@ def annotate_heatmap(
     an_fontsize=8,
     **textkw,
 ):
-    """
-    A function to annotate a heatmap.
+    """Annotate a heatmap with its per-cell values.
 
     Parameters
     ----------
@@ -933,7 +972,6 @@ def annotate_heatmap(
         All other arguments are forwarded to each call to `text` used to create
         the text labels.
     """
-
     if data is None:
         data_arr = np.asarray(im.get_array())
     else:

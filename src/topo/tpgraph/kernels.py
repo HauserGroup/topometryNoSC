@@ -5,6 +5,13 @@
 # License: MIT
 ######################################
 # Defining graph kernels in a scikit-learn fashion
+"""Graph-kernel construction and graph operators.
+
+Provides :func:`compute_kernel` and the scikit-learn-style :class:`Kernel`
+estimator, which build neighborhood-graph affinity matrices (adaptive bandwidth,
+fuzzy simplicial sets, continuous kNN) and expose graph operators: adjacency,
+Laplacian, diffusion operator, shortest paths, sparsification and imputation.
+"""
 
 import logging
 import warnings
@@ -105,8 +112,8 @@ def _safe_diffusion_operator_with_degree(W, alpha, semi_aniso=False):
 
 
 def _maybe_l2_normalize_rows(X):
-    """
-    Return X with row-wise L2 normalization if possible.
+    """Return ``X`` with row-wise L2 normalization if possible.
+
     Works for dense (ndarray) and CSR/CSC/COO sparse matrices.
     """
     try:
@@ -122,9 +129,10 @@ def _cosine_knn_requires_unit_vectors(backend: str) -> bool:
 
 
 def _cosine_distance_to_angle_from_sparse_triplets(x_idx, y_idx, dists):
-    """
+    """Convert sparse cosine-distance triplets to angles (radians).
+
     Given triplets of cosine *distance* d = 1 - cos in [0, 2],
-    convert to angle θ = arccos(cos) with cos = 1 - d.
+    converts to angle θ = arccos(cos) with cos = 1 - d.
     Returns in-place modified dists (angles in radians).
     """
     # cos = 1 - d
@@ -472,8 +480,9 @@ def compute_kernel(
 
 
 class Kernel(BaseEstimator, TransformerMixin):
-    """
-    Scikit-learn flavored class for computing a kernel matrix from a set of points. Includes functions
+    """Scikit-learn flavored estimator for computing a kernel matrix from points.
+
+    Includes functions
     for computing the kernel matrix with a variety of methods (adaptive bandwidth, fuzzy simplicial sets,
     continuous k-nearest-neighbors, etc) and performing operations
     on the resulting graph, such as obtaining its Laplacian, sparsifying it, filtering and interpolating signals,
@@ -646,6 +655,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.anisotropy = anisotropy
 
     def __repr__(self, N_CHAR_MAX=700):
+        """Return a short summary of the fitted state and kernel method."""
         if self._K is not None:
             if self.metric == "precomputed":
                 msg = "Kernel() estimator fitted with precomputed distance matrix"
@@ -699,7 +709,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         if resolved == "sklearn" and self.backend != "sklearn":
             warnings.warn(
                 "No approximate nearest neighbor backend found; falling back to "
-                "scikit-learn. Install one with `pip install topometry[ann]` for "
+                "scikit-learn. Install one with `pip install topometry-nosc[ann]` for "
                 "faster neighbor search.",
                 stacklevel=2,
             )
@@ -784,18 +794,16 @@ class Kernel(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X=None):
-        """
-        Returns the kernel matrix. Here for compability with scikit-learn only.
-        """
+        """Return the kernel matrix (scikit-learn compatibility)."""
         if self._K is None:
             raise ValueError("No kernel matrix has been fitted yet. Call fit() first.")
 
         return self._K
 
     def fit_transform(self, X, y=None, **fit_params):  # type: ignore
-        """
-        Fits the kernel matrix to the data and returns the kernel matrix.
-        Here for compability with scikit-learn only.
+        """Fit the kernel to the data and return the kernel matrix.
+
+        Here for compatibility with scikit-learn only.
         """
         self.fit(X, **fit_params)
         return self.K
@@ -816,9 +824,7 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def knn(self):
-        """
-        Returns the k-nearest-neighbors graph.
-        """
+        """Return the k-nearest-neighbors graph."""
         if self.knn_ is None:
             raise ValueError(
                 "No k-nearest-neighbors graph has been fitted yet or precomputed versions were used!"
@@ -827,18 +833,14 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def K(self):
-        """
-        Kernel matrix.
-        """
+        """Return the kernel (affinity) matrix."""
         if self._K is None:
             raise ValueError("No kernel matrix has been fitted yet. Call fit() first.")
         return self._K
 
     @property
     def A(self):
-        """
-        Graph adjacency matrix.
-        """
+        """Return the graph adjacency matrix."""
         if self._K is None:
             raise ValueError("No kernel matrix has been fitted yet. Call fit() first.")
         if self._A is None:
@@ -847,9 +849,7 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def degree(self):
-        """
-        Returns the degree of the binary adjacency matrix.
-        """
+        """Return the degree of the binary adjacency matrix."""
         if self._degree is None:
             if self._K is None:
                 raise ValueError(
@@ -860,10 +860,7 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def weighted_degree(self):
-        """
-        Returns the degree of the weighted affinity matrix.
-        """
-
+        """Return the degree of the weighted affinity matrix."""
         if self._weighted_degree is None:
             if self._K is None:
                 raise ValueError(
@@ -873,9 +870,10 @@ class Kernel(BaseEstimator, TransformerMixin):
         return self._weighted_degree
 
     def laplacian(self, laplacian_type=None):
-        """
-        Compute the graph Laplacian, given a adjacency or affinity graph W. For a friendly reference,
-        see this material from James Melville: https://jlmelville.github.io/smallvis/spectral.html
+        """Compute the graph Laplacian of this kernel's affinity matrix.
+
+        For a friendly reference, see this material from James Melville:
+        https://jlmelville.github.io/smallvis/spectral.html
 
         Parameters
         ----------
@@ -898,16 +896,13 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def L(self):
-        """
-        Object synonym for the laplacian() function.
-        """
+        """Object synonym for the :meth:`laplacian` function."""
         if self._L is None:
             return self.laplacian()
         return self._L
 
     def diff_op(self, anisotropy=1.0, symmetric=True):
-        """
-        Computes the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
+        """Compute the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
 
         Parameters
         ----------
@@ -965,16 +960,14 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def P(self):
-        """
-        Object synonym for the diff_op() function.
-        """
+        """Object synonym for the :meth:`diff_op` function."""
         if self._P is None:
             return self.diff_op()
         return self._P
 
     def shortest_paths(self, landmark=False, indices=None):
-        """
-        Compute the shortest paths between all pairs of nodes.
+        """Compute the shortest paths between all pairs of nodes.
+
         If landmark is True, the shortest paths are computed between all pairs of landmarks,
         not all sample nodes.
 
@@ -1019,14 +1012,13 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def SP(self):
-        """
-        Object synonym for the shortest_paths() function.
-        """
+        """Object synonym for the :meth:`shortest_paths` function."""
         if self._SP is None:
             return self.shortest_paths()
         return self._SP
 
     def get_indices_distances(self, n_neighbors=None, kernel=True):
+        """Return per-row neighbor indices and distances from the kernel or kNN graph."""
         if n_neighbors is None:
             n_neighbors = self.n_neighbors
         if kernel:
@@ -1035,9 +1027,9 @@ class Kernel(BaseEstimator, TransformerMixin):
             return get_indices_distances_from_sparse_matrix(self.knn_, n_neighbors)
 
     def _calculate_imputation_error(self, data, data_prev=None):
-        """
-        Calculates difference before and after imputation by diffusion.
-        This is from [MAGIC](https://github.com/KrishnaswamyLab/MAGIC).
+        """Compute the difference before and after imputation by diffusion.
+
+        Adapted from [MAGIC](https://github.com/KrishnaswamyLab/MAGIC).
 
         Parameters
         ----------
@@ -1061,8 +1053,8 @@ class Kernel(BaseEstimator, TransformerMixin):
         return error, data
 
     def impute(self, Y=None, t=None, threshold=0.01, tmax=10):
-        """
-        Uses the diffusion operator computed from graph build on X to impute the input data Y.
+        """Impute data ``Y`` using the diffusion operator built from ``X``.
+
         Although the idea behind this is far older, it was first reported in single-cell genomics
         by the Krishnaswamy lab in the MAGIC (Markov Affinity-based Graph Imputation of Cells)
         [manuscript](https://www.cell.com/cell/abstract/S0092-8674(18)30724-4)
@@ -1120,7 +1112,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         return Y_imp
 
     def _get_landmarks(self, X, n_landmarks=None):
-        """Placeholder for future landmark selection."""
+        """Select landmark points (placeholder for future landmark selection)."""
         raise NotImplementedError("Landmark selection is not implemented.")
 
     def filter(
@@ -1135,8 +1127,9 @@ class Kernel(BaseEstimator, TransformerMixin):
         solver="chebyshev",
         chebyshev_order=100,
     ):
-        """
-        This is inspired from [MELD](https://github.com/KrishnaswamyLab/MELD) to estimate sample associated density estimation.
+        """Estimate per-sample density over the graph by filtering a signal.
+
+        Inspired by [MELD](https://github.com/KrishnaswamyLab/MELD) for sample-associated density estimation.
         However, you can naturally use this for any signal in your data, not just samples of specific conditions. In practice, this is just
         a simple [PyGSP](https://pygsp.readthedocs.io/en/stable/reference/filters.html#module-pygsp.filters) filter on a graph.
         Indeed, it calls PyGSP, so you'll need it installed to use this function.
@@ -1274,8 +1267,8 @@ class Kernel(BaseEstimator, TransformerMixin):
         return sample_likelihoods
 
     def is_connected(self):
-        """
-        Check if the graph is connected (cached).
+        """Check if the graph is connected (cached).
+
         A graph is connected if and only if there exists a (directed) path
         between any two vertices.
 
@@ -1306,8 +1299,8 @@ class Kernel(BaseEstimator, TransformerMixin):
         return self._connected
 
     def _connected_components(self, target=None):
-        """
-        Finds the connected components of the kernel matrix by default.
+        """Find the connected components of the kernel matrix (or ``target``).
+
         Other matrices can be specified for use with the `target` parameter.
 
         Parameters
@@ -1331,10 +1324,9 @@ class Kernel(BaseEstimator, TransformerMixin):
         return n_components, labels
 
     def resistance_distance(self):
-        """
-        Uses the cached Laplacian matrix to compute the resistance distances.
-        See Klein and Randic [manuscript](https://doi.org/10.1007%2FBF01164627) for details.
+        """Compute resistance distances from the cached Laplacian matrix.
 
+        See Klein and Randic [manuscript](https://doi.org/10.1007%2FBF01164627) for details.
 
         Returns
         -------
@@ -1342,7 +1334,6 @@ class Kernel(BaseEstimator, TransformerMixin):
             Resistance distance matrix
 
         """
-
         if self.laplacian_type != "unnormalized":
             L = self.laplacian(laplacian_type="unnormalized")
         else:
@@ -1365,13 +1356,12 @@ class Kernel(BaseEstimator, TransformerMixin):
         return rd
 
     def sparsify(self, epsilon=0.1, maxiter=10, random_state=None):
-        """
-        Sparsify a graph (with the Spielman-Srivastava method). This originally only called PyGSP but now
-        also has some adaptations.
+        """Sparsify the graph with the Spielman-Srivastava method.
+
+        This originally only called PyGSP but now also has some adaptations.
 
         Parameters
         ----------
-
         epsilon : float (optional, default 0.1).
             Sparsification parameter, which must be between ``1/sqrt(N)`` and 1.
 
@@ -1509,6 +1499,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         return signal_interpolated
 
     def write_pkl(self, wd=None, filename="mykernel.pkl"):
+        """Pickle this kernel to ``wd/filename`` (defaults to the working directory)."""
         import os
         import pickle
 

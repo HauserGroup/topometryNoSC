@@ -1,3 +1,10 @@
+"""Low-dimensional layout and projection methods.
+
+Graph-layout optimization (MAP/UMAP-style), Isomap and the
+:class:`~topo.layouts.projector.Projector` orchestrator that dispatches to the
+available projection backends. Members are imported lazily.
+"""
+
 from importlib import import_module
 from typing import TYPE_CHECKING
 

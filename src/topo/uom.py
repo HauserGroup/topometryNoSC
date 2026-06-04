@@ -1,7 +1,10 @@
 # Union-of-Manifolds (UoM) logic extracted from TopOGraph.
-#
-# Provides standalone helper functions and a ``UoMMixin`` class that
-# TopOGraph inherits from to keep the main orchestrator slim.
+"""Union-of-Manifolds (UoM) scaffold construction.
+
+Standalone helpers plus the :class:`UoMMixin` that :class:`topo.topograph.TopOGraph`
+inherits. UoM partitions the graph into manifold components, builds a per-component
+eigenbasis and consolidates them into a single scaffold, keeping the orchestrator slim.
+"""
 
 import copy
 import logging
@@ -146,9 +149,9 @@ def consolidate_macros(W, labels, max_iters=100):
 
 
 def louvain_micro(S, random_state=0, max_passes=100, gamma=0.85):
-    """
-    Greedy Louvain modularity clustering on a weighted undirected graph *S*.
-    No external dependencies beyond NumPy / SciPy.
+    """Greedy Louvain modularity clustering on a weighted undirected graph ``S``.
+
+    Uses no external dependencies beyond NumPy / SciPy.
     """
     rng = np.random.RandomState(int(random_state))
     S = _to_float32_csr(S)
@@ -294,9 +297,10 @@ class _ProxyKernel:
 
 
 class UoMMixin:
-    """
-    Mixin providing Union-of-Manifolds (UoM) state initialization and the
-    per-component fit pipeline used by ``TopOGraph.fit()``.
+    """Union-of-Manifolds state and per-component fit pipeline.
+
+    Provides the UoM state initialization and the per-component fit pipeline
+    used by :meth:`topo.topograph.TopOGraph.fit`.
     """
 
     # ------------------------------------------------------------------
@@ -355,8 +359,13 @@ class UoMMixin:
 
     # Methods provided by the host class
     def _build_kernel(self, *args: Any, **kwargs: Any) -> Any: ...
-    def spectral_layout(self, *args: Any, **kwargs: Any) -> Any: ...
-    def project(self, *args: Any, **kwargs: Any) -> Any: ...
+    def spectral_layout(self, *args: Any, **kwargs: Any) -> Any:
+        """Interface stub; implemented by the host ``TopOGraph`` class."""
+        ...
+
+    def project(self, *args: Any, **kwargs: Any) -> Any:
+        """Interface stub; implemented by the host ``TopOGraph`` class."""
+        ...
 
     def _init_uom_state(self):
         """Initialize all UoM-specific attributes (called from TopOGraph.__init__)."""
@@ -417,10 +426,10 @@ class UoMMixin:
     # Per-component fit pipeline
     # -----------------------------------------------------------------
     def _fit_uom(self, X, **kwargs):
-        """
-        UoM branch of ``fit()``: detect components and build per-component
-        scaffolds, refined graphs, and projections.  Aggregates results into
-        block-diagonal operators.
+        """Run the UoM branch of ``fit()``.
+
+        Detects components and builds per-component scaffolds, refined graphs and
+        projections, aggregating results into block-diagonal operators.
         """
         if self.verbosity >= 1:
             logger.info(

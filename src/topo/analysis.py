@@ -1,8 +1,10 @@
 # Standalone analysis functions extracted from TopOGraph.
-#
-# Each function accepts explicit arguments (operators, scaffolds, eigenvalues)
-# rather than relying on a TopOGraph instance's internal state.
+"""Standalone spectral-analysis functions.
 
+Operator-native diagnostics (spectral selectivity, eigengap analysis and related
+scores) that take explicit arguments — operators, scaffolds, eigenvalues — rather
+than relying on a :class:`topo.topograph.TopOGraph` instance's internal state.
+"""
 
 import numpy as np
 import scipy.sparse as sp

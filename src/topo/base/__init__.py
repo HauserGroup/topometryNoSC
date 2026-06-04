@@ -1,3 +1,11 @@
+"""Foundational primitives: neighbor search and distances.
+
+Approximate/exact k-nearest-neighbor search (:func:`~topo.base.ann.kNN`) and the
+numba-accelerated distance and sparse-graph helpers the rest of the package
+builds on. The numba-dependent helpers are imported only when ``numba`` is
+available.
+"""
+
 import importlib.util
 
 from .ann import grid_search, kNN

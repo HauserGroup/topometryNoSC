@@ -40,7 +40,11 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Fuzzy simplicial-set graph construction.
 
+UMAP-derived routines that build a fuzzy simplicial set (smooth kNN membership
+graph) from data or a precomputed kNN graph, used as a kernel backend.
+"""
 
 import numpy as np
 from scipy.sparse import coo_matrix, csr_matrix
@@ -68,9 +72,10 @@ def fuzzy_simplicial_set(
     verbose=False,
     **kwargs,
 ):
-    """
-    Given a set of data X, a neighborhood size, and a measure of distance
-    compute the fuzzy simplicial set (here represented as a fuzzy graph in
+    """Compute the fuzzy simplicial set associated to the data.
+
+    Given a set of data X, a neighborhood size, and a measure of distance,
+    builds the fuzzy simplicial set (here represented as a fuzzy graph in
     the form of a sparse matrix) associated to the data. This is done by
     locally approximating geodesic distance at each point, creating a fuzzy
     simplicial set for each such point, and then combining all the local
@@ -223,8 +228,9 @@ def fuzzy_simplicial_set(
 
 
 def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
-    """Construct the membership strength data for the 1-skeleton of each local
-    fuzzy simplicial set -- this is formed as a sparse matrix where each row is
+    """Construct the membership-strength data for each local fuzzy simplicial set.
+
+    Forms the 1-skeleton as a sparse matrix where each row is
     a local fuzzy simplicial set, with a membership strength for the
     1-simplex to each other data point.
 
@@ -241,6 +247,7 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
         The normalization factor derived from the metric tensor approximation.
     rhos: array of shape(n_samples)
         The local connectivity adjustment.
+
     Returns
     -------
     rows: array of shape (n_samples * n_neighbors)
@@ -276,8 +283,9 @@ def compute_membership_strengths(knn_indices, knn_dists, sigmas, rhos):
 
 
 def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1.0):
-    """Compute a continuous version of the distance to the kth nearest
-    neighbor. That is, this is similar to knn-distance but allows continuous
+    """Compute a continuous version of the distance to the kth nearest neighbor.
+
+    That is, this is similar to knn-distance but allows continuous
     k values rather than requiring an integral k. In essence we are simply
     computing the distance such that the cardinality of fuzzy set we generate
     is k.

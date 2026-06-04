@@ -1,3 +1,10 @@
+"""Spectral operators and eigendecomposition.
+
+Graph Laplacians, diffusion operators and Laplacian-eigenmap layouts, plus the
+:class:`~topo.spectral.eigen.EigenDecomposition` transformer that turns a kernel
+or operator into a spectral embedding. Members are imported lazily.
+"""
+
 from importlib import import_module
 from typing import TYPE_CHECKING
 

@@ -47,7 +47,7 @@ def _normalized_laplacian(A):
     n = A.shape[0]
     d = np.asarray(A.sum(axis=1)).ravel().astype(np.float64).clip(min=1e-12)
     Dmh = sp.diags((1.0 / np.sqrt(d)).astype(np.float32))
-    return sp.eye(n, dtype=np.dtype("float32"), format="csr") - (Dmh @ A @ Dmh)
+    return sp.eye(n, dtype=float, format="csr") - (Dmh @ A @ Dmh)
 
 
 def _eigengap_k(vals, k_max, k_min=2):
@@ -70,7 +70,7 @@ def mbkm(X, n_clusters, random_state=0):
     km = MiniBatchKMeans(
         n_clusters=n_use,
         batch_size=batch,
-        n_init=10,
+        n_init="auto",
         max_no_improvement=30,
         reassignment_ratio=0.01,
         random_state=random_state,
@@ -455,23 +455,26 @@ class UoMMixin:
         self.uom_Kernel_Z_list, self.uom_Kernel_msZ_list = [], []
         self.uom_eigenvalues_dm_list, self.uom_eigenvalues_ms_list = [], []
 
-        def _local_size(Xi, n_max):
-            n_i = Xi.shape[0]
+        def _local_size(Xi_or_knn, n_max):
+            assert Xi_or_knn is not None
+            n_i = Xi_or_knn.shape[0]
             cap = min(int(self.id_max_components), max(2, n_i - 2))
-            k_auto, _det = automated_scaffold_sizing(
-                Xi,
+            res = automated_scaffold_sizing(
+                Xi_or_knn,
                 method=self.id_method,
                 ks=self.id_ks,
                 backend=self.backend,
                 metric=self.id_metric,
-                n_jobs=self.n_jobs if self.n_jobs != -1 else None,
+                n_jobs=int(self.n_jobs) if self.n_jobs is not None else -1,
                 quantile=self.id_quantile,
                 min_components=int(min(self.id_min_components, cap)),
                 max_components=int(min(cap, n_max)),
                 headroom=float(self.id_headroom),
                 random_state=self.random_state,
-                return_details=True,
+                return_details=False,
             )
+            k_auto = res[0] if isinstance(res, tuple) else res
+            k_auto = int(k_auto)
             return int(max(2, min(k_auto, cap)))
 
         for idx in self.uom_components_:
@@ -510,6 +513,7 @@ class UoMMixin:
 
             k_i = _local_size(Xi if Xi is not None else knn_i, n_max=n_i - 2)
             Ki_mat = getattr(Ki, "K", None) or getattr(Ki, "P", None)
+            assert Ki_mat is not None
             N_i = int(Ki_mat.shape[0])
             if N_i <= 2:
                 self._fit_uom_tiny_component(idx, N_i)
@@ -533,6 +537,8 @@ class UoMMixin:
             eig_ms_i = copy.deepcopy(eig_dm_i)
             eig_ms_i.method = "msDM"
 
+            assert eig_dm_i.eigenvalues is not None
+            assert eig_ms_i.eigenvalues is not None
             self.uom_eigenvalues_dm_list.append(
                 np.array(eig_dm_i.eigenvalues, copy=True)
             )
@@ -542,8 +548,12 @@ class UoMMixin:
 
             k_avail = eig_dm_i.eigenvalues.shape[0]
             k_use = min(k_i, k_avail)
-            Zi = eig_dm_i.transform()[:, :k_use]
-            msZi = eig_ms_i.transform()[:, :k_use]
+            Zi_all = eig_dm_i.transform()
+            msZi_all = eig_ms_i.transform()
+            assert Zi_all is not None
+            assert msZi_all is not None
+            Zi = np.asarray(Zi_all)[:, :k_use]
+            msZi = np.asarray(msZi_all)[:, :k_use]
 
             self.uom_DMEig_list.append(eig_dm_i)
             self.uom_msDMEig_list.append(eig_ms_i)
@@ -629,11 +639,21 @@ class UoMMixin:
 
     def _fit_uom_tiny_component(self, idx, n_i):
         """Fallback for components with < 3 samples."""
+        assert self.uom_Z_list is not None
+        assert self.uom_msZ_list is not None
+        assert self.uom_knn_Z_list is not None
+        assert self.uom_knn_msZ_list is not None
+        assert self.uom_Kernel_Z_list is not None
+        assert self.uom_Kernel_msZ_list is not None
+        assert self.uom_BaseKernel_list is not None
+        assert self.uom_knn_X_list is not None
+        assert self.uom_DMEig_list is not None
+        assert self.uom_msDMEig_list is not None
         Zi = np.zeros((n_i, 1), dtype=np.float32)
         self.uom_Z_list.append(Zi)
         self.uom_msZ_list.append(Zi.copy())
 
-        P_block = sp.eye(n_i, format="csr", dtype=np.float32)
+        P_block = sp.eye(n_i, format="csr", dtype=float)
         self.uom_knn_Z_list.append(P_block.copy())
         self.uom_knn_msZ_list.append(P_block.copy())
         self.uom_Kernel_Z_list.append(_ProxyKernel(P_block))
@@ -667,6 +687,15 @@ class UoMMixin:
 
     def _aggregate_uom_blocks(self):
         """Assemble per-component results into block-diagonal aggregates."""
+        assert self.uom_Z_list is not None
+        assert self.uom_msZ_list is not None
+        assert self.uom_components_ is not None
+        assert self.uom_knn_X_list is not None
+        assert self.uom_BaseKernel_list is not None
+        assert self.uom_knn_Z_list is not None
+        assert self.uom_knn_msZ_list is not None
+        assert self.uom_Kernel_Z_list is not None
+        assert self.uom_Kernel_msZ_list is not None
         n = self.n
 
         total_cols_Z = int(sum(z.shape[1] for z in self.uom_Z_list))
@@ -687,6 +716,7 @@ class UoMMixin:
             c0 = c1
 
         def _place_blocks(block_list):
+            assert self.uom_components_ is not None
             M = sp.lil_matrix((n, n), dtype=np.float32)
             for idx, B in zip(self.uom_components_, block_list):
                 M[np.ix_(idx, idx)] = B

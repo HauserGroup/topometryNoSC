@@ -210,7 +210,7 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
                     + str(int(self.global_id[method][key]))
                     + " )"
                 )
-                n, bins, patches = ax.hist(
+                ax.hist(
                     x,
                     bins=30,
                     histtype="step",
@@ -237,7 +237,7 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
                     + str(int(self.global_id["fsa"][key]))
                     + " )"
                 )
-                n, bins, patches = ax1.hist(
+                ax1.hist(
                     x,
                     bins=30,
                     histtype="step",
@@ -263,7 +263,7 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
                     + str(int(self.global_id["mle"][key]))
                     + " )"
                 )
-                n, bins, patches = ax2.hist(
+                ax2.hist(
                     x,
                     bins=30,
                     histtype="step",

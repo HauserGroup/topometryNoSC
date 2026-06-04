@@ -5,12 +5,11 @@ orchestrator slim. ``TopOGraph`` inherits ``LayoutBuildMixin``; all methods here
 operate on ``self`` and rely on attributes/properties defined on ``TopOGraph``.
 """
 
-from __future__ import annotations
-
 import gc
 import logging
 import time
 import warnings
+from typing import Any, cast
 
 import numpy as np
 from scipy.sparse import csr_matrix, issparse
@@ -23,6 +22,39 @@ logger = logging.getLogger(__name__)
 
 class LayoutBuildMixin:
     """Projection / layout construction and visualisation methods."""
+
+    # Interface contract — attributes supplied by TopOGraph
+    projection_methods: list[str] | None
+    graph_kernel_version: str
+    base_kernel_version: str
+    ProjectionDict: dict[str, Any]
+    _kernel_msZ: Any
+    _kernel_Z: Any
+    random_state: Any
+    laplacian_type: str
+    eigen_tol: float
+    runtimes: dict[str, float]
+    SpecLayout: Any
+    graph_knn: int
+    P_of_msZ: Any
+    P_of_Z: Any
+    graph_metric: str
+    uom_enabled: bool
+    msZ_uom: Any
+    Z_uom: Any
+    EigenbasisDict: dict[str, Any]
+    n_jobs: int
+    backend: str
+    layout_verbose: bool
+    verbosity: int
+    msTopoMAP_snapshots: list[dict[str, Any]]
+    TopoMAP_snapshots: list[dict[str, Any]]
+    uom_eigenvalues_ms_list: list[Any]
+    _uom_active_mode: str
+    uom_eigenvalues_dm_list: list[Any]
+    uom_components_: list[Any] | None
+    eigenbasis: Any
+    base_kernel: Any
 
     def _run_projections(self):
         """Compute requested 2-D projections on both scaffolds."""
@@ -165,7 +197,7 @@ class LayoutBuildMixin:
             landmarks=landmarks,
             landmark_method=landmark_method,
             num_iters=num_iters,
-            init=init_Y,
+            init=cast(Any, init_Y),
             nbrs_backend=self.backend,
             keep_estimator=False,
             random_state=self.random_state,

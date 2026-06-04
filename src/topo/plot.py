@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import numba
 import numpy as np
@@ -74,6 +74,27 @@ def decay_plot(
         )
     plt.tight_layout()
     return plt.show()
+
+
+def eigsorted(cov):
+    """Return eigenvalues/eigenvectors of a covariance matrix sorted descending."""
+    vals, vecs = np.linalg.eigh(np.asarray(cov, dtype=float))
+    order = vals.argsort()[::-1]
+    return vals[order], vecs[:, order]
+
+
+def _as_2d_array(X, name):
+    """Return X as a 2-D ndarray."""
+    arr = np.asarray(X)
+    if arr.ndim != 2:
+        raise ValueError(f"{name} must be a 2-D array.")
+    return arr
+
+
+def _check_n_columns(X, n_cols, name):
+    """Require at least n_cols columns."""
+    if X.shape[1] < n_cols:
+        raise ValueError(f"{name} must have at least {n_cols} columns.")
 
 
 def scatter(
@@ -267,7 +288,10 @@ def gaussian_potential(
 
     for i in range(emb.shape[0]):
         pos = emb[i, :2]
-        color = None if ellipse_colors is None else ellipse_colors[label_codes[i]]
+        if ellipse_colors is None or label_codes is None:
+            color = None
+        else:
+            color = ellipse_colors[label_codes[i]]
 
         draw_simple_ellipse(
             pos,
@@ -499,11 +523,15 @@ def plot_riemann_metric(
 
     """
 
+    emb = np.asarray(emb)
+
     if H_emb is None:
         from topo.eval import RiemannMetric
 
         rmetric = RiemannMetric(emb, L)
-        H = rmetric.get_dual_rmetric()
+        H = np.asarray(rmetric.get_dual_rmetric())
+    else:
+        H = np.asarray(H_emb)
 
     N = np.shape(emb)[0]
     rng = check_random_state(random_state)
@@ -519,26 +547,40 @@ def plot_riemann_metric(
         1
     )  # if an ellipse is a circle no distortion occured in particular directions
     if labels is not None:
-        colors = plt.get_cmap(cmap)(np.linspace(0, 1, np.shape(np.unique(labels))[0]))
-        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, c=labels, cmap=cmap)
+        labels_arr = np.asarray(labels)
+        if labels_arr.shape[0] != emb.shape[0]:
+            raise ValueError("labels must have the same length as emb.")
+        _, label_codes = np.unique(labels_arr, return_inverse=True)
+        colors = plt.get_cmap(cmap)(np.linspace(0, 1, int(label_codes.max()) + 1))
+        ax.scatter(emb[:, 0], emb[:, 1], s=pt_size, c=labels_arr, cmap=cmap)
     else:
+        labels_arr = None
+        label_codes = None
+        colors = None
         ax.scatter(emb[:, 0], emb[:, 1], s=pt_size)
+
     for i in range(n_plot):
         ii = sample_points[i]
         cov = H[ii, :, :]
-        if labels is not None:
+
+        if labels_arr is not None and colors is not None and label_codes is not None:
             plot_cov_ellipse(
                 cov,
                 emb[ii, :],
                 nstd=std,
                 ax=ax,
                 edgecolor="none",
-                color=colors[labels[ii]],
+                color=colors[label_codes[ii]],
                 alpha=alpha,
             )
         else:
             plot_cov_ellipse(
-                cov, emb[ii, :], nstd=std, ax=ax, edgecolor="none", alpha=alpha
+                cov,
+                emb[ii, :],
+                nstd=std,
+                ax=ax,
+                edgecolor="none",
+                alpha=alpha,
             )
     return ax
 
@@ -672,9 +714,9 @@ def plot_eigenvectors(
 def plot_dimensionality_histograms(
     local_id_dict,
     global_id_dict,
-    bins=50,
+    bins: int | Sequence[float] | str | None = 50,
     title="FSA",
-    histtype="step",
+    histtype: Literal["bar", "barstacked", "step", "stepfilled"] = "step",
     stacked=True,
     density=True,
     log=False,
@@ -690,9 +732,14 @@ def plot_dimensionality_histograms(
         #
         # Make a multiple-histogram of data-sets with different length.
         label = (
-            "k = " + key + "    ( estim.i.d. = " + str(int(global_id_dict[key])) + " )"
-        )git 
-        n, bins, patches = ax.hist(
+            "k = "
+            + str(key)
+            + "    ( estim.i.d. = "
+            + str(int(global_id_dict[key]))
+            + " )"
+        )
+
+        _n, _bins, _patches = ax.hist(
             x,
             bins=bins,
             histtype=histtype,
@@ -712,8 +759,8 @@ def plot_dimensionality_histograms(
 
 def plot_dimensionality_histograms_multiple(
     id_dict,
-    bins=50,
-    histtype="step",
+    bins: int | Sequence[float] | str | None = 50,
+    histtype: Literal["bar", "barstacked", "step", "stepfilled"] = "step",
     stacked=True,
     density=True,
     log=False,
@@ -721,7 +768,7 @@ def plot_dimensionality_histograms_multiple(
 ):
     fig, ax = plt.subplots(1, 1)
     # data
-    current_bins = bins
+    current_bins: int | Sequence[float] | str | None = bins
     for key in id_dict.keys():
         x = id_dict[key]
         #
@@ -731,11 +778,12 @@ def plot_dimensionality_histograms_multiple(
             bins=current_bins,
             histtype=histtype,
             stacked=stacked,
-            density=True,
+            density=density,
             log=log,
             label=key,
         )
-        current_bins = _bins
+
+        current_bins = cast(Sequence[float], _bins.tolist())
     ax.set_title(title)
     ax.legend(prop={"size": 10})
     fig.tight_layout()
@@ -845,14 +893,16 @@ def annotate_heatmap(
         the text labels.
     """
 
-    if not isinstance(data, (list, np.ndarray)):
-        data = im.get_array()
+    if data is None:
+        data_arr = np.asarray(im.get_array())
+    else:
+        data_arr = np.asarray(data)
 
     # Normalize the threshold to the images color range.
     if threshold is not None:
         threshold = im.norm(threshold)
     else:
-        threshold = im.norm(data.max()) / 2.0
+        threshold = im.norm(data_arr.max()) / 2.0
 
     # Set default alignment to center, but allow it to be
     # overwritten by textkw.
@@ -868,11 +918,11 @@ def annotate_heatmap(
     # Loop over the data and create a `Text` for each "pixel".
     # Change the text's color depending on the data.
     texts = []
-    for i in range(data.shape[0]):
-        for j in range(data.shape[1]):
-            kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
+    for i in range(data_arr.shape[0]):
+        for j in range(data_arr.shape[1]):
+            kw.update(color=textcolors[int(im.norm(data_arr[i, j]) > threshold)])
             text = im.axes.text(
-                j, i, valfmt(data[i, j], None), fontsize=an_fontsize, **kw
+                j, i, valfmt(data_arr[i, j], None), fontsize=an_fontsize, **kw
             )
             texts.append(text)
 
@@ -1008,12 +1058,10 @@ def visualize_optimization(
 
         fig.subplots_adjust(left=0.12, right=0.98, bottom=0.12, top=0.92)
         fig.canvas.draw()
-        w, h = fig.canvas.get_width_height()
-        frame = (
-            np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-            .reshape(h, w, 3)
-            .copy()
-        )
+        canvas = cast(Any, fig.canvas)
+        w, h = canvas.get_width_height()
+        rgba = np.asarray(canvas.buffer_rgba(), dtype=np.uint8).reshape(h, w, 4)
+        frame = rgba[:, :, :3].copy()
         frames.append(frame)
         plt.close(fig)
 

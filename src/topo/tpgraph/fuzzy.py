@@ -44,7 +44,7 @@
 
 import numpy as np
 from scipy.sparse import coo_matrix, csr_matrix
-from sklearn.base import TransformerMixin
+
 from topo.base.ann import kNN
 from topo.utils._utils import get_indices_distances_from_sparse_matrix
 
@@ -54,18 +54,20 @@ NPY_INFINITY = np.inf
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
 
+
 def fuzzy_simplicial_set(
-        X,
-        n_neighbors=15,
-        metric='cosine',
-        backend='nmslib',
-        n_jobs=1,
-        set_op_mix_ratio=1.0,
-        local_connectivity=1.0,
-        apply_set_operations=True,
-        return_dists=False,
-        verbose=False,
-        **kwargs):
+    X,
+    n_neighbors=15,
+    metric="cosine",
+    backend="nmslib",
+    n_jobs=1,
+    set_op_mix_ratio=1.0,
+    local_connectivity=1.0,
+    apply_set_operations=True,
+    return_dists=False,
+    verbose=False,
+    **kwargs,
+):
     """
     Given a set of data X, a neighborhood size, and a measure of distance
     compute the fuzzy simplicial set (here represented as a fuzzy graph in
@@ -89,7 +91,7 @@ def fuzzy_simplicial_set(
         structure to the detriment of the larger picture.
 
     backend : str (optional, default 'nmslib').
-        Which backend to use for neighborhood search. Options are 'nmslib', 'hnswlib', 
+        Which backend to use for neighborhood search. Options are 'nmslib', 'hnswlib',
         'pynndescent','annoy', 'faiss' and 'sklearn'.
 
     metric : str (optional, default 'cosine').
@@ -156,42 +158,51 @@ def fuzzy_simplicial_set(
 
     sigmas: array of shape (n_samples,)
         The normalization factor derived from the metric tensor approximation. Equal
-        to the distance 
+        to the distance
 
     rhos: array of shape (n_samples,)
         The distance to the 1st nearest neighbor for each point.
     """
-    if metric == 'precomputed':
+    if metric == "precomputed":
         if not isinstance(X, csr_matrix):
             raise TypeError(
-                'X should be a sparse csr_matrix if using precomputed distances.')
+                "X should be a sparse csr_matrix if using precomputed distances."
+            )
         knn_indices, knn_dists = get_indices_distances_from_sparse_matrix(
-            X, n_neighbors)
+            X, n_neighbors
+        )
     else:
-        knn = kNN(X, n_neighbors=n_neighbors,
-                  metric=metric,
-                  n_jobs=n_jobs,
-                  backend=backend,
-                  low_memory=True,
-                  return_instance=False,
-                  verbose=verbose,
-                  **kwargs)
+        knn = csr_matrix(
+            kNN(
+                X,
+                n_neighbors=n_neighbors,
+                metric=metric,
+                n_jobs=n_jobs,
+                backend=backend,
+                low_memory=True,
+                return_instance=False,
+                verbose=verbose,
+                **kwargs,
+            )
+        )
         knn_indices, knn_dists = get_indices_distances_from_sparse_matrix(
-            knn, n_neighbors)
+            knn, n_neighbors
+        )
 
     knn_dists = knn_dists.astype(np.float32)
+    n_samples = knn_indices.shape[0]
 
     sigmas, rhos = smooth_knn_dist(
-        knn_dists, float(n_neighbors), local_connectivity=float(local_connectivity),
+        knn_dists,
+        float(n_neighbors),
+        local_connectivity=float(local_connectivity),
     )
 
     rows, cols, vals = compute_membership_strengths(
         knn_indices, knn_dists, sigmas, rhos
     )
 
-    fuzzy_ss = coo_matrix(
-        (vals, (rows, cols)), shape=(X.shape[0], X.shape[0])
-    )
+    fuzzy_ss = coo_matrix((vals, (rows, cols)), shape=(n_samples, n_samples))
     fuzzy_ss.eliminate_zeros()
 
     if apply_set_operations:
@@ -199,7 +210,7 @@ def fuzzy_simplicial_set(
 
         prod_matrix = fuzzy_ss.multiply(transpose)
 
-        fuzzy_ss = (
+        fuzzy_ss = coo_matrix(
             set_op_mix_ratio * (fuzzy_ss + transpose - prod_matrix)
             + (1.0 - set_op_mix_ratio) * prod_matrix
         )
@@ -273,7 +284,7 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
 
     Originally implemented by Leland McInnes at https://github.com/lmcinnes/umap
     under the BSD 3-Clause License.
-    
+
     Parameters
     ----------
     distances: array of shape (n_samples, n_neighbors)

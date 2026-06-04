@@ -1,9 +1,9 @@
 ## Algorithms intrinsic dimensionality estimation
 import numpy as np
-from scipy.sparse.linalg import eigsh
-from topo.spectral import diffusion_operator
-from topo.base.ann import kNN
+from scipy.sparse import csr_matrix
 from sklearn.base import BaseEstimator, TransformerMixin
+
+from topo.base.ann import kNN
 from topo.utils._utils import get_indices_distances_from_sparse_matrix
 
 
@@ -34,7 +34,7 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
 
     backend : str (optional, default 'nmslib').
         Which backend to use for k-nearest-neighbor computations. Defaults to 'nmslib'.
-        Options are 'nmslib', 'hnswlib', 'faiss', 'annoy' and 'sklearn'.   
+        Options are 'nmslib', 'hnswlib', 'faiss', 'annoy' and 'sklearn'.
 
     n_jobs : int (optional, default 1).
         The number of jobs to use for parallel computations. If -1, all CPUs are used.
@@ -42,10 +42,10 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
 
     plot : bool (optional, default True).
         Whether to plot the results when using the `fit()` method.
-        
+
     random_state : int or numpy.random.RandomState() (optional, default None).
         A pseudo random number generator. Used for generating colors for plotting.
-    
+
     **kwargs : keyword arguments
         Additional keyword arguments to pass to the backend kNN estimator.
 
@@ -53,40 +53,43 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
     Properties
     ----------
     local_id, global_id : dictionaries containing local and global dimensionality estimates, respectivelly.
-    
+
         Their structure depends on the value of the `k` parameter:
 
         * If a single value of `k` is provided, then the dictionaries will have
         keys corresponding to the methods, and values corresponding to the
-        dimensionality estimates. 
+        dimensionality estimates.
 
         * If multiple values of `k` are provided, then the dictionaries will have
         keys corresponding to the number of k, and values corresponding to other dictionaries,
         which have keys corresponding to the methods, and values corresponding to the
-        dimensionality estimates. 
+        dimensionality estimates.
 
     """
 
-    def __init__(self,
-                methods=['fsa','mle'],
-                k=[10, 20, 50, 75, 100],
-                backend='hnswlib',
-                metric='euclidean',
-                n_jobs=-1,
-                plot=True,
-                random_state=None,
-                **kwargs):
+    def __init__(
+        self,
+        methods=["fsa", "mle"],
+        k=[10, 20, 50, 75, 100],
+        backend="hnswlib",
+        metric="euclidean",
+        n_jobs=-1,
+        plot=True,
+        random_state=None,
+        **kwargs,
+    ):
         if isinstance(methods, str):
             methods = [methods]
-        if isinstance(k, list):
-            n_k = len(k)
-            use_k = k
-        elif isinstance(k, int):
+        if isinstance(k, int):
             n_k = 1
-            use_k = k
-        elif isinstance(k, range):
-            n_k = len(k)
-            use_k = k
+            use_k = int(k)
+        elif isinstance(k, list | range):
+            use_k = tuple(int(ki) for ki in k)
+            n_k = len(use_k)
+        else:
+            raise TypeError("k must be an int, range, or list of ints.")
+        if n_k < 1:
+            raise ValueError("k must contain at least one value.")
         self.methods = methods
         self.use_k = use_k
         self.n_k = n_k
@@ -99,10 +102,10 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
         self.local_id = {}
         self.global_id = {}
 
-    def __repr__(self):
-        msg = 'IntrinsicDim estimator'
-        msg = msg + '\nMethods: ' + str(self.methods)
-        msg = msg + '\nk: ' + str(self.use_k)
+    def __repr__(self, N_CHAR_MAX=700):
+        msg = "IntrinsicDim estimator"
+        msg = msg + "\nMethods: " + str(self.methods)
+        msg = msg + "\nk: " + str(self.use_k)
         return msg
 
     def _parse_random_state(self):
@@ -113,97 +116,160 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
         elif isinstance(self.random_state, int):
             self.random_state = np.random.RandomState(self.random_state)
         else:
-            print('RandomState error! No random state was defined!')
+            raise TypeError(
+                "random_state must be None, an int, or a numpy RandomState, "
+                f"got {type(self.random_state)!r}."
+            )
 
     def _compute_id(self, X):
-        self.local_id['fsa'] = {}
-        self.local_id['mle'] = {}
-        self.global_id['fsa'] = {}
-        self.global_id['mle'] = {}
+        self.local_id["fsa"] = {}
+        self.local_id["mle"] = {}
+        self.global_id["fsa"] = {}
+        self.global_id["mle"] = {}
         if self.n_k == 1:
-            knn = kNN(X, n_jobs=self.n_jobs, n_neighbors=self.use_k, metric=self.metric, backend=self.backend)
+            k = self.use_k if isinstance(self.use_k, int) else self.use_k[0]
+            knn = csr_matrix(
+                kNN(
+                    X,
+                    n_jobs=self.n_jobs,
+                    n_neighbors=k,
+                    metric=self.metric,
+                    backend=self.backend,
+                )
+            )
             for method in self.methods:
-                if method not in ['fsa', 'mle']:
-                    raise ValueError('Invalid method. Valid methods are: fsa, mle.')
-                if method == 'fsa':
-                    self.local_id['fsa'][str(self.use_k)] = fsa_local(knn, self.use_k)
-                    self.global_id['fsa'][str(self.use_k)] = fsa_global(knn, id_local=self.local_id['fsa'][str(self.use_k)])
-                elif method == 'mle':
-                    self.local_id['mle'][str(self.use_k)] = mle_local(knn, self.use_k)
-                    self.global_id['mle'][str(self.use_k)] = mle_global(knn, id_local=self.local_id['mle'][str(self.use_k)])
+                if method not in ["fsa", "mle"]:
+                    raise ValueError("Invalid method. Valid methods are: fsa, mle.")
+                if method == "fsa":
+                    self.local_id["fsa"][str(k)] = fsa_local(knn, k)
+                    self.global_id["fsa"][str(k)] = fsa_global(
+                        knn, id_local=self.local_id["fsa"][str(k)]
+                    )
+                elif method == "mle":
+                    self.local_id["mle"][str(k)] = mle_local(knn, k)
+                    self.global_id["mle"][str(k)] = mle_global(
+                        knn, id_local=self.local_id["mle"][str(k)]
+                    )
 
         else:
-            for k in self.use_k:
-                knn = kNN(X, n_jobs=self.n_jobs, n_neighbors=k, metric=self.metric, backend=self.backend)
+            ks = (self.use_k,) if isinstance(self.use_k, int) else self.use_k
+            for k in ks:
+                knn = csr_matrix(
+                    kNN(
+                        X,
+                        n_jobs=self.n_jobs,
+                        n_neighbors=k,
+                        metric=self.metric,
+                        backend=self.backend,
+                    )
+                )
                 for method in self.methods:
-                    if method not in ['fsa', 'mle']:
-                        raise ValueError('Invalid method. Valid methods are: fsa, mle.')
-                    if method == 'fsa':
-                        self.local_id['fsa'][str(k)] = fsa_local(knn, k)
-                        self.global_id['fsa'][str(k)] = fsa_global(knn, id_local=self.local_id['fsa'][str(k)])
-                    elif method == 'mle':
-                        self.local_id['mle'][str(k)] = mle_local(knn, k)
-                        self.global_id['mle'][str(k)] = mle_global(knn, id_local=self.local_id['mle'][str(k)])
+                    if method not in ["fsa", "mle"]:
+                        raise ValueError("Invalid method. Valid methods are: fsa, mle.")
+                    if method == "fsa":
+                        self.local_id["fsa"][str(k)] = fsa_local(knn, k)
+                        self.global_id["fsa"][str(k)] = fsa_global(
+                            knn, id_local=self.local_id["fsa"][str(k)]
+                        )
+                    elif method == "mle":
+                        self.local_id["mle"][str(k)] = mle_local(knn, k)
+                        self.global_id["mle"][str(k)] = mle_global(
+                            knn, id_local=self.local_id["mle"][str(k)]
+                        )
 
-    def plot_id(self, bins=30, figsize=(6, 8), titlesize=22, labelsize=16, legendsize=10):
+    def plot_id(
+        self, bins=30, figsize=(6, 8), titlesize=22, labelsize=16, legendsize=10
+    ):
         self._parse_random_state()
         colors = []
         from random import randint
+
         from matplotlib import pyplot as plt
+
         for i in range(4):
-            colors.append('#%06X' % randint(0, 0xFFFFFF))
+            colors.append("#%06X" % randint(0, 0xFFFFFF))
         if len(self.methods) == 1:
             fig, ax = plt.subplots(1, 1, figsize=figsize)
             method = self.methods[0]
             for key in self.local_id[method].keys():
-                i=0
+                i = 0
                 x = self.local_id[method][key]
                 # Make a multiple-histogram of data-sets with different length.
-                label = 'k = ' + key + '    ( estim.i.d. = ' + str(int(self.global_id[method][key])) + ' )'
-                n, bins, patches  = ax.hist(x, bins=30, histtype='step', stacked=True, density=True, log=False, label=label)
-                sigma = np.std(x)
-                mu = np.mean(x)
-                y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
-                    np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
-                i= i+1
+                label = (
+                    "k = "
+                    + key
+                    + "    ( estim.i.d. = "
+                    + str(int(self.global_id[method][key]))
+                    + " )"
+                )
+                n, bins, patches = ax.hist(
+                    x,
+                    bins=30,
+                    histtype="step",
+                    stacked=True,
+                    density=True,
+                    log=False,
+                    label=label,
+                )
+                i = i + 1
             ax.set_title(method.upper(), fontsize=titlesize, pad=10)
-            ax.legend(prop={'size': 12}, fontsize=legendsize)
-            ax.set_xlabel('Estimated intrinsic dimension', fontsize=labelsize)
-            ax.set_ylabel('Frequency', fontsize=labelsize)
+            ax.legend(prop={"size": 12}, fontsize=legendsize)
+            ax.set_xlabel("Estimated intrinsic dimension", fontsize=labelsize)
+            ax.set_ylabel("Frequency", fontsize=labelsize)
 
         else:
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize)
-            for key in self.local_id['fsa'].keys():
-                i=0
-                x = self.local_id['fsa'][key]
+            for key in self.local_id["fsa"].keys():
+                i = 0
+                x = self.local_id["fsa"][key]
                 # Make a multiple-histogram of data-sets with different length.
-                label = 'k = ' + key + '    ( estim.i.d. = ' + str(int(self.global_id['fsa'][key])) + ' )'
-                n, bins, patches  = ax1.hist(x, bins=30, histtype='step', stacked=True, density=True, log=False, label=label)
-                sigma = np.std(x)
-                mu = np.mean(x)
-                y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
-                    np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
-                i= i+1
-            ax1.set_title('FSA', fontsize=titlesize, pad=10)
-            ax1.legend(prop={'size': 12}, fontsize=legendsize)
-            ax1.set_xlabel('Estimated intrinsic dimension', fontsize=labelsize)
-            ax1.set_ylabel('Frequency', fontsize=labelsize)
-            
-            for key in self.local_id['mle'].keys():
-                i=0
-                x = self.local_id['mle'][key]
+                label = (
+                    "k = "
+                    + key
+                    + "    ( estim.i.d. = "
+                    + str(int(self.global_id["fsa"][key]))
+                    + " )"
+                )
+                n, bins, patches = ax1.hist(
+                    x,
+                    bins=30,
+                    histtype="step",
+                    stacked=True,
+                    density=True,
+                    log=False,
+                    label=label,
+                )
+                i = i + 1
+            ax1.set_title("FSA", fontsize=titlesize, pad=10)
+            ax1.legend(prop={"size": 12}, fontsize=legendsize)
+            ax1.set_xlabel("Estimated intrinsic dimension", fontsize=labelsize)
+            ax1.set_ylabel("Frequency", fontsize=labelsize)
+
+            for key in self.local_id["mle"].keys():
+                i = 0
+                x = self.local_id["mle"][key]
                 # Make a multiple-histogram of data-sets with different length.
-                label = 'k = ' + key + '    ( estim.i.d. = ' + str(int(self.global_id['mle'][key])) + ' )'
-                n, bins, patches  = ax2.hist(x, bins=30, histtype='step', stacked=True, density=True, log=False, label=label)
-                sigma = np.std(x)
-                mu = np.mean(x)
-                y = ((1 / (np.sqrt(2 * np.pi) * sigma)) *
-                    np.exp(-0.5 * (1 / sigma * (bins - mu))**2))
-                i= i+1
-            ax2.set_title('MLE', fontsize=titlesize, pad=10)
-            ax2.legend(prop={'size': 12}, fontsize=legendsize)
-            ax2.set_xlabel('Estimated intrinsic dimension', fontsize=labelsize)
-            ax2.set_ylabel('Frequency', fontsize=labelsize)
+                label = (
+                    "k = "
+                    + key
+                    + "    ( estim.i.d. = "
+                    + str(int(self.global_id["mle"][key]))
+                    + " )"
+                )
+                n, bins, patches = ax2.hist(
+                    x,
+                    bins=30,
+                    histtype="step",
+                    stacked=True,
+                    density=True,
+                    log=False,
+                    label=label,
+                )
+                i = i + 1
+            ax2.set_title("MLE", fontsize=titlesize, pad=10)
+            ax2.legend(prop={"size": 12}, fontsize=legendsize)
+            ax2.set_xlabel("Estimated intrinsic dimension", fontsize=labelsize)
+            ax2.set_ylabel("Frequency", fontsize=labelsize)
 
         fig.tight_layout()
         plt.show()
@@ -233,39 +299,42 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
             self.plot_id(**kwargs)
 
     def transform(self, X=None):
+        """No-op transform kept for scikit-learn API compatibility.
+
+        ``IntrinsicDim`` exposes its estimates via attributes (``local_id``,
+        ``global_id``); this method returns ``self`` unchanged.
         """
-        Does nothing. Here for compability with scikit-learn only.
-        """
-        print('Dummy function. Does nothing. Here for compability with scikit-learn only.')
         return self
 
 
 def _get_dist_to_k_nearest_neighbor(K, n_neighbors=10):
     dist_to_k = np.zeros(K.shape[0])
     for i in np.arange(len(dist_to_k)):
-        dist_to_k[i] = np.sort(
-            K.data[K.indptr[i]: K.indptr[i + 1]])[n_neighbors - 1]
+        dist_to_k[i] = np.sort(K.data[K.indptr[i] : K.indptr[i + 1]])[n_neighbors - 1]
     return dist_to_k
 
+
 def _get_dist_to_median_nearest_neighbor(K, n_neighbors=10):
-    median_k = np.floor(n_neighbors/2).astype(int)
+    median_k = np.floor(n_neighbors / 2).astype(int)
     dist_to_median_k = np.zeros(K.shape[0])
     for i in np.arange(len(dist_to_median_k)):
-        dist_to_median_k[i] = np.sort(
-            K.data[K.indptr[i]: K.indptr[i + 1]])[median_k - 1]
+        dist_to_median_k[i] = np.sort(K.data[K.indptr[i] : K.indptr[i + 1]])[
+            median_k - 1
+        ]
     return dist_to_median_k
+
 
 def fsa_local(K, n_neighbors=10):
     """
     Measure local dimensionality using the Farahmand-Szepesvári-Audibert (FSA) dimension estimator
-    
+
     Parameters
     ----------
     K: sparse matrix
         Sparse matrix of distances between points
 
     n_neighbors: int
-        Number of neighbors to consider for the kNN graph. 
+        Number of neighbors to consider for the kNN graph.
         Note this is actually half the number of neighbors used in the FSA estimator, for efficiency.
 
     Returns
@@ -275,12 +344,13 @@ def fsa_local(K, n_neighbors=10):
     """
     dist_to_k = _get_dist_to_k_nearest_neighbor(K, n_neighbors=n_neighbors)
     dist_to_median_k = _get_dist_to_median_nearest_neighbor(K, n_neighbors=n_neighbors)
-    d = - np.log(2) / np.log(dist_to_median_k / dist_to_k)
+    d = -np.log(2) / np.log(dist_to_median_k / dist_to_k)
     return d
 
 
 def fsa_global(K, id_local=None, **kwargs):
     from statistics import median
+
     if id_local is None:
         dims = fsa_local(K, **kwargs)
     else:
@@ -292,8 +362,9 @@ def mle_local(K, n_neighbors=10, k1=1):
     """Maximum likelihood estimator af intrinsic dimension (Levina-Bickel)"""
     inds, dists = get_indices_distances_from_sparse_matrix(K, n_neighbors)
     norm_dists = dists / dists[:, -1:]
-    dims = -1./ np.nanmean(np.log(norm_dists[:, k1:-1]), axis=1)
+    dims = -1.0 / np.nanmean(np.log(norm_dists[:, k1:-1]), axis=1)
     return dims
+
 
 def mle_global(K, id_local=None, n_neighbors=15, k1=1):
     if id_local is None:
@@ -303,17 +374,21 @@ def mle_global(K, id_local=None, n_neighbors=15, k1=1):
 
 def automated_scaffold_sizing(
     X,
-    method: str = 'fsa',           # 'fsa' (quantile over ks) or 'mle' (global MLE at k)
-    ks=(15, 30, 60),               # for 'fsa': iterable of k; for 'mle': can pass an int k or an iterable (we'll use max)
-    backend='hnswlib',
-    metric='euclidean',
+    method: str = "fsa",  # 'fsa' (quantile over ks) or 'mle' (global MLE at k)
+    ks=(
+        15,
+        30,
+        60,
+    ),  # for 'fsa': iterable of k; for 'mle': can pass an int k or an iterable (we'll use max)
+    backend="hnswlib",
+    metric="euclidean",
     n_jobs: int = -1,
-    quantile: float = 0.99,        # only used for 'fsa'
+    quantile: float = 0.99,  # only used for 'fsa'
     min_components: int = 16,
     max_components: int = 512,
     headroom: float = 0.15,
     random_state=None,
-    use_median: bool = False,      # only used for 'mle': global id via median of locals (else Levina–Bickel global)
+    use_median: bool = False,  # only used for 'mle': global id via median of locals (else Levina–Bickel global)
     return_details: bool = False,
     **knn_kwargs,
 ):
@@ -344,7 +419,7 @@ def automated_scaffold_sizing(
 
     upper_cap = min(int(max_components), max(2, n - 2))
 
-    if method == 'fsa':
+    if method == "fsa":
         # Normalize ks
         if isinstance(ks, int):
             ks_use = (ks,)
@@ -368,7 +443,9 @@ def automated_scaffold_sizing(
             d_local = fsa_local(K, n_neighbors=k_eff)
             per_k_local[k_eff] = np.asarray(d_local, dtype=float)
 
-        ids_matrix = np.vstack([per_k_local[k] for k in sorted(per_k_local)]).T  # (n, len(ks))
+        ids_matrix = np.vstack(
+            [per_k_local[k] for k in sorted(per_k_local)]
+        ).T  # (n, len(ks))
         robust_cell_id = np.nanmedian(ids_matrix, axis=1)
         robust_cell_id = np.clip(robust_cell_id, 1.0, np.inf)
 
@@ -378,16 +455,16 @@ def automated_scaffold_sizing(
 
         if return_details:
             return n_components, {
-                'method': 'fsa',
-                'ks': ks_use,
-                'per_k_local_id': per_k_local,
-                'local_id': robust_cell_id,
-                'quantile_value': qv,
-                'selected_n_components': n_components,
+                "method": "fsa",
+                "ks": ks_use,
+                "per_k_local_id": per_k_local,
+                "local_id": robust_cell_id,
+                "quantile_value": qv,
+                "selected_n_components": n_components,
             }
         return n_components
 
-    elif method == 'mle':
+    elif method == "mle":
         # Accept either an int or an iterable for ks; choose a single k
         if isinstance(ks, int):
             k_int = ks
@@ -418,15 +495,13 @@ def automated_scaffold_sizing(
 
         if return_details:
             return n_components, {
-                'method': 'mle',
-                'k': k_int,
-                'local_id': local,
-                'global_id': gid,
-                'selected_n_components': n_components,
+                "method": "mle",
+                "k": k_int,
+                "local_id": local,
+                "global_id": gid,
+                "selected_n_components": n_components,
             }
         return n_components
 
     else:
         raise ValueError("`method` must be one of {'fsa','mle'}.")
-
-

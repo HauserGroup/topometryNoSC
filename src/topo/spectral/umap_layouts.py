@@ -339,7 +339,7 @@ def optimize_layout_euclidean(
             assert dens_init_fn is not None
             dens_init_fn(
                 head_embedding,
-                tail_embedding,
+                tail_embedding,  # type: ignore
                 head,
                 tail,
                 a,
@@ -358,7 +358,7 @@ def optimize_layout_euclidean(
 
         optimize_fn(
             head_embedding,
-            tail_embedding,
+            tail_embedding,  # type: ignore
             head,
             tail,
             n_vertices,
@@ -884,7 +884,7 @@ def optimize_layout_aligned_euclidean(
     for n in range(n_epochs):
         optimize_fn(
             head_embeddings,
-            tail_embeddings,
+            tail_embeddings,  # type: ignore
             heads,
             tails,
             epochs_per_sample,

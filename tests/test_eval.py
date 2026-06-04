@@ -29,7 +29,8 @@ def test_topo_metrics(fitted_topograph):
     rbo = diffusion_rank_biased_overlap(Px, Py, times=(1,), r=10, k_max=10)
     assert np.isfinite(rbo)
 
-    pjs = rowwise_js_similarity(Px, Py)
+    pjs = rowwise_js_similarity(Px, Py, return_per_row=False)
+    assert isinstance(pjs, float)
     assert np.isfinite(pjs)
 
     pf1 = sparse_neighborhood_f1(Px, Py, k=10)

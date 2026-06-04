@@ -4,6 +4,7 @@ import matplotlib
 
 matplotlib.use("Agg")  # Use headless backend for CI compatibility
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 from topo import plot
 from topo.tpgraph.intrinsic_dim import IntrinsicDim
@@ -26,7 +27,9 @@ def test_plot_riemann_metric(fitted_topograph):
     L = fitted_topograph.P_of_msZ
     ax = plot.plot_riemann_metric(emb, L=L, n_plot=5)
     assert ax is not None
-    plt.close(ax.figure)
+    fig = ax.get_figure()
+    assert isinstance(fig, Figure)
+    plt.close(fig)
 
 
 def test_plot_dimensionality_histograms(swiss_roll_data):

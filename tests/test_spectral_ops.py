@@ -32,9 +32,11 @@ class TestGraphOperators:
         "laplacian_type", ["unnormalized", "normalized", "random_walk"]
     )
     def test_graph_laplacian_sparse_shapes(self, laplacian_type):
-        L, D = _spectral.graph_laplacian(
+        res = _spectral.graph_laplacian(
             _path_graph(), laplacian_type=laplacian_type, return_D=True
         )
+        assert isinstance(res, tuple)
+        L, D = res
 
         assert sparse.issparse(L)
         assert sparse.issparse(D)
@@ -47,19 +49,28 @@ class TestGraphOperators:
 
     @pytest.mark.parametrize("symmetric", [False, True])
     def test_diffusion_operator_is_finite(self, symmetric):
-        P = _spectral.diffusion_operator(_path_graph(), alpha=0.5, symmetric=symmetric)
+        P = _spectral.diffusion_operator(
+            _path_graph(),
+            alpha=0.5,
+            symmetric=symmetric,
+            return_D_inv_sqrt=False,
+        )
 
+        assert isinstance(P, sparse.csr_matrix)
+        P_dense = P.toarray()
         assert P.shape == (3, 3)
-        assert np.isfinite(P.toarray()).all()
+        assert np.isfinite(P_dense).all()
         if not symmetric:
             np.testing.assert_allclose(np.asarray(P.sum(axis=1)).ravel(), np.ones(3))
         else:
-            np.testing.assert_allclose(P.toarray(), P.toarray().T)
+            np.testing.assert_allclose(P_dense, P_dense.T)
 
     def test_diffusion_operator_can_return_similarity_transform(self):
-        P, D_left = _spectral.diffusion_operator(
+        res = _spectral.diffusion_operator(
             _path_graph(), alpha=0.0, symmetric=True, return_D_inv_sqrt=True
         )
+        assert isinstance(res, tuple)
+        P, D_left = res
 
         assert sparse.issparse(P)
         assert sparse.issparse(D_left)
@@ -68,9 +79,11 @@ class TestGraphOperators:
         W = sparse.block_diag(
             [np.ones((3, 3)) - np.eye(3), np.ones((3, 3)) - np.eye(3)]
         )
-        evecs, evals = _spectral.LE(
+        res = _spectral.LE(
             W.tocsr(), n_eigs=2, laplacian_type="normalized", return_evals=True
         )
+        assert isinstance(res, tuple)
+        evecs, evals = res
 
         assert evecs.shape == (6, 2)
         assert evals.shape == (2,)

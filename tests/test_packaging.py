@@ -8,6 +8,7 @@ detection is centralised.
 import builtins
 import importlib
 import logging
+import sys
 
 import pytest
 
@@ -125,7 +126,7 @@ class TestNoEagerOptionalImports:
 
         monkeypatch.setattr(builtins, "__import__", guarded_import)
         # Drop cached modules so the import actually re-executes.
-        for mod in list(importlib.sys.modules):
+        for mod in list(sys.modules):
             if mod == module or mod.startswith(module + "."):
-                monkeypatch.delitem(importlib.sys.modules, mod, raising=False)
+                monkeypatch.delitem(sys.modules, mod, raising=False)
         importlib.import_module(module)

@@ -4,8 +4,9 @@
 # TopOGraph inherits from to keep the main orchestrator slim.
 
 import copy
+import logging
 import warnings
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import scipy.sparse as sp
@@ -13,6 +14,8 @@ import scipy.sparse as sp
 from topo.base.ann import kNN
 from topo.spectral.eigen import EigenDecomposition
 from topo.tpgraph.intrinsic_dim import automated_scaffold_sizing
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -44,7 +47,7 @@ def _normalized_laplacian(A):
     n = A.shape[0]
     d = np.asarray(A.sum(axis=1)).ravel().astype(np.float64).clip(min=1e-12)
     Dmh = sp.diags((1.0 / np.sqrt(d)).astype(np.float32))
-    return sp.eye(n, dtype=np.float32, format="csr") - (Dmh @ A @ Dmh)
+    return sp.eye(n, dtype=np.dtype("float32"), format="csr") - (Dmh @ A @ Dmh)
 
 
 def _eigengap_k(vals, k_max, k_min=2):
@@ -339,7 +342,7 @@ class UoMMixin:
     GraphKernelDict: dict
 
     # Projection
-    projection_methods: Optional[list]
+    projection_methods: list | None
 
     # Computed state (written by TopOGraph.fit before _fit_uom is called)
     current_eigenbasis: str
@@ -359,8 +362,8 @@ class UoMMixin:
         """Initialize all UoM-specific attributes (called from TopOGraph.__init__)."""
         self.uom = getattr(self, "uom", False)
         self.uom_enabled = bool(self.uom)
-        self.uom_comp_labels_: Optional[np.ndarray] = None
-        self.uom_components_: Optional[list] = None
+        self.uom_comp_labels_: np.ndarray | None = None
+        self.uom_components_: list | None = None
 
         self.uom_knn_X_list = None
         self.knn_X_uom = None
@@ -420,7 +423,7 @@ class UoMMixin:
         block-diagonal operators.
         """
         if self.verbosity >= 1:
-            print(
+            logger.info(
                 "UoM: detecting disconnected components in P(X) and building per-component scaffolds/graphs..."
             )
 
@@ -430,11 +433,13 @@ class UoMMixin:
             labels = self.uom_comp_labels_
             n_comp = int(np.unique(labels).size)
             if self.verbosity >= 1:
-                print(f"UoM: using precomputed component labels (n={n_comp}).")
+                logger.info(f"UoM: using precomputed component labels (n={n_comp}).")
         else:
             n_comp, labels = self.uom_find_components(P=self.base_kernel.P)
             if self.verbosity >= 1:
-                print(f"UoM: computed component labels on refined graph (n={n_comp}).")
+                logger.info(
+                    f"UoM: computed component labels on refined graph (n={n_comp})."
+                )
 
         self.uom_comp_labels_ = labels
         self.uom_components_ = [np.where(labels == c)[0] for c in np.unique(labels)]

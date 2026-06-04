@@ -2,8 +2,6 @@
 # Enough simple sparse operations in numba to enable sparse UMAP
 #
 # License: BSD 3 clause
-from __future__ import print_function
-
 import locale
 
 import numba
@@ -12,6 +10,7 @@ import numpy as np
 from topo.utils.umap_utils import norm
 
 locale.setlocale(locale.LC_NUMERIC, "C")
+
 
 # Just reproduce a simpler version of numpy unique (not numba supported yet)
 @numba.njit()
@@ -178,10 +177,7 @@ def general_sset_intersection(
         right_val = right_min
         for k in range(indptr2[i], indptr2[i + 1]):
             if indices2[k] == j:
-                if right_complement:
-                    right_val = 1.0 - data2[k]
-                else:
-                    right_val = data2[k]
+                right_val = 1.0 - data2[k] if right_complement else data2[k]
 
         if left_val > left_min or right_val > right_min:
             if mix_weight < 0.5:
@@ -498,10 +494,10 @@ def sparse_correlation(ind1, data1, ind2, data2, n_features):
         shifted_data2[i] = data2[i] - mu_y
 
     norm1 = dtype.type(
-        np.sqrt((norm(shifted_data1) ** 2) + (n_features - ind1.shape[0]) * (mu_x ** 2))
+        np.sqrt((norm(shifted_data1) ** 2) + (n_features - ind1.shape[0]) * (mu_x**2))
     )
     norm2 = dtype.type(
-        np.sqrt((norm(shifted_data2) ** 2) + (n_features - ind2.shape[0]) * (mu_y ** 2))
+        np.sqrt((norm(shifted_data2) ** 2) + (n_features - ind2.shape[0]) * (mu_y**2))
     )
 
     dot_prod_inds, dot_prod_data = sparse_mul(ind1, shifted_data1, ind2, shifted_data2)
@@ -598,7 +594,6 @@ def sparse_ll_dirichlet(ind1, data1, ind2, data2):
 
     self_denom1 = 0.0
     for d1 in data1:
-
         self_denom1 += log_single_beta(d1)
 
     self_denom2 = 0.0
@@ -625,7 +620,7 @@ sparse_named_distances = {
     # Other distances
     "canberra": sparse_canberra,
     "ll_dirichlet": sparse_ll_dirichlet,
-    'braycurtis': sparse_bray_curtis,
+    "braycurtis": sparse_bray_curtis,
     "poincare": sparse_poincare,
     # Binary distances
     "hamming": sparse_hamming,

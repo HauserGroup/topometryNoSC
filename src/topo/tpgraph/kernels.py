@@ -6,38 +6,43 @@
 ######################################
 # Defining graph kernels in a scikit-learn fashion
 
+import logging
+import warnings
+from typing import Any, cast
+
 import numpy as np
+
+# dumb warning, suggests lilmatrix but it doesnt work
 from scipy.sparse import (
-    find,
-    csr_matrix,
-    linalg,
-    lil_matrix,
-    csc_matrix,
-    kron,
+    SparseEfficiencyWarning,
     coo_matrix,
-    tril,
+    csc_matrix,
+    csr_matrix,
     diags,
+    find,
+    issparse,
+    kron,
+    lil_matrix,
+    linalg,
+    tril,
 )
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial import procrustes
-from scipy.stats import rv_discrete
-from sklearn.utils import check_random_state
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import normalize as _l2_normalize_rows
+from sklearn.utils import check_random_state
 
 from topo.base.ann import kNN
 from topo.base.dists import pairwise_distances
-from topo.spectral._spectral import graph_laplacian, diffusion_operator
 from topo.spectral._spectral import degree as compute_degree
+from topo.spectral._spectral import diffusion_operator, graph_laplacian
 from topo.tpgraph.cknn import cknn_graph
 from topo.tpgraph.fuzzy import fuzzy_simplicial_set
 from topo.utils._utils import get_indices_distances_from_sparse_matrix
-import warnings
-
-# dumb warning, suggests lilmatrix but it doesnt work
-from scipy.sparse import SparseEfficiencyWarning
 
 warnings.simplefilter("ignore", SparseEfficiencyWarning)
+
+logger = logging.getLogger(__name__)
 
 
 def _maybe_l2_normalize_rows(X):
@@ -188,9 +193,12 @@ def compute_kernel(
     N = np.shape(X)[0]
     # initialize optional variables used only when expand_nbr_search=True
     new_k = None
+    adap_sd = None
+    pm = None
     adap_sd_new = None
     pm_new = None
     new_K = None
+    dists_new = None
     if n_jobs == -1:
         from joblib import cpu_count
 
@@ -228,7 +236,7 @@ def compute_kernel(
             dens_dict["knn"] = K
     if fuzzy:
         cknn = False
-        W, sigmas, rhos = fuzzy_simplicial_set(
+        _fuzzy_res = fuzzy_simplicial_set(
             K,
             n_neighbors=n_neighbors,
             metric="precomputed",
@@ -238,11 +246,12 @@ def compute_kernel(
             return_dists=False,
             verbose=verbose,
         )
+        W, sigmas, rhos = _fuzzy_res[0], _fuzzy_res[1], _fuzzy_res[2]
         if return_densities:
             dens_dict["sigma"] = sigmas
             dens_dict["rho"] = rhos
     elif cknn:
-        A, W, adap_sd = cknn_graph(
+        res = cknn_graph(
             K,
             n_neighbors=n_neighbors,
             delta=delta,
@@ -252,6 +261,9 @@ def compute_kernel(
             return_densities=True,
             verbose=verbose,
         )
+        A = res[0]
+        W = res[1]
+        adap_sd = res[2]  # type: ignore
         if return_densities:
             dens_dict["unweighted_adjacency"] = A
             dens_dict["adaptive_bw"] = adap_sd
@@ -274,7 +286,7 @@ def compute_kernel(
                     **kwargs,
                 )
                 adap_sd_new = _adap_bw(new_K, new_k)
-                x_new, y_new, dists_new = find(new_K)
+                _, _, dists_new = find(new_K)
                 # Get an indirect measure of the local density
                 pm_new = np.interp(
                     adap_sd_new, (adap_sd_new.min(), adap_sd_new.max()), (2, new_k)
@@ -301,9 +313,15 @@ def compute_kernel(
             dists = np.maximum(dists, 0.0)
         # Normalize distances
         if adaptive_bw:
+            assert adap_sd is not None
+            assert pm is not None
             # Alpha decaying: the kernel adaptively decays depending on neighborhood density
             if alpha_decaying:
                 if expand_nbr_search:
+                    assert adap_sd_new is not None
+                    assert pm_new is not None
+                    assert dists_new is not None
+                    assert new_k is not None
                     base = dists_new / (adap_sd_new[x] + 1e-10)
                     expo = np.power(2, ((new_k - pm_new[x]) / pm_new[x]))
                 else:
@@ -312,6 +330,8 @@ def compute_kernel(
                 d_scaled = np.power(base, expo)
             else:
                 if expand_nbr_search:
+                    assert adap_sd_new is not None
+                    assert dists_new is not None
                     d_scaled = dists_new / (adap_sd_new[x] + 1e-10)
                 else:
                     d_scaled = dists / (adap_sd[x] + 1e-10)
@@ -321,7 +341,7 @@ def compute_kernel(
             if sigma is not None:
                 if sigma == 0:
                     sigma = 1e-10
-                d_scaled = dists / sigma
+                d_scaled = np.asarray(dists, dtype=np.float64) / sigma
                 if square_distances:
                     d_scaled = d_scaled**2
             else:
@@ -329,14 +349,17 @@ def compute_kernel(
                 d_scaled = dists
 
         # Final kernel weights
-        W = csr_matrix((np.exp(-d_scaled), (x, y)), shape=[N, N])
+        d_scaled_float = np.asarray(d_scaled, dtype=np.float64)
+        W = csr_matrix((np.exp(-d_scaled_float), (x, y)), shape=[N, N])
 
     # handle NaN/Inf robustly (set to 0 before symmetrizing)
+    W = cast(csr_matrix, W)
     W.data = _ensure_nonneg_and_finite(W.data, eps=0.0)
 
     if symmetrize:
-        W = (W + W.T) / 2
+        W = (W + W.T) / 2  # type: ignore
 
+    W = cast(csr_matrix, W)
     # handle NaNs/Infs robustly
     W.data = np.where(np.isfinite(W.data), W.data, 0.0)
 
@@ -529,12 +552,8 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.knn_ = None
         self.dens_dict = None
         self.anisotropy = anisotropy
-        self._have_hnswlib = None
-        self._have_nmslib = None
-        self._have_annoy = None
-        self._have_faiss = None
 
-    def __repr__(self):
+    def __repr__(self, N_CHAR_MAX=700):
         if self._K is not None:
             if self.metric == "precomputed":
                 msg = "Kernel() estimator fitted with precomputed distance matrix"
@@ -567,76 +586,17 @@ class Kernel(BaseEstimator, TransformerMixin):
         return msg
 
     def _parse_backend(self):
-        try:
-            import hnswlib
+        from topo._optional import best_ann_backend
 
-            self._have_hnswlib = True
-        except ImportError:
-            self._have_hnswlib = False
-        try:
-            import nmslib
-
-            self._have_nmslib = True
-        except ImportError:
-            self._have_nmslib = False
-        try:
-            import annoy
-
-            self._have_annoy = True
-        except ImportError:
-            self._have_annoy = False
-        try:
-            import faiss
-
-            self._have_faiss = True
-        except ImportError:
-            self._have_faiss = False
-
-        if self.backend == "hnswlib":
-            if not self._have_hnswlib:
-                if self._have_nmslib:
-                    self.backend = "nmslib"
-                elif self._have_annoy:
-                    self.backend = "annoy"
-                elif self._have_faiss:
-                    self.backend = "faiss"
-                else:
-                    self.backend = "sklearn"
-        elif self.backend == "nmslib":
-            if not self._have_nmslib:
-                if self._have_hnswlib:
-                    self.backend = "hnswlib"
-                elif self._have_annoy:
-                    self.backend = "annoy"
-                elif self._have_faiss:
-                    self.backend = "faiss"
-                else:
-                    self.backend = "sklearn"
-        elif self.backend == "annoy":
-            if not self._have_annoy:
-                if self._have_nmslib:
-                    self.backend = "nmslib"
-                elif self._have_hnswlib:
-                    self.backend = "hnswlib"
-                elif self._have_faiss:
-                    self.backend = "faiss"
-                else:
-                    self.backend = "sklearn"
-        elif self.backend == "faiss":
-            if not self._have_faiss:
-                if self._have_nmslib:
-                    self.backend = "nmslib"
-                elif self._have_hnswlib:
-                    self.backend = "hnswlib"
-                elif self._have_annoy:
-                    self.backend = "annoy"
-                else:
-                    self.backend = "sklearn"
-        else:
-            print(
-                "Warning: no approximate nearest neighbor library found. Using sklearn's KDTree instead."
+        resolved = best_ann_backend(self.backend)
+        if resolved == "sklearn" and self.backend != "sklearn":
+            warnings.warn(
+                "No approximate nearest neighbor backend found; falling back to "
+                "scikit-learn. Install one with `pip install topometry[ann]` for "
+                "faster neighbor search.",
+                stacklevel=2,
             )
-            self.backend == "sklearn"
+        self.backend = resolved
 
     def fit(self, X, recompute=False, **kwargs):
         """
@@ -688,6 +648,7 @@ class Kernel(BaseEstimator, TransformerMixin):
                 verbose=self.verbose,
                 **kwargs,
             )
+        assert self.dens_dict is not None
         if self.metric != "precomputed":
             self.knn_ = self.dens_dict["knn"]
         if self.fuzzy:
@@ -717,7 +678,7 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         return self._K
 
-    def fit_transform(self, X, y=None):
+    def fit_transform(self, X, y=None, **fit_params):  # type: ignore
         """
         Fits the kernel matrix to the data and returns the kernel matrix.
         Here for compability with scikit-learn only.
@@ -773,15 +734,14 @@ class Kernel(BaseEstimator, TransformerMixin):
     @property
     def degree(self):
         """
-        Returns the degree of the adjacency matrix.
+        Returns the degree of the binary adjacency matrix.
         """
-
         if self._degree is None:
             if self._K is None:
                 raise ValueError(
                     "No kernel matrix has been fitted yet. Call fit() first."
                 )
-            self._degree = compute_degree(self._A)
+            self._degree = compute_degree(self.A)
         return self._degree
 
     @property
@@ -866,13 +826,14 @@ class Kernel(BaseEstimator, TransformerMixin):
             if anisotropy > 1:
                 anisotropy = 1.0
             if symmetric:
-                self._P, self.D_inv_sqrt_ = diffusion_operator(
+                res = diffusion_operator(
                     self.K,
                     alpha=anisotropy,
                     semi_aniso=self.semi_aniso,
                     symmetric=symmetric,
                     return_D_inv_sqrt=True,
                 )
+                self._P, self.D_inv_sqrt_ = res[0], res[1]  # type: ignore
             else:
                 self._P = diffusion_operator(
                     self.K,
@@ -880,7 +841,8 @@ class Kernel(BaseEstimator, TransformerMixin):
                     semi_aniso=self.semi_aniso,
                     symmetric=symmetric,
                 )
-            self._P = (self._P + self._P.T) / 2
+            self._P = cast(csr_matrix, self._P)
+            self._P = (self._P + self._P.T) / 2  # type: ignore
         return self._P
 
     @property
@@ -918,7 +880,7 @@ class Kernel(BaseEstimator, TransformerMixin):
                     "No kernel matrix has been fitted yet. Call fit() first."
                 )
             if landmark:
-                print("Landmarks are still to be implemented.")
+                logger.info("Landmarks are still to be implemented.")
             from topo.eval.local_scores import geodesic_distance
 
             SP = geodesic_distance(
@@ -1015,21 +977,26 @@ class Kernel(BaseEstimator, TransformerMixin):
                     "No input data has been fitted yet. Call fit() first with the parameter `cache_input` set to True."
                 )
             Y = self.X.copy()
+        Y_imp = Y
         if t is None or t < 0:
             i = 1
             while i < tmax:
-                P_diffused = self._P**i
-                Y_imp = np.dot(P_diffused.toarray(), Y)
+                P_mat = cast(csr_matrix, self._P)
+                P_diffused = P_mat**i  # type: ignore
+                P_diffused = cast(csr_matrix, P_diffused)
+                Y_imp = np.dot(P_diffused.toarray(), Y)  # type: ignore
                 error, _ = self._calculate_imputation_error(Y_imp, Y)
                 i += 1
-                if error < threshold:
+                if error is not None and error < threshold:
                     t_opt = i
-                    print("Optimal t: {}".format(t_opt))
+                    logger.info("Optimal t: %s", t_opt)
                     break
 
         else:
-            P_diffused = self._P**t
-            Y_imp = np.dot(P_diffused.toarray(), Y)
+            P_mat = cast(csr_matrix, self._P)
+            P_diffused = P_mat**t  # type: ignore
+            P_diffused = cast(csr_matrix, P_diffused)
+            Y_imp = np.dot(P_diffused.toarray(), Y)  # type: ignore
         return Y_imp
 
     def _get_landmarks(self, X, n_landmarks=None):
@@ -1095,7 +1062,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         """
         if self._sample_densities is None:
             try:
-                from pygsp import graphs, filters
+                from pygsp import filters, graphs  # type: ignore
             except ImportError:
                 raise ImportError(
                     "pygsp is not installed. Please install it with `pip install pygsp` to use filtering functions."
@@ -1118,9 +1085,7 @@ class Kernel(BaseEstimator, TransformerMixin):
                     labels = labels.reshape(-1)
                 else:
                     raise ValueError(
-                        "sample_labels must be a single column. Gotshape={}".format(
-                            labels.shape
-                        )
+                        f"sample_labels must be a single column. Gotshape={labels.shape}"
                     )
             if samples.shape[0] == 2:
                 df = pd.DataFrame(
@@ -1134,24 +1099,34 @@ class Kernel(BaseEstimator, TransformerMixin):
 
                 _LB = LabelBinarizer()
                 _sample_indicators = _LB.fit_transform(sample_labels)
+
+                if issparse(_sample_indicators):
+                    _sample_indicators_sparse = cast(Any, _sample_indicators)
+                    _sample_indicators_dense = _sample_indicators_sparse.toarray()
+                else:
+                    _sample_indicators_dense = np.asarray(_sample_indicators)
+
                 sample_indicators = pd.DataFrame(
-                    _sample_indicators, columns=_LB.classes_
+                    _sample_indicators_dense,
+                    columns=_LB.classes_,  # type: ignore
                 )
             sample_indicators = sample_indicators / sample_indicators.sum(axis=0)
             # convert to pygsp format
             # will need to pad 1's to diagonal for filtering
             if target is None:
-                graph = graphs.Graph(self.K)
+                graph = graphs.Graph(self.K)  # type: ignore
             else:
-                graph = graphs.Graph(target)
+                graph = graphs.Graph(target)  # type: ignore
             graph.estimate_lmax()
             # default to Laplacian filter
             if filterfunc is None:
 
-                def filterfunc(x):
+                def _default_filterfunc(x):
                     return 1 / (1 + (beta * np.abs(x / graph.lmax - offset)) ** order)
 
-            filt = filters.Filter(graph, filterfunc)
+                filterfunc = _default_filterfunc
+
+            filt = filters.Filter(graph, filterfunc)  # type: ignore
             densities = filt.filter(
                 sample_indicators, method=solver, order=chebyshev_order
             )
@@ -1168,6 +1143,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         from sklearn.preprocessing import normalize
 
         replicates = np.unique(replicates)
+        assert self._sample_densities is not None
         sample_likelihoods = self._sample_densities.copy()
         for rep in replicates:
             curr_cols = self._sample_densities.columns[
@@ -1192,6 +1168,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         """
         if self._connected is not None:
             return self._connected
+        assert self.N is not None
         adjacencies = [self.A]
         for adjacency in adjacencies:
             visited = np.zeros(self.N, dtype=bool)
@@ -1254,7 +1231,8 @@ class Kernel(BaseEstimator, TransformerMixin):
         try:
             pseudo = linalg.inv(L)
         except RuntimeError:
-            pseudo = lil_matrix(np.linalg.pinv(L.toarray()))
+            L_dense = L.toarray() if hasattr(L, "toarray") else np.asarray(L)  # type: ignore
+            pseudo = lil_matrix(np.linalg.pinv(L_dense))
 
         N = np.shape(L)[0]
         d = csc_matrix(pseudo.diagonal())
@@ -1289,12 +1267,8 @@ class Kernel(BaseEstimator, TransformerMixin):
         sparse_graph : sparse matrix
             Sparsified graph affinity matrix.
         """
-        try:
-            from pygsp import graphs, reduction
-        except ImportError:
-            raise ImportError(
-                "pygsp is not installed. Please install it with `pip install pygsp` to use filtering functions."
-            )
+        assert self.N is not None
+
         if random_state is None:
             random_state = np.random.RandomState()
         elif isinstance(random_state, int):
@@ -1306,7 +1280,10 @@ class Kernel(BaseEstimator, TransformerMixin):
             raise ValueError("Epsilon out of required range!")
 
         # Not sparse
-        resistance_distances = self.resistance_distance().toarray()
+        rd = self.resistance_distance()
+        resistance_distances = (
+            rd.toarray() if hasattr(rd, "toarray") else np.asarray(rd)
+        )
         W = coo_matrix(self.K)
         W.data[W.data < 1e-10] = 0
         W = W.tocsc()
@@ -1314,12 +1291,16 @@ class Kernel(BaseEstimator, TransformerMixin):
         start_nodes, end_nodes, weights = find(tril(W))
 
         # Calculate the new weights.
-        weights = np.maximum(0, weights)
-        Re = np.maximum(0, resistance_distances[start_nodes, end_nodes])
+        weights = np.maximum(0, weights)  # type: ignore
+        Re = np.maximum(0, resistance_distances[start_nodes, end_nodes])  # type: ignore
         Pe = weights * Re
         Pe = Pe / np.sum(Pe)
-        dist = rv_discrete(values=(np.arange(len(Pe)), Pe), seed=random_state)
 
+        rng = np.random.default_rng(
+            random_state if isinstance(random_state, int) else None
+        )
+
+        sparserL = None
         for i in range(maxiter):
             # Rudelson, 1996 Random Vectors in the Isotropic Position
             # (too hard to figure out actual C0)
@@ -1328,7 +1309,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             C = 4 * C0
             q = round(self.N * np.log(self.N) * 9 * C**2 / (epsilon**2))
 
-            results = dist.rvs(size=int(q))
+            results = rng.choice(len(Pe), size=int(q), p=Pe)
             values, inv = np.unique(results, return_inverse=True)
             values = values.astype(int)
             freq = np.bincount(inv).astype(int)
@@ -1348,14 +1329,15 @@ class Kernel(BaseEstimator, TransformerMixin):
             if self.is_connected():
                 break
             elif i == maxiter - 1:
-                print("Graph is disconnected. Sparsifying anyway...")
+                logger.warning("Graph is disconnected. Sparsifying anyway...")
             else:
                 epsilon -= (epsilon - 1 / np.sqrt(self.N)) / 2.0
 
-        sparserW = diags(sparserL.diagonal(), 0) - sparserL
-        sparserW = (sparserW + sparserW.T) / 2.0
+        if sparserL is not None:
+            sparserW = diags(sparserL.diagonal(), 0) - sparserL  # type: ignore
+            sparserW = (sparserW + sparserW.T) / 2.0  # type: ignore
 
-        return sparserW
+        return sparserW  # type: ignore
 
     def interpolate(
         self, f_subsampled, keep_inds, target=None, order=100, reg_eps=0.005
@@ -1388,7 +1370,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             Interpolated graph signal on the full vertex set of G.
         """
         try:
-            from pygsp import graphs, reduction
+            from pygsp import graphs, reduction  # type: ignore
         except ImportError:
             raise ImportError(
                 "pygsp is not installed. Please install it with `pip install pygsp` to use interpolating functions."
@@ -1405,16 +1387,12 @@ class Kernel(BaseEstimator, TransformerMixin):
         return signal_interpolated
 
     def write_pkl(self, wd=None, filename="mykernel.pkl"):
-        try:
-            import pickle
-        except ImportError:
-            return print(
-                "Pickle is needed for saving the Kernel estimator. Please install it with `pip3 install pickle`"
-            )
-        if wd is None:
-            import os
+        import os
+        import pickle
 
+        if wd is None:
             wd = os.getcwd()
-        with open(wd + filename, "wb") as output:
+        path = os.path.join(wd, filename)
+        with open(path, "wb") as output:
             pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
-        return print("Kernel saved at " + wd + filename)
+        logger.info("Kernel saved at %s", path)

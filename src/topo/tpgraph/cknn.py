@@ -1,4 +1,3 @@
-
 #####################################
 # Author: Davi Sidarta-Oliveira
 # School of Medical Sciences,University of Campinas,Brazil
@@ -8,26 +7,30 @@
 # This is a highly performant python implementation of the Ck-NN graph construction algorithm
 # CkNN was developed by Tyrus Berry and Timothy Sauer [http://dx.doi.org/10.3934/fods.2019001]
 
+
 import numpy as np
 from scipy.sparse import csr_matrix, find
-from sklearn.base import TransformerMixin
-from topo.base.ann import kNN
-from topo.spectral._spectral import graph_laplacian
 
-def cknn_graph(X, n_neighbors=10,
-               delta=1.0,
-               metric='euclidean',
-               weighted=False,
-               include_self=False,
-               return_densities=False,
-               backend='nmslib',
-               n_jobs=1,
-               verbose=False,
-               **kwargs):
+from topo.base.ann import kNN
+
+
+def cknn_graph(
+    X,
+    n_neighbors=10,
+    delta=1.0,
+    metric="euclidean",
+    weighted: bool | None = False,
+    include_self=False,
+    return_densities=False,
+    backend="nmslib",
+    n_jobs=1,
+    verbose=False,
+    **kwargs,
+):
     """
     Function-oriented implementation of Continuous k-Nearest-Neighbors (CkNN).
     An efficient implementation of [CkNN](https://arxiv.org/pdf/1606.02353.pdf).
-    CkNN is the only unweighted graph construction that 
+    CkNN is the only unweighted graph construction that
     can be used to approximate the Laplace-Beltrami Operator via the unnormalized graph Laplacian.
     It can also be used to wield an weighted affinity matrix with locality-sensitive weights.
 
@@ -78,30 +81,32 @@ def cknn_graph(X, n_neighbors=10,
 
     """
     N = X.shape[0]
-    if metric == 'precomputed':
+    if metric == "precomputed":
         knn = X.copy()
     else:
         # Fit kNN - we'll use a smaller number of k-neighbors for the CkNN normalization
-        knn = kNN(X, n_neighbors=n_neighbors,
-                  metric=metric,
-                  n_jobs=n_jobs,
-                  backend=backend,
-                  verbose=verbose,
-                  **kwargs)
+        knn = csr_matrix(
+            kNN(
+                X,
+                n_neighbors=n_neighbors,
+                metric=metric,
+                n_jobs=n_jobs,
+                backend=backend,
+                verbose=verbose,
+                **kwargs,
+            )
+        )
 
     median_k = np.floor(n_neighbors / 2).astype(np.int32)
     adap_sd = np.zeros(N)
     for i in np.arange(len(adap_sd)):
-        adap_sd[i] = np.sort(knn.data[knn.indptr[i]: knn.indptr[i + 1]])[
-            median_k - 1
-        ]
+        adap_sd[i] = np.sort(knn.data[knn.indptr[i] : knn.indptr[i + 1]])[median_k - 1]
 
     x, y, dists = find(knn)
     # The CkNN normalization
     # prevent division by zero
     cknn_norm = delta * np.sqrt(adap_sd.dot(adap_sd.T)) + 1e-12
-    A = csr_matrix(((dists / cknn_norm), (x, y)),
-                   shape=[N, N])
+    A = csr_matrix(((dists / cknn_norm), (x, y)), shape=[N, N])
     dd = np.arange(N)
     if include_self:
         A[dd, dd] = True
@@ -123,5 +128,3 @@ def cknn_graph(X, n_neighbors=10,
                 return A.astype(np.int32), adap_sd
             else:
                 return A.astype(np.int32)
-
-

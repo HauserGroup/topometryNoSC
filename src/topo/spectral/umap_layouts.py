@@ -101,6 +101,7 @@ def _optimize_layout_euclidean_single_epoch(
 
             dist_squared = rdist(current, other)
 
+            grad_cor_coeff = 0.0
             if densmap_flag:
                 phi = 1.0 / (1.0 + a * pow(dist_squared, b))
                 dphi_term = (
@@ -187,7 +188,14 @@ def _optimize_layout_euclidean_single_epoch(
 
 
 def _optimize_layout_euclidean_densmap_epoch_init(
-    head_embedding, tail_embedding, head, tail, a, b, re_sum, phi_sum,
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    a,
+    b,
+    re_sum,
+    phi_sum,
 ):
     re_sum.fill(0)
     phi_sum.fill(0)
@@ -296,6 +304,8 @@ def optimize_layout_euclidean(
         _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=parallel
     )
 
+    dens_init_fn = None
+    dens_var_shift = 0.0
     if densmap:
         dens_init_fn = numba.njit(
             _optimize_layout_euclidean_densmap_epoch_init,
@@ -319,7 +329,6 @@ def optimize_layout_euclidean(
         dens_re_sum = np.zeros(1, dtype=np.float32)
 
     for n in range(n_epochs):
-
         densmap_flag = (
             densmap
             and (densmap_kwds["lambda"] > 0)
@@ -327,6 +336,7 @@ def optimize_layout_euclidean(
         )
 
         if densmap_flag:
+            assert dens_init_fn is not None
             dens_init_fn(
                 head_embedding,
                 tail_embedding,
@@ -336,7 +346,7 @@ def optimize_layout_euclidean(
                 b,
                 dens_re_sum,
                 dens_phi_sum,
-            )
+            )  # type: ignore
 
             dens_re_std = np.sqrt(np.var(dens_re_sum) + dens_var_shift)
             dens_re_mean = np.mean(dens_re_sum)
@@ -374,7 +384,7 @@ def optimize_layout_euclidean(
             dens_R,
             dens_mu,
             dens_mu_tot,
-        )
+        )  # type: ignore
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
@@ -850,11 +860,11 @@ def optimize_layout_aligned_euclidean(
     move_other = head_embeddings[0].shape[0] == tail_embeddings[0].shape[0]
     alpha = initial_alpha
 
-    epochs_per_negative_sample = numba.typed.List.empty_list(numba.types.float32[::1])
-    epoch_of_next_negative_sample = numba.typed.List.empty_list(
+    epochs_per_negative_sample = numba.typed.List.empty_list(numba.types.float32[::1])  # type: ignore[reportAttributeAccessIssue]
+    epoch_of_next_negative_sample = numba.typed.List.empty_list(  # type: ignore[reportAttributeAccessIssue]
         numba.types.float32[::1]
     )
-    epoch_of_next_sample = numba.typed.List.empty_list(numba.types.float32[::1])
+    epoch_of_next_sample = numba.typed.List.empty_list(numba.types.float32[::1])  # type: ignore[reportAttributeAccessIssue]
 
     for m in range(len(heads)):
         epochs_per_negative_sample.append(
@@ -892,7 +902,7 @@ def optimize_layout_aligned_euclidean(
             epoch_of_next_negative_sample,
             epoch_of_next_sample,
             n,
-        )
+        )  # type: ignore
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 

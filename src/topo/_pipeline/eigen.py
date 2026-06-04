@@ -7,11 +7,16 @@ construction and refined scaffold-graph building. Methods operate on ``self``.
 import copy
 import logging
 import time
+from collections.abc import Sequence
 from typing import Any, cast
+
+import numpy as np
+from scipy.sparse import csr_matrix
 
 from topo.base.ann import kNN
 from topo.spectral.eigen import EigenDecomposition
 from topo.tpgraph.intrinsic_dim import automated_scaffold_sizing
+from topo.tpgraph.kernels import Kernel
 
 logger = logging.getLogger(__name__)
 
@@ -22,50 +27,48 @@ class EigenBuildMixin:
     # Interface contract — attributes supplied by TopOGraph
     id_max_components: int
     id_method: str
-    id_ks: Any
+    id_ks: int | Sequence[int]
     backend: str
     id_metric: str
     n_jobs: int
     id_quantile: float
     id_min_components: int
     id_headroom: float
-    random_state: Any
+    random_state: int | np.random.RandomState | None
     _id_details: dict[str, Any]
     _scaffold_components_ms: int | None
     _scaffold_components_dm: int | None
     n_eigs: int
-    global_dimensionality: Any
-    local_dimensionality: Any
+    global_dimensionality: int | float | None
+    local_dimensionality: np.ndarray | None
     verbosity: int
     base_kernel_version: str
-    EigenbasisDict: dict[str, Any]
+    EigenbasisDict: dict[str, EigenDecomposition]
     eigensolver: str
     eigen_tol: float
     diff_t: int
     bases_graph_verbose: bool
     runtimes: dict[str, float]
     current_eigenbasis: str
-    eigenbasis: Any
+    eigenbasis: EigenDecomposition | None
     graph_knn: int
     graph_metric: str
     graph_kernel_version: str
-    GraphKernelDict: dict[str, Any]
+    GraphKernelDict: dict[str, Kernel]
     low_memory: bool
-    graph_kernel: Any
+    graph_kernel: Kernel | None
     current_graphkernel: str
-    _knn_msZ: Any
-    _knn_Z: Any
-    _kernel_msZ: Any
-    _kernel_Z: Any
-    base_kernel: Any
+    _knn_msZ: csr_matrix | None
+    _knn_Z: csr_matrix | None
+    _kernel_msZ: Kernel | None
+    _kernel_Z: Kernel | None
+    base_kernel: Kernel | None
 
-    def _build_kernel(
-        self, *args: Any, **kwargs: Any
-    ) -> tuple[Any, dict[str, Any]]: ...
-    def spectral_layout(self, *args: Any, **kwargs: Any) -> Any: ...
-    def _run_projections(self, *args: Any, **kwargs: Any) -> Any: ...
+    def _build_kernel(self, *args, **kwargs) -> tuple[Kernel, dict[str, Kernel]]: ...
+    def spectral_layout(self, *args, **kwargs) -> np.ndarray: ...
+    def _run_projections(self, *args, **kwargs) -> None: ...
 
-    def _automated_sizing(self, X: Any):
+    def _automated_sizing(self, X: np.ndarray | csr_matrix):
         n = X.shape[0]
         max_cap = min(int(self.id_max_components), max(2, n - 2))
 

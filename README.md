@@ -10,7 +10,7 @@
 
 > **Fork notice:** This is a heavily modified fork of
 > [topometry](https://github.com/davisidarta/topometry) by David S Oliveira,
-> It has diverged significantly and may or may not be maintained independently. Most likely unmaintained. 
+> It has diverged significantly and may or may not be maintained independently. Most likely unmaintained.
 
 **TopoMetry** is a geometry-aware Python toolkit for exploring high-dimensional data via diffusion/Laplacian operators. It learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** and then finds clusters and builds low-dimensional layouts for analysis and visualization.
 
@@ -43,15 +43,36 @@ Empirically, TopoMetry often outperforms PCA-based pipelines and stand-alone lay
 
 ## Installation
 
+TopoMetry is a standard, pip-installable package. The **core** install depends
+only on numpy, scipy, scikit-learn, numba and tqdm:
 
-Install with [uv](https://docs.astral.sh/uv/) **(Recommended)**:
-
+```bash
+pip install topometry            # core
+pip install "topometry[all]"     # core + plotting, dataframes, ANN backends and extra layouts
 ```
-uv sync
 
+Optional features are grouped into extras — install only what you need:
+
+| Extra        | Adds                                                        |
+|--------------|------------------------------------------------------------|
+| `plot`       | matplotlib (plotting)                                       |
+| `pandas`     | pandas (DataFrame I/O)                                      |
+| `ann`        | hnswlib (fast approximate nearest neighbors)               |
+| `layouts`    | pacmap, pymde, trimap, umap-learn (extra projections)      |
+| `notebooks`  | jupyterlab / ipywidgets                                    |
+| `all`        | everything above                                           |
+
+Missing an optional dependency raises a clear message telling you which extra to
+install (e.g. `pip install topometry[plot]`).
+
+### Development install
+
+This project uses [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv sync --all-extras   # package + all extras + dev tooling
+uv run pytest -q       # run the tests
 ```
-
-With pip or conda, you're on your own.
 
 
 ## Tutorials and documentation

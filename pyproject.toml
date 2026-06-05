@@ -86,6 +86,10 @@ dev = [
     "ruff>=0.15.11",
 ]
 nmslib = ["nmslib>=2.1.2"]
+docs = [
+    "mkdocs-material>=9",
+    "mkdocstrings[python]>=0.25",
+]
 
 [tool.hatch.version]
 path = "src/topo/version.py"

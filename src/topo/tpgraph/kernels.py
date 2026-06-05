@@ -497,10 +497,6 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     Parameters
     ----------
-    X : array-like, shape (n_samples, n_features)
-        The set of points to compute the kernel matrix for. Accepts np.ndarrays and scipy.sparse matrices.
-        If precomputed, assumed to be a square symmetric semidefinite matrix.
-
     metric : string (optional, default 'cosine')
         The metric to use when computing the kernel matrix.
         Possible values are: 'cosine', 'euclidean' and others, depending on the chosen nearest-neighbors backend. Accepts precomputed distances as 'precomputed'.

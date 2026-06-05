@@ -79,7 +79,10 @@ uv run pytest -q       # run the tests
 
 ## Tutorials and documentation
 
-Check TopoMetry's **(OLD)** [documentation](https://topometry.readthedocs.io/en/latest/) for tutorials, guided analyses and other documentation.
+Documentation for this fork: <https://HauserGroup.github.io/topometryNoSC/>
+(installation, quickstart, concepts, and an auto-generated API reference).
+
+The original upstream project's **(OLD)** [documentation](https://topometry.readthedocs.io/en/latest/) may still be useful for background, but describes the upstream API, which differs from this fork.
 
 
 

@@ -1,0 +1,48 @@
+site_name: topometry-nosc
+site_description: "An independently maintained, heavily modified fork of TopOMetry."
+site_url: https://HauserGroup.github.io/topometryNoSC/
+repo_url: https://github.com/HauserGroup/topometryNoSC
+repo_name: HauserGroup/topometryNoSC
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: numpy
+            show_source: true
+            separate_signature: true
+            show_signature_annotations: true
+            members_order: source
+            merge_init_into_class: true
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quickstart: quickstart.md
+  - Concepts: concepts.md
+  - Math details: math_details.md
+  - API Reference: api.md
+  - Citation: citation.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - tables
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite

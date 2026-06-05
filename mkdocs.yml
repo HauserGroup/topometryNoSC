@@ -4,6 +4,10 @@ site_url: https://HauserGroup.github.io/topometryNoSC/
 repo_url: https://github.com/HauserGroup/topometryNoSC
 repo_name: HauserGroup/topometryNoSC
 
+watch:
+  - docs
+  - src/topo
+
 theme:
   name: material
   logo: assets/topometry_logo.png
@@ -50,7 +54,7 @@ plugins:
           paths: [src]
           options:
             docstring_style: numpy
-            show_source: true
+            show_source: false
             separate_signature: true
             show_signature_annotations: true
             members_order: source

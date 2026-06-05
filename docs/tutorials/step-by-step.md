@@ -33,7 +33,7 @@ from data import load_cells   # the helper described above
 ## 1. Get the data
 
 ```python
-X, labels = load_cells()
+X, labels, _ = load_cells()
 
 print(X.shape)        # (n_rows, n_columns) e.g. (1797, 64)
 print(set(labels))    # the groups, used only for colouring later
@@ -47,9 +47,9 @@ By default the helper uses the hosted dataset if it can reach it, and otherwise
 the built-in offline one. You can force either:
 
 ```python
-X, labels = load_cells("builtin")   # offline, no download
-X, labels = load_cells("hosted")    # only the hosted file (error if missing)
-X, labels = load_cells("auto")      # default: hosted, fall back to built-in
+X, labels, _ = load_cells("builtin")   # offline, no download
+X, labels, _ = load_cells("hosted")    # only the hosted file (error if missing)
+X, labels, _ = load_cells("auto")      # default: hosted, fall back to built-in
 ```
 
 Want readable group names too (for example cell types)? Ask for them:

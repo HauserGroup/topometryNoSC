@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import urllib.request
 from pathlib import Path
+from shutil import copyfileobj
+from typing import Literal
 
 import numpy as np
 
@@ -34,7 +36,10 @@ DATA_URL = (
 _CACHE = Path.home() / ".cache" / "topometry-nosc"
 
 
-def load_cells(source: str = "auto", return_names: bool = False):
+def load_cells(
+    source: Literal["auto", "hosted", "builtin"] = "auto",
+    return_names: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """Return the example dataset as ``(X, labels)``.
 
     Parameters
@@ -102,10 +107,19 @@ def _load_builtin() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return X, labels, names
 
 
-def _download_cached(url: str) -> Path:
+def _download_cached(url: str, timeout: float = 30.0) -> Path:
     """Download ``url`` into the local cache once; return the cached path."""
     _CACHE.mkdir(parents=True, exist_ok=True)
     path = _CACHE / url.rsplit("/", 1)[-1]
     if not path.exists():
-        urllib.request.urlretrieve(url, path)  # noqa: S310 (trusted release URL)
+        tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+        try:
+            with (
+                urllib.request.urlopen(url, timeout=timeout) as response,  # noqa: S310
+                tmp_path.open("wb") as out,
+            ):
+                copyfileobj(response, out)
+            tmp_path.replace(path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
     return path

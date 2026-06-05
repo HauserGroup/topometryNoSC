@@ -60,6 +60,7 @@ nav:
   - Installation: installation.md
   - Quickstart: quickstart.md
   - Tutorial: tutorials/step-by-step.md
+  - Data provenance: tutorials/data-provenance.md
   - Concepts: concepts.md
   - Math details: math_details.md
   - API Reference: api.md

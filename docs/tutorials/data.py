@@ -34,24 +34,71 @@ DATA_URL = (
 _CACHE = Path.home() / ".cache" / "topometry-nosc"
 
 
-def load_cells() -> tuple[np.ndarray, np.ndarray]:
+def load_cells(source: str = "auto", return_names: bool = False):
     """Return the example dataset as ``(X, labels)``.
 
-    Downloads the hosted ``.npz`` once and caches it locally. If the file is not
-    reachable (for example before it has been uploaded), falls back to a small
-    dataset that ships with scikit-learn so the tutorial always runs.
-    """
-    try:
-        path = _download_cached(DATA_URL)
-        with np.load(path) as npz:
-            return npz["X"].astype(np.float32), npz["labels"].astype(int)
-    except Exception:
-        # Offline fallback: scikit-learn's handwritten digits (1797 x 64, 10
-        # groups). Ships with scikit-learn, so no download, no extra packages.
-        from sklearn.datasets import load_digits
+    Parameters
+    ----------
+    source : {"auto", "hosted", "builtin"}, default "auto"
+        Where to get the data:
 
-        data = load_digits()
-        return data.data.astype(np.float32), data.target.astype(int)
+        * ``"auto"`` — try the hosted ``.npz`` (downloaded once and cached); if
+          it is not reachable, fall back to the built-in dataset so the tutorial
+          always runs.
+        * ``"hosted"`` — use only the hosted ``.npz``; raise if it cannot be
+          fetched.
+        * ``"builtin"`` — use only scikit-learn's handwritten digits. No
+          download, fully offline; pick this if you prefer not to fetch anything.
+    return_names : bool, default False
+        If ``True``, also return ``label_names``: a 1-D array mapping each
+        integer label id to its readable name (e.g. a cell type). For the hosted
+        dataset these come from the file; for the built-in one they are just the
+        digit strings.
+
+    Returns
+    -------
+    (X, labels) or (X, labels, label_names)
+        ``label_names`` is only included when ``return_names=True``.
+    """
+    if source not in ("auto", "hosted", "builtin"):
+        raise ValueError(
+            f"source must be 'auto', 'hosted' or 'builtin', got {source!r}."
+        )
+
+    if source == "builtin":
+        X, labels, names = _load_builtin()
+    else:
+        try:
+            path = _download_cached(DATA_URL)
+            with np.load(path, allow_pickle=False) as npz:
+                X = npz["X"].astype(np.float32)
+                labels = npz["labels"].astype(int)
+                names = (
+                    npz["label_names"]
+                    if "label_names" in npz.files
+                    else np.array([str(i) for i in np.unique(labels)])
+                )
+        except Exception:
+            if source == "hosted":
+                raise
+            X, labels, names = _load_builtin()
+
+    return (X, labels, names) if return_names else (X, labels)
+
+
+def _load_builtin() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Built-in offline dataset: scikit-learn's handwritten digits.
+
+    1797 rows x 64 measurements, 10 groups. Ships with scikit-learn, so no
+    download and no extra packages.
+    """
+    from sklearn.datasets import load_digits
+
+    raw_X, raw_labels = load_digits(return_X_y=True)
+    X = np.asarray(raw_X, dtype=np.float32)
+    labels = np.asarray(raw_labels, dtype=int)
+    names = np.array([str(i) for i in range(10)])
+    return X, labels, names
 
 
 def _download_cached(url: str) -> Path:

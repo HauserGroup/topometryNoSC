@@ -43,6 +43,25 @@ print(set(labels))    # the groups, used only for colouring later
 measurement. `labels` are just group names we use to colour the plots — the
 model never sees them.
 
+By default the helper uses the hosted dataset if it can reach it, and otherwise
+the built-in offline one. You can force either:
+
+```python
+X, labels = load_cells("builtin")   # offline, no download
+X, labels = load_cells("hosted")    # only the hosted file (error if missing)
+X, labels = load_cells("auto")      # default: hosted, fall back to built-in
+```
+
+Want readable group names too (for example cell types)? Ask for them:
+
+```python
+X, labels, label_names = load_cells(return_names=True)
+print(label_names[labels[0]])   # name of the first row's group
+```
+
+Where the example data came from and how it was prepared is recorded in
+[Data provenance](data-provenance.md).
+
 ## 2. Build the map
 
 One object does the whole pipeline. Create it and call `fit`:

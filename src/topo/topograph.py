@@ -127,7 +127,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     Parameters
     ----------
-    ----------
     base_knn : int, default 30
         k-nearest neighbors for the base graph on input space.
     graph_knn : int, default 30
@@ -756,7 +755,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         """Save this TopOGraph to a pickle file."""
         save_topograph(self, filename, remove_base_class)
 
-
     def spectral_layout(self, *args: Any, **kwargs: Any) -> Any:
         """Disambiguate inherited ``spectral_layout`` implementations.
 
@@ -766,6 +764,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         maintenance.
         """
         return LayoutBuildMixin.spectral_layout(self, *args, **kwargs)
+
 
 # =========================================================================
 # Module-level I/O helpers

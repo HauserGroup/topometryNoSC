@@ -217,7 +217,7 @@ def eigendecompose(
     return evals, evecs
 
 
-class EigenDecomposition(BaseEstimator, TransformerMixin):
+class EigenDecomposition(BaseEstimator, TransformerMixin, auto_wrap_output_keys=None):
     """Scikit-learn flavored transformer for eigendecomposing sparse symmetric matrices.
 
     Computes and explores the associated eigenvectors and eigenvalues.
@@ -501,7 +501,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
             original_return_evals = self.return_evals
             self.return_evals = False
             try:
-                embedding = self.transform()
+                embedding = self._represent()
             finally:
                 self.return_evals = original_return_evals
 
@@ -515,6 +515,18 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
 
     def transform(self, X=None):
         """Return the current representation.
+
+        ``X`` is ignored; the representation is computed from the eigenpairs
+        stored during :meth:`fit`. Present for scikit-learn compatibility.
+        """
+        return self._represent()
+
+    def _represent(self):
+        """Compute the stored representation, taking no arguments.
+
+        Internal helper so :meth:`results` and :meth:`fit_transform` can obtain
+        the representation without calling :meth:`transform`, which scikit-learn
+        wraps into a form that requires an explicit ``X`` argument.
 
         For DM/msDM, compute the embedding from stored eigenpairs:
 
@@ -560,7 +572,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin):
         """Fit the model on ``X`` and return the resulting representation."""
         if X is None:
             raise ValueError("X is required for fit_transform().")
-        return self.fit(X).transform()
+        return self.fit(X)._represent()
 
     def spectral_layout(self, X, laplacian_type="normalized", return_evals=False):
         """Compute the spectral embedding of a graph.

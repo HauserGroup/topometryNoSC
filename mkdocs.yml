@@ -6,8 +6,9 @@ repo_name: HauserGroup/topometryNoSC
 
 theme:
   name: material
+  logo: assets/topometry_logo.png
+  favicon: assets/topometry_logo.png
   icon:
-    logo: material/graph-outline
     repo: fontawesome/brands/github
   font:
     text: Nunito
@@ -15,15 +16,15 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: teal
-      accent: pink
+      primary: pink
+      accent: teal
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: teal
-      accent: pink
+      primary: pink
+      accent: teal
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
@@ -59,9 +60,10 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Quickstart: quickstart.md
-  - Tutorial: tutorials/step-by-step.md
-  - Plotting: tutorials/plotting.md
-  - Data provenance: tutorials/data-provenance.md
+  - Tutorials:
+      - Step by step: tutorials/step-by-step.md
+      - Plotting: tutorials/plotting.md
+      - Data provenance: tutorials/data-provenance.md
   - Concepts: concepts.md
   - Math details: math_details.md
   - Background &amp; reading: background.md

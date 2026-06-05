@@ -57,8 +57,9 @@ def load_cells(source: str = "auto", return_names: bool = False):
 
     Returns
     -------
-    (X, labels) or (X, labels, label_names)
-        ``label_names`` is only included when ``return_names=True``.
+    (X, labels, label_names)
+        Always returns a 3-tuple. ``label_names`` is a 1-D array when
+        ``return_names=True`` and ``None`` otherwise.
     """
     if source not in ("auto", "hosted", "builtin"):
         raise ValueError(
@@ -83,7 +84,7 @@ def load_cells(source: str = "auto", return_names: bool = False):
                 raise
             X, labels, names = _load_builtin()
 
-    return (X, labels, names) if return_names else (X, labels)
+    return X, labels, (names if return_names else None)
 
 
 def _load_builtin() -> tuple[np.ndarray, np.ndarray, np.ndarray]:

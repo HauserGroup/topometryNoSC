@@ -1,7 +1,8 @@
 """Centralised handling of optional dependencies.
 
 The core package depends only on ``numpy``, ``scipy``, ``scikit-learn``,
-``numba`` and ``tqdm``. Everything else (plotting, dataframe I/O, approximate
+``numba`` and ``joblib``. Everything else (plotting, dataframe I/O, the AMG
+eigensolver, approximate
 nearest-neighbour backends and the third-party layout libraries) is optional and
 gated through the helpers in this module so that:
 
@@ -28,6 +29,7 @@ __all__ = [
 _EXTRA_FOR: dict[str, str] = {
     "matplotlib": "plot",
     "pandas": "pandas",
+    "pyamg": "amg",
     "hnswlib": "ann",
     "nmslib": "ann",
     "annoy": "ann",

@@ -45,8 +45,15 @@ Empirically, TopoMetry often outperforms PCA-based pipelines and stand-alone lay
 
 ## Installation
 
+> [!WARNING]
+> **Do not install alongside the original `topometry`.** This fork ships the same
+> import package name (`topo`). Installing both `topometry` and `topometry-nosc`
+> in one environment makes them overwrite each other's files. `import topo` will
+> **raise an error** if it detects both. Use a fresh virtualenv, or
+> `pip uninstall topometry` first.
+
 topometry-nosc is a standard, pip-installable package. The **core** install
-depends only on numpy, scipy, scikit-learn, numba and tqdm:
+depends only on numpy, scipy, scikit-learn, numba and joblib:
 
 ```bash
 pip install topometry-nosc            # core
@@ -60,6 +67,7 @@ Optional features are grouped into extras — install only what you need:
 | `plot`       | matplotlib (plotting)                                       |
 | `pandas`     | pandas (DataFrame I/O)                                      |
 | `ann`        | hnswlib (fast approximate nearest neighbors)               |
+| `amg`        | pyamg (algebraic-multigrid `eigensolver='amg'`)            |
 | `layouts`    | pacmap, pymde, trimap, umap-learn (extra projections)      |
 | `notebooks`  | jupyterlab / ipywidgets                                    |
 | `all`        | everything above                                           |

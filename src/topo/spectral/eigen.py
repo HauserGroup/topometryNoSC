@@ -26,7 +26,10 @@ from topo.tpgraph.kernels import Kernel
 
 logger = logging.getLogger(__name__)
 
-EIGEN_SOLVERS = ["dense", "arpack", "lobpcg"]
+# "amg" is always a recognised solver name; the actual pyamg dependency is
+# checked at use-time so a missing install yields an actionable install hint
+# rather than an "unknown eigensolver" error.
+EIGEN_SOLVERS = ["dense", "arpack", "lobpcg", "amg"]
 
 
 def _load_smoothed_aggregation_solver() -> Any:
@@ -39,8 +42,6 @@ def _load_smoothed_aggregation_solver() -> Any:
 
 _smoothed_aggregation_solver = _load_smoothed_aggregation_solver()
 PYAMG_LOADED = _smoothed_aggregation_solver is not None
-if PYAMG_LOADED:
-    EIGEN_SOLVERS.append("amg")
 
 
 def _diffusion_operator_with_degree(W, alpha) -> tuple[Any, Any]:
@@ -180,7 +181,7 @@ def eigendecompose(
         if not PYAMG_LOADED:
             raise ImportError(
                 'Using "amg" as eigensolver requires pyamg. '
-                "Install it with `pip install pyamg`."
+                "Install it with `pip install topometry-nosc[amg]`."
             )
 
         np.random.set_state(random_state.get_state())

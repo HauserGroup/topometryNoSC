@@ -1,0 +1,57 @@
+/* topometry-nosc docs — teal + coral palette
+   Overrides Material's built-in teal/pink with exact brand hues. */
+
+:root {
+  /* Teal primary (header, nav highlight) */
+  --md-primary-fg-color:              #00897B;
+  --md-primary-fg-color--light:       #4DB6AC;
+  --md-primary-fg-color--dark:        #00695C;
+
+  /* Coral accent (links on hover, buttons, focus) */
+  --md-accent-fg-color:               #FF6E64;
+  --md-accent-fg-color--transparent:  rgba(255, 110, 100, 0.1);
+
+  /* Teal links in light mode */
+  --md-typeset-a-color:               #00897B;
+}
+
+/* Dark (slate) tweaks — lighter, softer for contrast on dark bg */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color:              #1e2a28;   /* calm dark header, teal-tinted */
+  --md-accent-fg-color:               #FF8A80;   /* warmer coral on dark */
+  --md-accent-fg-color--transparent:  rgba(255, 138, 128, 0.12);
+  --md-typeset-a-color:               #4DD0C4;   /* aqua links */
+}
+
+/* Rounded, friendly headings */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* Subtle coral underline accent under h2 section breaks */
+.md-typeset h2 {
+  border-bottom: 2px solid var(--md-accent-fg-color--transparent);
+  padding-bottom: 0.2em;
+}
+
+/* Slightly bouncier link hover */
+.md-typeset a {
+  transition: color 120ms ease;
+}
+
+/* Gradient flourish on the homepage top hero (h1 on index) */
+.md-content h1:first-of-type {
+  background: linear-gradient(90deg, #00897B 0%, #FF6E64 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Rounded code blocks + cards feel */
+.md-typeset pre > code,
+.md-typeset .admonition {
+  border-radius: 10px;
+}

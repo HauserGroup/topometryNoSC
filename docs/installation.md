@@ -5,17 +5,31 @@
 `TransformerMixin`. This makes the building-block classes compatible with
 scikit-learn pipelines and easy to combine with other workflows.
 
-The **core** install depends only on numpy, scipy, scikit-learn, numba, tqdm and
-pyamg:
+The **core** install depends only on numpy, scipy, scikit-learn, numba and
+joblib:
 
 ```bash
 pip install topometry-nosc            # core
 pip install "topometry-nosc[all]"     # core + plotting, dataframes, ANN backends, extra layouts
 ```
 
-!!! note
-    The import package is named `topo`, so `topometry-nosc` cannot be installed
-    alongside the upstream `topometry` distribution in the same environment.
+!!! danger "Do not install alongside upstream `topometry`"
+    This fork ships the **same import package name** (`topo`) as the original
+    [`topometry`](https://pypi.org/project/topometry/). Installing both
+    distributions in one environment makes them silently overwrite each other's
+    `topo/` files.
+
+    To prevent broken installs, `import topo` **fails fast** with an
+    `ImportError` if it detects the upstream `topometry` distribution present in
+    the same environment:
+
+    ```text
+    Conflicting installation detected: the upstream 'topometry' distribution is
+    installed in the same environment as this fork ('topometry-nosc')...
+    ```
+
+    Use a fresh virtual environment, or run `pip uninstall topometry` before
+    installing this fork.
 
 ## Optional dependencies (extras)
 
@@ -26,6 +40,7 @@ Optional features are grouped into extras — install only what you need:
 | `plot`       | matplotlib (plotting)                                   |
 | `pandas`     | pandas (DataFrame I/O)                                  |
 | `ann`        | hnswlib (fast approximate nearest neighbors)           |
+| `amg`        | pyamg (algebraic-multigrid `eigensolver='amg'`)        |
 | `layouts`    | pacmap, pymde, trimap, umap-learn (extra projections)  |
 | `notebooks`  | jupyterlab / ipywidgets                                |
 | `all`        | everything above                                       |

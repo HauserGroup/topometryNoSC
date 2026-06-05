@@ -19,6 +19,36 @@ dependencies are only required when the features that use them are called.
 from importlib import import_module
 from typing import TYPE_CHECKING
 
+
+def _ensure_no_upstream_conflict() -> None:
+    """Fail fast if the upstream ``topometry`` distribution is co-installed.
+
+    This fork ships the same import package name (``topo``) as upstream
+    TopOMetry. Installing both ``topometry`` and ``topometry-nosc`` into one
+    environment lets them silently overwrite each other's ``topo/`` files, so a
+    mixed install is never valid. Detect it and raise immediately with
+    actionable instructions.
+    """
+    import importlib.metadata as _metadata
+
+    try:
+        _metadata.distribution("topometry")
+    except _metadata.PackageNotFoundError:
+        return
+
+    raise ImportError(
+        "Conflicting installation detected: the upstream 'topometry' "
+        "distribution is installed in the same environment as this fork "
+        "('topometry-nosc'). Both provide the import package 'topo' and will "
+        "overwrite each other. Keep exactly one:\n"
+        "    pip uninstall topometry        # keep this fork (topometry-nosc)\n"
+        "  or\n"
+        "    pip uninstall topometry-nosc   # keep upstream TopOMetry"
+    )
+
+
+_ensure_no_upstream_conflict()
+
 __all__ = [
     "TopOGraph",
     "load_topograph",

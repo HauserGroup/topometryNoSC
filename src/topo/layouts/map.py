@@ -52,9 +52,9 @@ def fuzzy_embedding(
     spread=1,
     n_epochs=600,
     metric="cosine",
-    metric_kwds={},
+    metric_kwds=None,
     output_metric="euclidean",
-    output_metric_kwds={},
+    output_metric_kwds=None,
     gamma=1.0,
     negative_sample_rate=5,
     init="spectral",
@@ -65,7 +65,7 @@ def fuzzy_embedding(
     a=None,
     b=None,
     densmap=False,
-    densmap_kwds={},
+    densmap_kwds=None,
     output_dens=False,
     save_every=None,
     save_limit=None,
@@ -178,12 +178,9 @@ def fuzzy_embedding(
     """
     if random_state is None:
         random_state = random.RandomState()
-    if metric_kwds is None:
-        _metric_kwds = {}
-    else:
-        _metric_kwds = metric_kwds
-    if output_metric_kwds is None:
-        _output_metric_kwds = {}
+    metric_kwds = metric_kwds or {}
+    output_metric_kwds = output_metric_kwds or {}
+    densmap_kwds = densmap_kwds or {}
 
     # Compat for umap 0.4 -> 0.5
     if a is None or b is None:

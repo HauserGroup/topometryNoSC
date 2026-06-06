@@ -235,7 +235,7 @@ def graph_laplacian(W, laplacian_type="normalized", return_D=False):
         The graph adjacency or affinity matrix. Assumed to be symmetric and with zero diagonal.
         No further symmetrization is performed, so make sure to symmetrize W if necessary (usually done additively with W = (W + W.T)/2 ).
 
-    laplacian : str (optional, default 'random_walk').
+    laplacian_type : str (optional, default 'random_walk').
         The type of laplacian to use. Can be 'unnormalized', 'normalized' or 'random_walk'.
 
     return_D : bool (optional, default False).

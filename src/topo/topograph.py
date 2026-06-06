@@ -510,7 +510,23 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.bases_graph_verbose = self.verbosity >= 3
 
     def spectral_scaffold(self, multiscale: bool = True):
-        """Return scaffold coordinates (n_samples × n_eigs)."""
+        """Return the fitted spectral scaffold coordinates.
+
+        Parameters
+        ----------
+        multiscale : bool, default=True
+            If ``True``, return the multiscale diffusion-map scaffold (``msZ``),
+            which weights eigenvectors by ``lambda / (1 - lambda)`` and is the
+            default representation for most downstream TopoMetry layouts. If
+            ``False``, return the fixed-time diffusion-map scaffold (``Z``).
+
+        Returns
+        -------
+        ndarray, shape (n_samples, n_components)
+            Spectral coordinates for the fitted samples. The number of columns is
+            determined by ``n_eigs`` and, when automatic sizing is enabled, the
+            estimated intrinsic dimensionality.
+        """
         if self.uom_enabled:
             arr = self.msZ_uom if multiscale else self.Z_uom
             if arr is None:
@@ -529,7 +545,24 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def eigenvalues(self):
-        """Eigenvalues of the active eigenbasis (dict in UoM mode)."""
+        """Eigenvalues from the fitted spectral decomposition.
+
+        For the standard pipeline this returns the eigenvalues associated with
+        the currently active eigenbasis, usually the ``msDM`` scaffold built from
+        the base kernel. Diffusion-map eigenvalues are ordered from largest to
+        smallest; values near 1 represent smooth, persistent geometric modes,
+        while values near 0 represent rapidly decaying modes.
+
+        In Union-of-Manifolds mode, the return value is a dictionary with the
+        active mode, one eigenvalue array per component, and the corresponding
+        component sizes.
+
+        Returns
+        -------
+        ndarray or dict
+            Eigenvalues for the fitted global scaffold, or per-component
+            eigenvalues when ``uom=True``.
+        """
         if getattr(self, "uom_enabled", False) and self.uom_eigenvalues_ms_list:
             mode = getattr(self, "_uom_active_mode", "msDM")
             per_comp = (
@@ -545,7 +578,19 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def knn_msZ(self):
-        """KNN graph in msDM scaffold space."""
+        """Sparse kNN distance graph built in multiscale scaffold space.
+
+        ``msZ`` is the multiscale diffusion-map representation returned by
+        ``spectral_scaffold(multiscale=True)``. This graph is used to build the
+        refined ``msDM`` kernel and the ``P_of_msZ`` operator that underlies
+        ``msTopoMAP`` and ``msTopoPaCMAP``.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            Sparse graph with one row per sample and nonzero entries storing
+            neighbor distances in ``msZ`` space.
+        """
         if self.uom_enabled and self.knn_msZ_uom is not None:
             return self.knn_msZ_uom
         if self._knn_msZ is None:
@@ -554,7 +599,19 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def knn_Z(self):
-        """KNN graph in DM scaffold space."""
+        """Sparse kNN distance graph built in fixed-time DM scaffold space.
+
+        ``Z`` is the diffusion-map representation returned by
+        ``spectral_scaffold(multiscale=False)``. This graph is used to build the
+        refined ``DM`` kernel and the ``P_of_Z`` operator that underlies
+        ``TopoMAP`` and ``TopoPaCMAP``.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            Sparse graph with one row per sample and nonzero entries storing
+            neighbor distances in ``Z`` space.
+        """
         if self.uom_enabled and self.knn_Z_uom is not None:
             return self.knn_Z_uom
         if self._knn_Z is None:
@@ -563,7 +620,18 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def P_of_msZ(self) -> csr_matrix:
-        """Diffusion operator on the msDM scaffold."""
+        """Diffusion operator built from the multiscale scaffold graph.
+
+        This is the refined graph operator computed after building kNN and kernel
+        weights in ``msZ`` space. It is the operator used by multiscale layouts
+        such as ``msTopoMAP`` and by analysis helpers when ``which='msZ'``.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            Fitted diffusion/operator matrix with shape
+            ``(n_samples, n_samples)``.
+        """
         if self.uom_enabled and self.P_of_msZ_uom is not None:
             return (
                 self.P_of_msZ_uom
@@ -575,13 +643,20 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         P = self._kernel_msZ.P
         return P if isinstance(P, csr_matrix) else csr_matrix(P)
 
-    @P_of_msZ.setter
-    def P_of_msZ(self, value) -> None:
-        raise AttributeError("P_of_msZ is a read-only fitted property.")
-
     @property
     def P_of_Z(self) -> csr_matrix:
-        """Diffusion operator on the DM scaffold."""
+        """Diffusion operator built from the fixed-time DM scaffold graph.
+
+        This is the refined graph operator computed after building kNN and kernel
+        weights in ``Z`` space. It is the operator used by fixed-time layouts
+        such as ``TopoMAP`` and by analysis helpers when ``which='Z'``.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            Fitted diffusion/operator matrix with shape
+            ``(n_samples, n_samples)``.
+        """
         if self.uom_enabled and self.P_of_Z_uom is not None:
             return (
                 self.P_of_Z_uom
@@ -593,13 +668,21 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         P = self._kernel_Z.P
         return P if isinstance(P, csr_matrix) else csr_matrix(P)
 
-    @P_of_Z.setter
-    def P_of_Z(self, value) -> None:
-        raise AttributeError("P_of_Z is a read-only fitted property.")
-
     @property
     def knn_X(self):
-        """Base kNN graph in input space."""
+        """Sparse kNN distance graph built from the input representation.
+
+        This is the first graph in the pipeline, constructed directly from the
+        data passed to :meth:`fit` using ``base_metric`` and ``base_knn``. It is
+        useful for debugging neighbor search, comparing the input graph with
+        scaffold-space graphs, and building custom diagnostics.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            Sparse graph with one row per sample and nonzero entries storing
+            neighbor distances in input space.
+        """
         if self.uom_enabled and self.knn_X_uom is not None:
             return self.knn_X_uom
         if self.base_knn_graph is None:
@@ -608,7 +691,19 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def P_of_X(self):
-        """Diffusion operator on input space."""
+        """Diffusion operator built from the input-space base kernel.
+
+        This operator is computed from the base affinity graph before the
+        spectral scaffold is built. It is the reference operator for the first
+        diffusion/eigendecomposition step and is useful when comparing how much
+        structure is preserved by scaffold-space or layout-space operators.
+
+        Returns
+        -------
+        scipy.sparse matrix
+            Fitted diffusion/operator matrix with shape
+            ``(n_samples, n_samples)``.
+        """
         if self.uom_enabled and self.P_of_X_uom is not None:
             return self.P_of_X_uom
         if self.base_kernel is None:
@@ -617,12 +712,39 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def global_id(self):
-        """Global intrinsic dimensionality estimate."""
+        """Global intrinsic-dimensionality estimate used to size the scaffold.
+
+        The value is estimated during :meth:`fit` from neighbor-distance
+        statistics using the configured ``id_method`` and ``id_ks`` settings. It
+        represents the package's estimate of the data's effective geometric
+        dimensionality and is used, with headroom and bounds, to choose how many
+        spectral components to keep.
+
+        Returns
+        -------
+        int, float, or None
+            Estimated global intrinsic dimension after fitting. ``None`` means
+            the model has not been fitted or automatic sizing has not populated
+            the estimate.
+        """
         return self.global_dimensionality
 
     @property
     def intrinsic_dim(self):
-        """Structured intrinsic-dimensionality info (global + local)."""
+        """Detailed intrinsic-dimensionality diagnostics from fitting.
+
+        This property exposes both the global estimate and the per-sample/local
+        estimates used to size the spectral scaffold. The exact contents of
+        ``details`` depend on the configured estimator, for example ``fsa`` or
+        ``mle``.
+
+        Returns
+        -------
+        dict
+            Dictionary with ``method``, ``global``, ``local``, and ``details``.
+            ``local`` is typically an array of per-sample estimates; ``details``
+            contains estimator-specific intermediate values.
+        """
         det = (self._id_details or {}).get(self.id_method)
         return {
             "method": self.id_method,
@@ -635,22 +757,68 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def TopoMAP(self):
-        """2-D MAP layout on the DM refined graph."""
+        """Two-dimensional MAP layout from the fixed-time DM branch.
+
+        This is the default MAP-style visualization computed from the refined
+        graph/operator built in ``Z`` space. It is a display embedding with shape
+        ``(n_samples, 2)``; use it for visualization, not as a lossless
+        replacement for the spectral scaffold.
+
+        Returns
+        -------
+        ndarray, shape (n_samples, 2)
+            Stored projection from ``ProjectionDict``. Call :meth:`fit` or
+            :meth:`project` first if it is unavailable.
+        """
         return self._get_projection("MAP", multiscale=False)
 
     @property
     def msTopoMAP(self):
-        """2-D MAP layout on the msDM refined graph."""
+        """Two-dimensional MAP layout from the multiscale msDM branch.
+
+        This is the MAP-style visualization computed from the refined
+        graph/operator built in ``msZ`` space. Because ``msZ`` aggregates
+        diffusion behavior across scales, this layout is often a useful default
+        view for data with hierarchical or multiscale structure.
+
+        Returns
+        -------
+        ndarray, shape (n_samples, 2)
+            Stored projection from ``ProjectionDict``. Call :meth:`fit` or
+            :meth:`project` first if it is unavailable.
+        """
         return self._get_projection("MAP", multiscale=True)
 
     @property
     def TopoPaCMAP(self):
-        """2-D PaCMAP layout on the DM refined graph."""
+        """Two-dimensional PaCMAP layout from the fixed-time DM branch.
+
+        PaCMAP is an optional projection method that balances nearby,
+        mid-near, and farther point pairs. This property returns the PaCMAP view
+        computed from the fixed-time diffusion scaffold ``Z``.
+
+        Returns
+        -------
+        ndarray, shape (n_samples, 2)
+            Stored PaCMAP projection. Requires the PaCMAP optional dependency and
+            a fitted or explicitly projected ``PaCMAP`` layout.
+        """
         return self._get_projection("PaCMAP", multiscale=False)
 
     @property
     def msTopoPaCMAP(self):
-        """2-D PaCMAP layout on the msDM refined graph."""
+        """Two-dimensional PaCMAP layout from the multiscale msDM branch.
+
+        This property returns the PaCMAP view computed from the multiscale
+        diffusion scaffold ``msZ``. It is useful as a comparison to ``msTopoMAP``
+        because PaCMAP and MAP optimize different layout objectives.
+
+        Returns
+        -------
+        ndarray, shape (n_samples, 2)
+            Stored PaCMAP projection. Requires the PaCMAP optional dependency and
+            a fitted or explicitly projected ``PaCMAP`` layout.
+        """
         return self._get_projection("PaCMAP", multiscale=True)
 
     # ------------------------------------------------------------------
@@ -688,7 +856,47 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return_dict=True,
         **kwargs,
     ):
-        """Per-sample spectral selectivity (delegates to ``topo.analysis``)."""
+        """Compute per-sample diagnostics in the spectral scaffold.
+
+        The returned scores summarize how strongly each sample is associated
+        with particular scaffold axes and whether its local neighborhood is
+        axis-like or radially separated. These diagnostics are exploratory:
+        they help identify samples driven by a small number of spectral modes,
+        but they are not supervised labels or clustering scores.
+
+        Parameters
+        ----------
+        Z : array-like, optional
+            Scaffold coordinates to analyze. If omitted, uses
+            :meth:`spectral_scaffold`.
+        evals : array-like, optional
+            Eigenvalues matching the scaffold columns. If omitted, uses the
+            fitted eigenvalues for the selected DM/msDM branch.
+        multiscale : bool, default=True
+            Whether the default scaffold should be ``msZ`` (``True``) or ``Z``
+            (``False``).
+        use_scaffold_components : bool, default=True
+            If automatic sizing selected fewer useful components than were
+            computed, restrict diagnostics to that selected width.
+        smooth_P : {'X', 'Z', 'msZ'} or None, default=None
+            Optional fitted operator used to diffusion-smooth the scalar
+            diagnostic fields.
+        smooth_t : int, default=0
+            Number of smoothing steps when ``smooth_P`` is provided.
+        out_prefix : str, default='spectral'
+            Prefix used when storing results in ``LocalScoresDict``.
+        return_dict : bool, default=True
+            If ``True``, return the result dictionary. If ``False``, only store
+            the result in ``LocalScoresDict``.
+        **kwargs
+            Forwarded to :func:`topo.analysis.spectral_selectivity`.
+
+        Returns
+        -------
+        dict or None
+            Dictionary with ``EAS``, ``RayScore``, ``LAC``, ``axis``,
+            ``axis_sign``, and ``radius`` when ``return_dict=True``.
+        """
         if Z is None:
             Z = self.spectral_scaffold(multiscale=multiscale)
         Z = np.asarray(Z)
@@ -718,15 +926,89 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return result if return_dict else None
 
     def filter_signal(self, signal, t: int = 8, which: str = "msZ"):
-        """Diffusion-filter a 1-D signal."""
+        """Smooth a per-sample scalar signal over a fitted diffusion operator.
+
+        This applies ``P^t`` to a one-dimensional signal, where ``P`` is one of
+        the fitted operators from the pipeline. It is useful for denoising or
+        visualizing a continuous per-sample quantity, such as a score, intensity,
+        or expression value, according to the learned graph geometry.
+
+        Parameters
+        ----------
+        signal : array-like, shape (n_samples,)
+            One value per fitted sample.
+        t : int, default=8
+            Number of diffusion steps. Larger values produce stronger smoothing.
+        which : {'X', 'Z', 'msZ'}, default='msZ'
+            Operator to use: input-space base operator (``'X'``), fixed-time DM
+            scaffold operator (``'Z'``), or multiscale scaffold operator
+            (``'msZ'``).
+
+        Returns
+        -------
+        ndarray, shape (n_samples,)
+            Diffusion-smoothed signal.
+        """
         return _analysis.filter_signal(signal, self._select_P_operator(which), t)
 
     def impute(self, X, t: int = 8, which: str = "msZ", **kwargs):
-        """Diffusion-based imputation."""
+        """Diffuse a data matrix over a fitted graph operator.
+
+        Each column of ``X`` is treated as a graph signal and smoothed by
+        applying ``P^t``. This can be used as a simple graph-based denoising or
+        imputation step, but it should be interpreted as smoothing over the
+        learned geometry rather than recovery of unobserved ground truth.
+
+        Parameters
+        ----------
+        X : array-like or sparse matrix, shape (n_samples, n_features)
+            Data values to diffuse. The number of rows must match the fitted
+            samples.
+        t : int, default=8
+            Number of diffusion steps. Larger values smooth more aggressively.
+        which : {'X', 'Z', 'msZ'}, default='msZ'
+            Fitted operator to use for diffusion.
+        **kwargs
+            Forwarded to :func:`topo.analysis.impute`, such as ``output``.
+
+        Returns
+        -------
+        ndarray or scipy.sparse matrix
+            Diffused version of ``X``. The output format follows
+            :func:`topo.analysis.impute`.
+        """
         return _analysis.impute(X, self._select_P_operator(which), t, **kwargs)
 
     def riemann_diagnostics(self, Y=None, L=None, diffusion_op=None, **kwargs):
-        """Riemann metric + deformation scalars."""
+        """Measure local distortion in a two-dimensional embedding.
+
+        This estimates a Riemannian metric field for a 2-D layout and derives
+        scalar distortion summaries such as anisotropy, log-determinant, and
+        deformation. Use it to identify where a visualization stretches,
+        compresses, or anisotropically distorts the fitted graph geometry.
+
+        Parameters
+        ----------
+        Y : array-like, shape (n_samples, 2), optional
+            Embedding to diagnose. If omitted, the first available fitted layout
+            is used, trying ``TopoMAP``, ``msTopoMAP``, ``TopoPaCMAP``, and
+            ``msTopoPaCMAP`` before computing a MAP projection.
+        L : array-like or sparse matrix, optional
+            Graph Laplacian/operator used as the reference geometry. If omitted,
+            uses ``base_kernel.L``.
+        diffusion_op : {'X', 'Z', 'msZ'} or None, default=None
+            Optional fitted operator used to smooth deformation maps when
+            ``diffusion_t`` is passed through ``kwargs``.
+        **kwargs
+            Forwarded to :func:`topo.analysis.riemann_diagnostics`.
+
+        Returns
+        -------
+        dict
+            Dictionary stored in ``RiemannMetricDict['last']``. Common keys are
+            ``G`` for the local metric tensor, ``anisotropy``, ``logdetG``,
+            ``deformation``, and ``limits``.
+        """
         if Y is None:
             for prop in ("TopoMAP", "msTopoMAP", "TopoPaCMAP", "msTopoPaCMAP"):
                 try:

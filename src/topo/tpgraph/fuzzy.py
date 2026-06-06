@@ -116,18 +116,6 @@ def fuzzy_simplicial_set(
     n_jobs : int (optional, default 1).
         Number of threads to be used in computation of nearest neighbors.  Set to -1 to use all available CPUs.
 
-    knn_indices : array of shape (n_samples, n_neighbors) (optional).
-        If the k-nearest neighbors of each point has already been calculated
-        you can pass them in here to save computation time. This should be
-        an array with the indices of the k-nearest neighbors as a row for
-        each data point. Ignored if metric is 'precomputed'.
-
-    knn_dists : array of shape (n_samples, n_neighbors) (optional).
-        If the k-nearest neighbors of each point has already been calculated
-        you can pass them in here to save computation time. This should be
-        an array with the distances of the k-nearest neighbors as a row for
-        each data point. Ignored if metric is 'precomputed'.
-
     set_op_mix_ratio : float (optional, default 1.0).
         Interpolate between (fuzzy) union and intersection as the set operation
         used to combine local fuzzy simplicial sets to obtain a global fuzzy

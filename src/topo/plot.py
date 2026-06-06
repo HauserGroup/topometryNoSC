@@ -542,9 +542,9 @@ def plot_riemann_metric(
         Embedding matrix.
 
     L: numpy.ndarray
-       Graph Laplacian matrix. Should be provided if H_emb is not provided.
+        Graph Laplacian matrix. Should be provided if H_emb is not provided.
 
-    H : Dual Riemann metric, shape = (n, n_dim, n_dim)
+    H_emb : Dual Riemann metric, shape = (n, n_dim, n_dim)
         The inverse (dual) Riemann metric matrix at each point. Should be provided if Laplacian is not provided.
         Computed with the class `topo.eval.rmetric.RiemannMetric`.
 
@@ -569,7 +569,7 @@ def plot_riemann_metric(
     random_state: int (optional, default None)
         Random state for sampling points to plot ellipses of.
 
-    kwargs: dict
+    **kwargs: dict
         Additional arguments for matplotlib.
 
     References
@@ -968,7 +968,7 @@ def annotate_heatmap(
         Value in data units according to which the colors from textcolors are
         applied.  If None (the default) uses the middle of the colormap as
         separation.  Optional.
-    **kwargs
+    **textkw
         All other arguments are forwarded to each call to `text` used to create
         the text labels.
     """

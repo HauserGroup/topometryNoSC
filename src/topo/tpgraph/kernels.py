@@ -833,7 +833,13 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def knn(self):
-        """Return the k-nearest-neighbors graph."""
+        """Sparse k-nearest-neighbor distance graph fitted in input space.
+
+        This is the raw neighbor graph used to build the affinity kernel. Rows
+        correspond to samples and nonzero entries store neighbor distances. It is
+        available after :meth:`fit` when the kernel was built from feature data;
+        it is not populated for precomputed-distance inputs.
+        """
         if self.knn_ is None:
             raise ValueError(
                 "No k-nearest-neighbors graph has been fitted yet or precomputed versions were used!"
@@ -842,14 +848,27 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def K(self):
-        """Return the kernel (affinity) matrix."""
+        """Sparse weighted affinity matrix learned by the kernel.
+
+        ``K[i, j]`` is the edge weight between samples ``i`` and ``j`` after the
+        selected kernel construction, such as adaptive bandwidth, fuzzy
+        simplicial-set affinities, continuous kNN, or Gaussian weighting. This is
+        the main graph representation passed to Laplacian and diffusion
+        operators.
+        """
         if self._K is None:
             raise ValueError("No kernel matrix has been fitted yet. Call fit() first.")
         return self._K
 
     @property
     def A(self):
-        """Return the graph adjacency matrix."""
+        """Binary adjacency matrix derived from the affinity support.
+
+        ``A`` has the same shape as :attr:`K`, but stores only whether an edge is
+        present. Nonzero affinities in ``K`` become 1 and absent edges remain 0.
+        Use this when graph connectivity matters but affinity magnitude should
+        not affect the calculation.
+        """
         if self._K is None:
             raise ValueError("No kernel matrix has been fitted yet. Call fit() first.")
         if self._A is None:
@@ -858,7 +877,12 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def degree(self):
-        """Return the degree of the binary adjacency matrix."""
+        """Per-sample binary degree of the adjacency graph.
+
+        This is the row degree of :attr:`A`, so each edge contributes one unit
+        regardless of its affinity weight. It is useful for checking graph
+        connectivity and neighborhood support.
+        """
         if self._degree is None:
             if self._K is None:
                 raise ValueError(
@@ -869,7 +893,12 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def weighted_degree(self):
-        """Return the degree of the weighted affinity matrix."""
+        """Per-sample weighted degree of the affinity graph.
+
+        This is the row sum of :attr:`K`, so each edge contributes according to
+        its learned affinity. It is the degree notion used by weighted graph
+        operators such as Laplacians and diffusion matrices.
+        """
         if self._weighted_degree is None:
             if self._K is None:
                 raise ValueError(
@@ -905,7 +934,13 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def L(self):
-        """Object synonym for the :meth:`laplacian` function."""
+        """Cached graph Laplacian for the fitted affinity matrix.
+
+        Accessing this property computes :meth:`laplacian` with the kernel's
+        configured ``laplacian_type`` if the Laplacian is not already cached.
+        Use :meth:`laplacian` directly when you need to request a specific
+        Laplacian normalization.
+        """
         if self._L is None:
             return self.laplacian()
         return self._L
@@ -969,7 +1004,13 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def P(self):
-        """Object synonym for the :meth:`diff_op` function."""
+        """Cached diffusion operator for the fitted affinity matrix.
+
+        Accessing this property computes :meth:`diff_op` with the default
+        anisotropy and symmetric normalization if the operator is not already
+        cached. The result is the Markov/diffusion operator used by diffusion
+        maps and related spectral scaffolds.
+        """
         if self._P is None:
             return self.diff_op()
         return self._P
@@ -1021,7 +1062,13 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def SP(self):
-        """Object synonym for the :meth:`shortest_paths` function."""
+        """Cached all-pairs graph shortest-path distance matrix.
+
+        Accessing this property computes :meth:`shortest_paths` on the fitted
+        affinity graph if the matrix is not already cached. The returned dense
+        matrix contains graph geodesic distances between samples and can be
+        expensive for large datasets.
+        """
         if self._SP is None:
             return self.shortest_paths()
         return self._SP

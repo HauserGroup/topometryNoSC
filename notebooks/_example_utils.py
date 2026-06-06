@@ -471,6 +471,7 @@ def compute_metrics(
             Y,
             n_neighbors=config.n_neighbors,
             metric=config.metric,
+            n_jobs=1,
             cor_method="spearman",
             landmarks=landmarks,
             random_state=config.random_state,

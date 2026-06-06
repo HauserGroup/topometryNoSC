@@ -33,7 +33,7 @@ from data import load_cells   # the helper described above
 ## 1. Get the data
 
 ```python
-X, labels = load_cells()
+X, labels, _ = load_cells()
 
 print(X.shape)        # (n_rows, n_columns) e.g. (1797, 64)
 print(set(labels))    # the groups, used only for colouring later
@@ -47,9 +47,9 @@ By default the helper uses the hosted dataset if it can reach it, and otherwise
 the built-in offline one. You can force either:
 
 ```python
-X, labels = load_cells("builtin")   # offline, no download
-X, labels = load_cells("hosted")    # only the hosted file (error if missing)
-X, labels = load_cells("auto")      # default: hosted, fall back to built-in
+X, labels, _ = load_cells("builtin")   # offline, no download
+X, labels, _ = load_cells("hosted")    # only the hosted file (error if missing)
+X, labels, _ = load_cells("auto")      # default: hosted, fall back to built-in
 ```
 
 Want readable group names too (for example cell types)? Ask for them:
@@ -163,26 +163,8 @@ tp.plot.scatter(tg2.TopoMAP, labels=labels)
 
 ## Using your own data
 
-You do **not** change the tutorial to use your own data — you only change the
-helper. The recommended workflow keeps every heavy or domain-specific dependency
-out of the package entirely:
-
-1. **Prepare once, on your machine.** Do whatever cleaning/normalising your data
-   needs in a one-off script (this is the only place tools like single-cell
-   packages live). End with two arrays: `X` (rows × columns, float) and
-   `labels` (one integer per row).
-2. **Save as one plain file.** numpy's `.npz` is ideal — one compressed file,
-   loads with numpy alone:
-   ```python
-   import numpy as np
-   np.savez_compressed("example.npz", X=X, labels=labels)
-   ```
-3. **Host it.** Upload `example.npz` as a GitHub Release asset (free, versioned,
-   lives with the repo). Copy its download URL.
-4. **Point the helper at it.** Set `DATA_URL` in [`data.py`](data.py) to that
-   URL. `load_cells` downloads it once, caches it locally, and returns
-   `(X, labels)` — no single-cell packages, no preprocessing for anyone who runs
-   the tutorial.
-
-That's the whole point: the tutorial, and your users, only ever see a ready-made
-table.
+You don't change the tutorial to use your own data — you only change the helper.
+Prepare your data once (the only place heavy or domain-specific tools live), save
+it as a plain `.npz`, host it, and point `DATA_URL` in [`data.py`](data.py) at it.
+The full recipe, with the export script, is in
+[Data provenance](data-provenance.md).

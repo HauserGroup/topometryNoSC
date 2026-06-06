@@ -97,30 +97,66 @@ The original upstream project's **(OLD)** [documentation](https://topometry.read
 ## Minimal example
 
 ```python
-import numpy as np
 import topo as tp
-
-# Generate sample data (e.g., points on a Swiss roll)
 from sklearn.datasets import make_swiss_roll
+
 X, color = make_swiss_roll(n_samples=2000, noise=0.5, random_state=42)
 
-# Learn topological metrics and spectral scaffold
+# Fit runs the whole pipeline: kNN -> kernel -> eigenbasis -> scaffold ->
+# refined graph -> 2-D layouts (defaults: MAP + PaCMAP).
 tg = tp.TopOGraph()
 tg.fit(X)
 
-# Build a refined topological graph
-tgraph = tg.transform(X)
+# Layouts computed during fit, available as attributes:
+print(tg.TopoMAP.shape)         # (2000, 2)
+print(tg.msTopoPaCMAP.shape)    # (2000, 2)
 
-# Optimize a 2-D layout
-tg.project_graph_layouts()
+# Compute another layout on demand from the same fitted model:
+emb = tg.project(projection_method="PaCMAP")
 ```
+
+## Step-by-step (under the hood)
+
+`TopOGraph.fit` above chains four building blocks. Each is a standalone,
+scikit-learn-style estimator you can use on its own — swap one out, stop early,
+or feed your own matrices in:
+
+```python
+from sklearn.datasets import make_swiss_roll
+
+from topo.base.ann import kNN
+from topo.tpgraph.kernels import Kernel
+from topo.spectral.eigen import EigenDecomposition
+from topo.layouts.projector import Projector
+
+X, color = make_swiss_roll(n_samples=2000, noise=0.5, random_state=42)
+
+# 1. k-nearest-neighbor graph (sparse). Useful on its own.
+knn_graph = kNN(X, n_neighbors=15, metric="euclidean")
+
+# 2. Affinity kernel -> Laplace-Beltrami-type operator.
+kernel = Kernel(n_neighbors=15, metric="euclidean").fit(X)
+affinity = kernel.K              # sparse affinity matrix
+operator = kernel.P              # diffusion operator
+
+# 3. Spectral scaffold: eigendecompose the operator (diffusion maps).
+eig = EigenDecomposition(n_components=20, method="DM").fit(kernel)
+scaffold = eig.transform(kernel) # (2000, ~20) eigen-coordinates
+
+# 4. 2-D layout from the scaffold (any feature matrix works here).
+emb = Projector(n_components=2, projection_method="MAP").fit_transform(scaffold)
+print(emb.shape)                 # (2000, 2)
+```
+
+Each step maps to a documented class: `kNN`, `Kernel`, `EigenDecomposition`,
+`Projector`. See the [API reference](https://HauserGroup.github.io/topometryNoSC/api/)
+and the [step-by-step tutorial](https://HauserGroup.github.io/topometryNoSC/tutorials/step-by-step/).
 
 ## Output
 
-Example output for `notebooks/example.ipynb`:
+Example `TopOGraph` fit:
 
-
-![TopOMetry fit example](topo/example.png)
+![TopOMetry fit example](src/topo/example.png)
 
 ## Changelog
 

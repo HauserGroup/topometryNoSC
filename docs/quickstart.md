@@ -57,6 +57,9 @@ tg.eigenvalues      # eigenvalues of the active eigenbasis
 tg.eigenspectrum()  # scree plot
 ```
 
+The fitted operator properties above are read-only views of the fitted pipeline
+state. Re-fit the model, or build a new `TopOGraph`, to change them.
+
 ## Choosing kernel versions
 
 The `base_kernel_version` and `graph_kernel_version` parameters control the graph construction. Available options:

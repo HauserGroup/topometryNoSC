@@ -721,7 +721,7 @@ def topo_preserve_score(
     r: int = 64,
     symmetric_hint: bool = False,
     k_for_pf1: int | None = None,
-    weights: dict = dict(PF1=0.30, PJS=0.30, SP=0.30),
+    weights: dict | None = None,
 ):
     """Composite **TopoPreserve score** from four operator-aware metrics.
 
@@ -829,6 +829,9 @@ def topo_preserve_score(
     }
 
     # --- weighted mixture with renormalization over finite components ---
+    if weights is None:
+        weights = {"PF1": 0.30, "PJS": 0.30, "SP": 0.30}
+
     acc, wsum = 0.0, 0.0
     for key, w in weights.items():
         v = parts.get(key, np.nan)

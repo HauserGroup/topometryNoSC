@@ -52,29 +52,29 @@ from _example_utils import (
 
 config = DemoConfig(
     # Data
-    use_custom_data=False,
-    data_path=Path("../data/my_data.npy"),
-    color_path=None,
-    scale_data=False,
+    use_custom_data=False,  # True loads data_path instead of the Swiss roll
+    data_path=Path("../data/my_data.npy"),  # (n_samples, n_features) float array
+    color_path=None,  # optional: (n_samples,) color values
+    scale_data=False,  # recommended when features have very different units
     n_samples=2000,
     noise=0.5,
     random_state=42,
     # Graph/kernel
     n_neighbors=15,
-    metric="euclidean",
-    backend="hnswlib",
-    kernel_version="cknn",
-    sigma=1.0,
-    anisotropy=1.0,
+    metric="euclidean",  # any metric accepted by the chosen backend
+    backend="hnswlib",  # "hnswlib" | "nmslib" | "sklearn"
+    kernel_version="cknn",  # "bw_adaptive" | "fuzzy" | "cknn" | "gaussian"
+    sigma=1.0,  # bandwidth for "gaussian" only
+    anisotropy=1.0,  # alpha for the diffusion operator (0-1)
     # Spectral scaffold
-    n_components_dm=64,
-    dm_method="msDM",
-    eigensolver="arpack",
-    diffusion_time=0,
+    n_components_dm=64,  # eigenvectors to compute
+    dm_method="msDM",  # "DM" | "msDM" | "LE"
+    eigensolver="arpack",  # "arpack" | "lobpcg" | "amg"
+    diffusion_time=0,  # t=0 means multiscale; t>0 means fixed-time DM
     # Final 2-D layout
-    projection_method="PaCMAP",
+    projection_method="PaCMAP",  # "MAP" | "PaCMAP" | "UMAP" | "Isomap" | ...
     n_components_2d=2,
-    num_iters=500,
+    num_iters=500,  # optimization iterations for iterative layouts
     # Output
     save_figures=False,
     output_dir=Path("../figures"),

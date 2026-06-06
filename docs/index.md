@@ -55,5 +55,6 @@ geometry preserved.
 
 - [Installation](installation.md)
 - [Quickstart](quickstart.md) — fit a `TopOGraph`, inspect scaffolds, make 2-D layouts
+- [Practical FAQ](faq.md) — when to use TopoMetry, target-aware checks, troubleshooting
 - [Concepts](concepts.md) and [Math details](math_details.md)
 - [API Reference](api.md)

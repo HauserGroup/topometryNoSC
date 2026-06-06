@@ -28,6 +28,15 @@ class TestLandmarkAndSparseMatrixUtilities:
         assert idx.shape == (2,)
         assert set(idx).issubset(set(range(X.shape[0])))
 
+    def test_kmeans_landmark_indices_accept_sparse_input(self):
+        X = sparse.csr_matrix([[0.0], [0.1], [10.0], [10.1]])
+        idx = _utils.get_landmark_indices(
+            X, n_landmarks=2, method="kmeans", random_state=0, batch_size=4
+        )
+
+        assert idx.shape == (2,)
+        assert set(idx).issubset(set(range(X.shape[0])))
+
     def test_landmark_method_validation(self):
         with pytest.raises(ValueError, match="Unknown landmark"):
             _utils.get_landmark_indices(np.ones((4, 2)), method="bad")

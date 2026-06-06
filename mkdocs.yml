@@ -64,6 +64,7 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Quickstart: quickstart.md
+  - Practical FAQ: faq.md
   - Tutorials:
       - Step by step: tutorials/step-by-step.md
       - Plotting: tutorials/plotting.md

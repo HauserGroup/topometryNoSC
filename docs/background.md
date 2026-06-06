@@ -120,14 +120,21 @@ arrangement; trying a few is normal.
 
 ## 7. Evaluation and geometry diagnostics
 
-How faithful is the embedding? The package scores geometry preservation rather
-than trusting any single layout. *(Package: `topo.eval`.)*
+How faithful is the embedding? The package emphasizes geometry and operator
+preservation rather than trusting any single layout. *(Packages: `topo.eval`,
+`topo.eval.topo_metrics`, `topo.eval.rmetric`.)*
 
 - **Geodesic rank correlation.** The package compares geodesic distances in the
   original vs. embedded space with Spearman/Kendall correlation (built on Isomap's
   geodesic idea, §6). [Tenenbaum et al., *Science* 2000](https://doi.org/10.1126/science.290.5500.2319)
-- **Trustworthiness & continuity.** The standard neighbor-preservation metrics:
-  do embedded neighbors reflect real neighbors, and vice versa.
+- **Operator-native topology metrics.** The package also compares transition
+  neighborhoods, transition probabilities, and spectral coordinates between
+  graph operators. These scores are meant to compare representations and
+  parameter choices in the same graph/diffusion language as the pipeline.
+- **Trustworthiness & continuity.** These are standard DR diagnostics in the
+  broader literature: do embedded neighbors reflect real neighbors, and vice
+  versa? They are useful context, but they are not the main built-in evaluation
+  API in this fork.
   [Venna & Kaski, *Neural Networks* 2006](https://doi.org/10.1016/j.neunet.2006.05.014)
 - **Co-ranking framework.** Lee & Verleysen unify these rank-based metrics in one
   co-ranking matrix — the cleanest way to think about DR quality.
@@ -136,6 +143,10 @@ than trusting any single layout. *(Package: `topo.eval`.)*
   an embedding introduces from its Laplacian — the basis for the package's
   `rmetric` diagnostics (after the megaman library). [arXiv:1305.7255](https://arxiv.org/abs/1305.7255) ·
   [megaman, *JMLR* 2016](https://www.jmlr.org/papers/v17/16-109.html)
+- **Target-aware evaluation.** Predicting or smoothing a per-sample target
+  answers a different question from geometry preservation. See the
+  [Practical FAQ](faq.md#how-should-i-evaluate-an-embedding-against-a-target-variable)
+  for recommended checks.
 
 ## 8. Surveys and starting points
 

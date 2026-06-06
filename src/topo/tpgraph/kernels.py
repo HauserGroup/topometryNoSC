@@ -131,18 +131,20 @@ def _cosine_knn_requires_unit_vectors(backend: str) -> bool:
     return backend in ("hnswlib", "faiss")
 
 
-def _cosine_distance_to_angle_from_sparse_triplets(x_idx, y_idx, dists):
-    """Convert sparse cosine-distance triplets to angles (radians).
+def _cosine_distance_to_angle(dists):
+    """Convert cosine distances to angles in radians.
 
-    Given triplets of cosine *distance* d = 1 - cos in [0, 2],
-    converts to angle θ = arccos(cos) with cos = 1 - d.
-    Returns in-place modified dists (angles in radians).
+    Given cosine *distance* d = 1 - cos in [0, 2], converts to
+    angle θ = arccos(cos) with cos = 1 - d.
     """
-    # cos = 1 - d
-    # clamp to [-1, 1] before arccos
     cos_vals = 1.0 - dists
     cos_vals = np.clip(cos_vals, -1.0, 1.0)
     return np.arccos(cos_vals)
+
+
+def _cosine_distance_to_angle_from_sparse_triplets(x_idx, y_idx, dists):
+    """Convert sparse cosine-distance triplets to angles (radians)."""
+    return _cosine_distance_to_angle(dists)
 
 
 def _ensure_nonneg_and_finite(arr, eps=0.0):
@@ -369,6 +371,8 @@ def compute_kernel(
     else:
         if adaptive_bw:
             adap_sd = _adap_bw(K, k)
+            if metric == "cosine" and use_angular:
+                adap_sd = _cosine_distance_to_angle(adap_sd)
             # Get an indirect measure of the local density
             pm = np.interp(adap_sd, (adap_sd.min(), adap_sd.max()), (2, k))
             if return_densities:
@@ -382,7 +386,7 @@ def compute_kernel(
                     expand_nbr_search = False
                 else:
                     new_K = kNN(
-                        X,
+                        X_for_knn,
                         metric=metric,
                         n_neighbors=new_k,
                         backend=backend,
@@ -390,6 +394,8 @@ def compute_kernel(
                         **kwargs,
                     )
                     adap_sd_new = _adap_bw(new_K, new_k)
+                    if metric == "cosine" and use_angular:
+                        adap_sd_new = _cosine_distance_to_angle(adap_sd_new)
 
                     pm_new = np.interp(
                         adap_sd_new, (adap_sd_new.min(), adap_sd_new.max()), (2, new_k)
@@ -407,7 +413,7 @@ def compute_kernel(
 
         # If using cosine metric and 'use_angular', convert cosine distance (=1-cos) to angle (radians)
         if metric == "cosine" and use_angular:
-            dists = _cosine_distance_to_angle_from_sparse_triplets(x, y, dists)
+            dists = _cosine_distance_to_angle(dists)
 
         # Numerical guards for distances (important for arccos and exponent)
         # For cosine distance we expect [0, 2]; for angles [0, pi]; Euclidean ≥ 0.

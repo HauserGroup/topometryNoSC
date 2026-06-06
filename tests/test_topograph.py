@@ -144,6 +144,21 @@ class TestTopOGraphProjections:
         assert Y.shape == (n, 2)
         assert np.isfinite(Y).all()
 
+    def test_pacmap_custom_init_array_workaround(self):
+        """Test that PaCMAP accepts a custom numpy array initialization without crashing."""
+        pytest.importorskip("pacmap")
+        from topo.layouts.projector import Projector
+
+        X = np.random.RandomState(42).rand(20, 5)
+        init_arr = np.random.RandomState(42).rand(20, 2)
+        proj = Projector(
+            projection_method="PaCMAP",
+            init=init_arr,
+            num_iters=5,
+        )
+        Y = proj.fit_transform(X)
+        assert Y.shape == (20, 2)
+
     def test_select_p_operator_rejects_invalid_name(self, fitted_topograph):
         with pytest.raises(ValueError, match="must be one of"):
             fitted_topograph._select_P_operator("bad")

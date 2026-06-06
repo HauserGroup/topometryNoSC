@@ -38,6 +38,9 @@ Use TopoMetry when you want:
 
 Empirically, TopoMetry often outperforms PCA-based pipelines and stand-alone layouts. Still, **let the data decide**—TopoMetry includes metrics and reports to support evidence-based choices.
 
+For practical guidance on UMAP vs. TopoMetry, target-aware embedding checks, and
+layout troubleshooting, see [`docs/faq.md`](docs/faq.md).
+
 ### When not to use TopoMetry
 
 - **Very small sample sizes** where the manifold hypothesis is weak

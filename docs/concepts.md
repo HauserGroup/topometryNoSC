@@ -33,7 +33,9 @@ are then built in scaffold space before computing 2-D layouts.
 
 `topo.eval` provides metrics comparing local and global geometric structure
 between the original data representation and learned embeddings, plus Riemannian
-distortion diagnostics.
+distortion diagnostics. These scores evaluate geometry/topology preservation,
+not supervised target predictiveness; for target-aware checks see the
+[Practical FAQ](faq.md#how-should-i-evaluate-an-embedding-against-a-target-variable).
 
 ## High-level orchestrator
 

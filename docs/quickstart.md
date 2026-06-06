@@ -111,6 +111,10 @@ X_imputed = tg.impute(X, t=8, which='msZ')
 diag = tg.riemann_diagnostics()
 ```
 
+For target-aware checks, such as asking whether a 2-D embedding explains a
+continuous or binary per-sample variable, see the
+[Practical FAQ](faq.md#how-should-i-evaluate-an-embedding-against-a-target-variable).
+
 ## Save and load
 
 ```python

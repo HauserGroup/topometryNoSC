@@ -90,7 +90,7 @@ class Projector(BaseEstimator, TransformerMixin):
         landmarks=None,
         landmark_method="kmeans",
         num_iters=800,
-        init="spectral",
+        init: str | np.ndarray = "spectral",
         nbrs_backend="hnswlib",
         keep_estimator=False,
         random_state=None,
@@ -400,6 +400,23 @@ class Projector(BaseEstimator, TransformerMixin):
                 metric = "angular"
             else:
                 metric = self.metric
+
+            # Workaround for PaCMAP <=0.7.0 bug where `init == "pca"` crashes on ndarrays
+            class _SafePacmapInit(np.ndarray):
+                def __eq__(self, other):
+                    if isinstance(other, str):
+                        return False
+                    return super().__eq__(other)
+
+                def __ne__(self, other):
+                    if isinstance(other, str):
+                        return True
+                    return super().__ne__(other)
+
+            safe_init = self.init_Y_
+            if isinstance(safe_init, np.ndarray):
+                safe_init = safe_init.view(_SafePacmapInit)
+
             self.estimator_ = pacmap.PaCMAP(
                 n_components=self.n_components,
                 n_neighbors=self.n_neighbors,
@@ -409,7 +426,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 verbose=self.verbose,
                 **kwargs,
             )
-            self.Y_ = self.estimator_.fit_transform(X=X, init=self.init_Y_)
+            self.Y_ = self.estimator_.fit_transform(X=X, init=safe_init)
 
         elif self.projection_method == "TriMAP":
             try:

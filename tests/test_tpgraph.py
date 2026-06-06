@@ -104,3 +104,28 @@ def test_kernel_numeric_helpers():
         [0.1, 0.1, 2.0],
     )
     np.testing.assert_allclose(kernels._adap_bw(graph, n_neighbors=2), [1.0, 1.0])
+
+
+def test_cosine_use_angular_converts_adaptive_bandwidth_units():
+    X = np.array(
+        [
+            [1.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 1.0],
+            [-1.0, 0.0],
+        ]
+    )
+
+    _K, densities = compute_kernel(
+        X,
+        metric="cosine",
+        n_neighbors=2,
+        backend="sklearn",
+        use_angular=True,
+        return_densities=True,
+        symmetrize=False,
+    )
+
+    raw_bandwidth = kernels._adap_bw(densities["knn"], n_neighbors=2)
+    expected = kernels._cosine_distance_to_angle(raw_bandwidth)
+    np.testing.assert_allclose(densities["adaptive_bw"], expected)

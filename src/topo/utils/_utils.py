@@ -47,7 +47,7 @@ def get_landmark_indices(
         from sklearn.cluster import MiniBatchKMeans
         from sklearn.metrics import pairwise_distances_argmin
 
-        data_arr = np.asarray(data.todense() if issparse(data) else data)
+        data_arr = np.asarray(data.toarray() if issparse(data) else data)
         kmeans = MiniBatchKMeans(
             n_clusters=n_landmarks, random_state=random_state, **kwargs
         ).fit(data_arr)

@@ -125,62 +125,107 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     Learns spectral scaffolds, refined operators and 2-D layouts from data.
 
+    Use this for standard end-to-end workflows. It orchestrates building
+    neighborhood graphs, diffusion operators, spectral scaffolds, and 2-D layouts.
+
+    **Notation Glossary:**
+    * `X` = original input data
+    * `Z` = fixed-time spectral scaffold
+    * `msZ` = multiscale spectral scaffold
+    * `P` = diffusion / Markov transition operator
+    * `kNN` = sparse nearest-neighbor distance graph
+    * `ID` = intrinsic dimensionality
+
+    **Example**
+    ```python
+    from topo import TopOGraph
+    model = TopOGraph(
+        base_knn=30,
+        graph_knn=30,
+        projection_methods=["MAP", "PaCMAP"],
+        random_state=42,
+    )
+    model.fit(X)
+    Y = model.msTopoMAP
+    Z = model.spectral_scaffold(multiscale=True)
+    ```
+
     Parameters
     ----------
-    base_knn : int, default 30
+    base_knn : int, default=30
         k-nearest neighbors for the base graph on input space.
-    graph_knn : int, default 30
+    graph_knn : int, default=30
         k-nearest neighbors for the refined graph built in spectral scaffold space.
-    min_eigs : int, default 128
+    min_eigs : int, default=128
         Minimum number of eigenpairs to compute for the scaffold.
     base_kernel : topo.tpgraph.Kernel or None, default None
         Pre-fitted kernel to reuse; if provided, ``fit`` skips base graph construction.
-    laplacian_type : str, default 'normalized'
+    laplacian_type : {"normalized", "unnormalized", "random_walk"}, default="normalized"
         Laplacian normalization for spectral computations.
-    base_kernel_version : str, default 'bw_adaptive'
+    base_kernel_version : {"cknn", "fuzzy", "bw_adaptive", "bw_adaptive_alpha_decaying", "bw_adaptive_nbr_expansion", "bw_adaptive_alpha_decaying_nbr_expansion", "gaussian"}, default="bw_adaptive"
         Kernel choice for the base graph.
-    graph_kernel_version : str, default 'bw_adaptive'
+    graph_kernel_version : {"cknn", "fuzzy", "bw_adaptive", "bw_adaptive_alpha_decaying", "bw_adaptive_nbr_expansion", "bw_adaptive_alpha_decaying_nbr_expansion", "gaussian"}, default="bw_adaptive"
         Kernel choice for scaffold graphs.
-    backend : str, default 'hnswlib'
+    backend : {"hnswlib", "nmslib", "faiss", "annoy", "sklearn"}, default="hnswlib"
         Approximate nearest-neighbor backend.
-    base_metric : str, default 'cosine'
-        Distance metric for the base kNN graph.
-    graph_metric : str, default 'euclidean'
+    base_metric : str, default="cosine"
+        Distance metric for the base kNN graph (e.g., "cosine", "euclidean", or "precomputed").
+    graph_metric : str, default="euclidean"
         Distance metric for kNN in scaffold space.
-    diff_t : int, default 0
+    diff_t : int, default=0
         Diffusion time for single-time scaffold.
-    sigma : float, default 0.1
+    sigma : float, default=0.1
         Bandwidth for Gaussian kernels.
-    delta : float, default 1.0
+    delta : float, default=1.0
         Radius parameter for cKNN kernels.
-    n_jobs : int, default -1
+    n_jobs : int, default=-1
         Threads for kNN searches; -1 uses all cores.
-    low_memory : bool, default False
+    low_memory : bool, default=False
         Avoid caching large kernel objects.
-    eigen_tol : float, default 1e-8
+    eigen_tol : float, default=1e-8
         Tolerance for the eigensolver.
-    eigensolver : str, default 'arpack'
+    eigensolver : {"arpack", "lobpcg", "amg", "dense"}, default="arpack"
         Solver for eigendecomposition.
-    projection_methods : list[str], default ['MAP', 'PaCMAP']
-        Layouts to compute during ``fit``.
-    cache : bool, default True
+    projection_methods : list of str, default=["MAP", "PaCMAP"]
+        Layouts to compute during ``fit``. Supported strings include "MAP", "PaCMAP", "UMAP", "Isomap", "t-SNE", etc.
+    cache : bool, default=True
         Cache kernel / eigen objects in dictionaries for reuse.
-    verbosity : int, default 0
+    verbosity : int, default=0
         Logging verbosity (0=silent, 1=major, 2+=layout, 3=debug).
     random_state : int or RandomState, default 42
         Random seed.
-    id_method : str, default 'fsa'
+    id_method : {"fsa", "mle"}, default="fsa"
         Intrinsic-dimensionality estimator for scaffold sizing.
     id_ks : int or iterable, default 50
         Neighborhood sizes for I.D. estimation.
-    id_metric : str, default 'euclidean'
+    id_metric : str, default="euclidean"
         Metric for I.D. estimation.
-    id_quantile : float, default 0.99
-    id_min_components : int, default 128
-    id_max_components : int, default 1024
-    id_headroom : float, default 0.5
+    id_quantile : float, default=0.99
+        Quantile of local intrinsic-dimensionality estimates used to choose
+        the scaffold dimensionality. Higher values allocate more eigenvectors.
+    id_min_components : int, default=128
+        Lower bound on the number of spectral components computed, regardless
+        of the intrinsic-dimensionality estimate.
+    id_max_components : int, default=1024
+        Upper bound on the number of spectral components computed.
+    id_headroom : float, default=0.5
+        Fractional safety margin added to the intrinsic-dimensionality estimate
+        when selecting the number of spectral components.
     uom : bool, default False
         Enable Union-of-Manifolds (block-diagonal scaffolds).
+
+    Fitted Attributes
+    -----------------
+    BaseKernelDict : dict
+        Cached base kernels.
+    EigenbasisDict : dict
+        Cached spectral scaffolds.
+    GraphKernelDict : dict
+        Cached refined graph kernels.
+    ProjectionDict : dict
+        Cached 2-D projections.
+    global_dimensionality : float
+        Global intrinsic dimensionality estimate.
     """
 
     def __init__(
@@ -509,8 +554,25 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.layout_verbose = self.verbosity >= 2
         self.bases_graph_verbose = self.verbosity >= 3
 
-    def spectral_scaffold(self, multiscale: bool = True):
-        """Return scaffold coordinates (n_samples × n_eigs)."""
+    def spectral_scaffold(self, multiscale: bool = True) -> np.ndarray:
+        """Return spectral scaffold coordinates.
+
+        Parameters
+        ----------
+        multiscale : bool, default=True
+            If True, return the multiscale diffusion-map scaffold. If False,
+            return the fixed-time diffusion-map scaffold.
+
+        Returns
+        -------
+        Z : np.ndarray of shape (n_samples, n_components)
+            Spectral coordinates used to build refined graph operators and layouts.
+
+        Raises
+        ------
+        AttributeError
+            If called before `fit`.
+        """
         if self.uom_enabled:
             arr = self.msZ_uom if multiscale else self.Z_uom
             if arr is None:
@@ -528,8 +590,18 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     # ------------------------------------------------------------------
 
     @property
-    def eigenvalues(self):
-        """Eigenvalues of the active eigenbasis (dict in UoM mode)."""
+    def eigenvalues(self) -> np.ndarray | dict[str, Any]:
+        """Eigenvalues of the active spectral scaffold.
+
+        For diffusion maps (DM/msDM), large values (near 1) indicate smooth,
+        globally persistent geometric modes, while values near 0 indicate local noise.
+        In UoM mode, returns a dictionary containing the eigenvalues per component.
+
+        Returns
+        -------
+        evals : ndarray or dict
+            The eigenvalues array, or a dict in UoM mode.
+        """
         if getattr(self, "uom_enabled", False) and self.uom_eigenvalues_ms_list:
             mode = getattr(self, "_uom_active_mode", "msDM")
             per_comp = (
@@ -544,8 +616,17 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return self.EigenbasisDict[self.current_eigenbasis].eigenvalues
 
     @property
-    def knn_msZ(self):
-        """KNN graph in msDM scaffold space."""
+    def knn_msZ(self) -> csr_matrix:
+        """The k-nearest-neighbors graph built in the msDM scaffold space.
+
+        Represents the refined neighborhood structure after multiscale spectral
+        denoising. Used to build the final projection layout.
+
+        Returns
+        -------
+        knn : scipy.sparse.csr_matrix
+            The sparse distance matrix.
+        """
         if self.uom_enabled and self.knn_msZ_uom is not None:
             return self.knn_msZ_uom
         if self._knn_msZ is None:
@@ -553,8 +634,17 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return self._knn_msZ
 
     @property
-    def knn_Z(self):
-        """KNN graph in DM scaffold space."""
+    def knn_Z(self) -> csr_matrix:
+        """The k-nearest-neighbors graph built in the fixed-time DM scaffold space.
+
+        Represents the refined neighborhood structure after fixed-time spectral
+        denoising.
+
+        Returns
+        -------
+        knn : scipy.sparse.csr_matrix
+            The sparse distance matrix.
+        """
         if self.uom_enabled and self.knn_Z_uom is not None:
             return self.knn_Z_uom
         if self._knn_Z is None:
@@ -563,7 +653,16 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def P_of_msZ(self) -> csr_matrix:
-        """Diffusion operator on the msDM scaffold."""
+        """The diffusion operator (Markov matrix) on the msDM scaffold.
+
+        Captures the random walk transition probabilities on the refined
+        multiscale spectral manifold.
+
+        Returns
+        -------
+        P : scipy.sparse.csr_matrix
+            The sparse Markov transition matrix.
+        """
         if self.uom_enabled and self.P_of_msZ_uom is not None:
             return (
                 self.P_of_msZ_uom
@@ -581,7 +680,13 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def P_of_Z(self) -> csr_matrix:
-        """Diffusion operator on the DM scaffold."""
+        """The diffusion operator (Markov matrix) on the fixed-time DM scaffold.
+
+        Returns
+        -------
+        P : scipy.sparse.csr_matrix
+            The sparse Markov transition matrix.
+        """
         if self.uom_enabled and self.P_of_Z_uom is not None:
             return (
                 self.P_of_Z_uom
@@ -598,8 +703,17 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         raise AttributeError("P_of_Z is a read-only fitted property.")
 
     @property
-    def knn_X(self):
-        """Base kNN graph in input space."""
+    def knn_X(self) -> csr_matrix:
+        """The base k-nearest-neighbors graph in the original input space.
+
+        Contains the raw neighbor distances before any density correction
+        or spectral decomposition is applied.
+
+        Returns
+        -------
+        knn : scipy.sparse.csr_matrix
+            The sparse distance matrix.
+        """
         if self.uom_enabled and self.knn_X_uom is not None:
             return self.knn_X_uom
         if self.base_knn_graph is None:
@@ -607,8 +721,17 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return self.base_knn_graph
 
     @property
-    def P_of_X(self):
-        """Diffusion operator on input space."""
+    def P_of_X(self) -> csr_matrix:
+        """The base diffusion operator on the original input space.
+
+        The density-corrected Markov transition matrix from which the
+        spectral scaffolds (eigenbases) are initially decomposed.
+
+        Returns
+        -------
+        P : scipy.sparse.csr_matrix
+            The sparse Markov transition matrix.
+        """
         if self.uom_enabled and self.P_of_X_uom is not None:
             return self.P_of_X_uom
         if self.base_kernel is None:
@@ -616,13 +739,33 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return self.base_kernel.P
 
     @property
-    def global_id(self):
-        """Global intrinsic dimensionality estimate."""
+    def global_id(self) -> float:
+        """The estimated global intrinsic dimensionality of the dataset.
+
+        A scalar value representing the effective number of continuous dimensions
+        required to represent the data manifold, computed using the specified
+        `id_method` (e.g., MLE or FSA).
+
+        Returns
+        -------
+        dim : float
+            The global intrinsic dimensionality estimate.
+        """
         return self.global_dimensionality
 
     @property
-    def intrinsic_dim(self):
-        """Structured intrinsic-dimensionality info (global + local)."""
+    def intrinsic_dim(self) -> dict[str, Any]:
+        """Structured intrinsic-dimensionality information.
+
+        Returns a dictionary containing the method used, the global ID estimate,
+        and per-sample local ID estimates. Useful for identifying regions of
+        varying geometric complexity.
+
+        Returns
+        -------
+        info : dict
+            Dictionary with keys 'method', 'global', 'local', and 'details'.
+        """
         det = (self._id_details or {}).get(self.id_method)
         return {
             "method": self.id_method,
@@ -634,23 +777,60 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     # --- Embedding properties ---
 
     @property
-    def TopoMAP(self):
-        """2-D MAP layout on the DM refined graph."""
+    def TopoMAP(self) -> np.ndarray:
+        """2-D MAP layout optimized on the fixed-time DM refined graph.
+
+        A low-dimensional visualization preserving the fuzzy simplicial set
+        cross-entropy of the DM spectral scaffold.
+
+        Returns
+        -------
+        Y : np.ndarray of shape (n_samples, 2)
+            The fitted two-dimensional embedding.
+        """
         return self._get_projection("MAP", multiscale=False)
 
     @property
-    def msTopoMAP(self):
-        """2-D MAP layout on the msDM refined graph."""
+    def msTopoMAP(self) -> np.ndarray:
+        """2-D MAP layout optimized on the msDM refined graph.
+
+        A low-dimensional visualization preserving the fuzzy simplicial set
+        cross-entropy of the multiscale spectral scaffold. This is typically
+        the default and most robust representation.
+
+        Returns
+        -------
+        Y : np.ndarray of shape (n_samples, 2)
+            The fitted two-dimensional embedding.
+        """
         return self._get_projection("MAP", multiscale=True)
 
     @property
-    def TopoPaCMAP(self):
-        """2-D PaCMAP layout on the DM refined graph."""
+    def TopoPaCMAP(self) -> np.ndarray:
+        """2-D PaCMAP layout optimized on the fixed-time DM refined graph.
+
+        A low-dimensional visualization preserving the pairwise relationships
+        of the DM spectral scaffold.
+
+        Returns
+        -------
+        Y : np.ndarray of shape (n_samples, 2)
+            The fitted two-dimensional embedding.
+        """
         return self._get_projection("PaCMAP", multiscale=False)
 
     @property
-    def msTopoPaCMAP(self):
-        """2-D PaCMAP layout on the msDM refined graph."""
+    def msTopoPaCMAP(self) -> np.ndarray:
+        """2-D PaCMAP layout optimized on the msDM refined graph.
+
+        A low-dimensional visualization preserving the pairwise relationships
+        of the multiscale spectral scaffold.
+
+        Returns
+        -------
+        Y : np.ndarray of shape (n_samples, 2)
+            The fitted two-dimensional embedding.
+        """
         return self._get_projection("PaCMAP", multiscale=True)
 
     # ------------------------------------------------------------------
@@ -688,7 +868,13 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return_dict=True,
         **kwargs,
     ):
-        """Per-sample spectral selectivity (delegates to ``topo.analysis``)."""
+        """Per-sample spectral selectivity (delegates to ``topo.analysis``).
+
+        Returns
+        -------
+        result : dict or None
+            Dictionary containing selectivity scores.
+        """
         if Z is None:
             Z = self.spectral_scaffold(multiscale=multiscale)
         Z = np.asarray(Z)
@@ -718,15 +904,38 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return result if return_dict else None
 
     def filter_signal(self, signal, t: int = 8, which: str = "msZ"):
-        """Diffusion-filter a 1-D signal."""
+        """Diffusion-filter a 1-D signal.
+
+        Returns
+        -------
+        filtered_signal : ndarray
+            The smoothed signal.
+        """
         return _analysis.filter_signal(signal, self._select_P_operator(which), t)
 
     def impute(self, X, t: int = 8, which: str = "msZ", **kwargs):
-        """Diffusion-based imputation."""
+        """Diffusion-based imputation.
+
+        Returns
+        -------
+        imputed_X : ndarray
+            The imputed matrix.
+        """
         return _analysis.impute(X, self._select_P_operator(which), t, **kwargs)
 
     def riemann_diagnostics(self, Y=None, L=None, diffusion_op=None, **kwargs):
-        """Riemann metric + deformation scalars."""
+        """Riemann metric + deformation scalars.
+
+        Notes
+        -----
+        This method may require O(n_samples^2) memory if all-pairs distances are
+        materialized internally. For large datasets, use landmark mode or avoid.
+
+        Returns
+        -------
+        metrics : dict
+            Dictionary of computed Riemannian metrics and deformation fields.
+        """
         if Y is None:
             for prop in ("TopoMAP", "msTopoMAP", "TopoPaCMAP", "msTopoPaCMAP"):
                 try:

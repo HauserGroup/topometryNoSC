@@ -235,10 +235,10 @@ def graph_laplacian(W, laplacian_type="normalized", return_D=False):
         The graph adjacency or affinity matrix. Assumed to be symmetric and with zero diagonal.
         No further symmetrization is performed, so make sure to symmetrize W if necessary (usually done additively with W = (W + W.T)/2 ).
 
-    laplacian : str (optional, default 'random_walk').
+    laplacian_type : str, default='random_walk'
         The type of laplacian to use. Can be 'unnormalized', 'normalized' or 'random_walk'.
 
-    return_D : bool (optional, default False).
+    return_D : bool, default=False
         Whether to also return a degree matrix with the Laplacian in a tuple
 
     Returns
@@ -295,22 +295,22 @@ def LE(
     W : scipy.sparse.csr_matrix or np.ndarray
         The graph adjacency or affinity matrix. Assumed to be symmetric and with zero diagonal.
 
-    n_eigs : int (optional, default 10).
+    n_eigs : int, default=10
         The number of eigenvectors to compute.
 
-    laplacian_type : str (optional, default 'random_walk').
+    laplacian_type : str, default='random_walk'
         The type of laplacian to use. Can be 'unnormalized', 'normalized', or 'random_walk'.
 
-    drop_first : bool (optional, default True).
+    drop_first : bool, default=True
         Whether to drop the first eigenvector.
 
-    return_evals : bool (optional, default False).
+    return_evals : bool, default=False
         Whether to return the eigenvalues. If True, returns a tuple of (eigenvectors, eigenvalues).
 
-    eigen_tol : float (optional, default 0).
+    eigen_tol : float, default=0
         The tolerance for the eigendecomposition.
 
-    random_state : int (optional, default None).
+    random_state : int, default=None
         The random state for the eigendecomposition in scipy.sparse.linalg.lobpcg() if the data has more than
         a million samples.
 
@@ -388,19 +388,19 @@ def diffusion_operator(
         The graph adjacency or affinity matrix. Assumed to be symmetric and with zero diagonal.
         No further symmetrization is performed, so make sure to symmetrize W if necessary (usually done additively with W = (W + W.T)/2 ).
 
-    alpha : float (optional, default 1.0).
+    alpha : float, default=1.0
         Anisotropy to apply. 'Alpha' in the diffusion maps literature.
 
-    symmetric : bool (optional, default True).
+    symmetric : bool, default=True
         Whether to use a symmetric version of the diffusion operator. This is particularly useful to yield a symmetric operator
         when using anisotropy (alpha > 0), as the diffusion operator P would be assymetric otherwise, which can be problematic
         during matrix decomposition. Eigenvalues are the same of the assymetric version, and the eigenvectors of the original assymetric
         operator can be obtained by left multiplying by D_inv_sqrt (returned if `return_D_inv_sqrt` set to True).
 
-    semi_aniso : bool (optional, default False).
+    semi_aniso : bool, default=False
         Whether to use semi-anisotropic diffusion. This reweights the original kernel  (not the renormalized kernel) by the renormalized degree.
 
-    return_D_inv_sqrt : bool (optional, default False).
+    return_D_inv_sqrt : bool, default=False
         Whether to return a tuple of diffusion operator P and inverse square root of the degree matrix.
 
     Returns

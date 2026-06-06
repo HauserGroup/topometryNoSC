@@ -283,21 +283,21 @@ def optimize_layout_euclidean(
         Parameter of differentiable approximation of right adjoint functor
     rng_state: array of int64, shape (3,)
         The internal state of the rng
-    gamma: float (optional, default 1.0)
+    gamma: float, default=1.0
         Weight to apply to negative samples.
-    initial_alpha: float (optional, default 1.0)
+    initial_alpha: float, default=1.0
         Initial learning rate for the SGD.
-    negative_sample_rate: int (optional, default 5)
+    negative_sample_rate: int, default=5
         Number of negative samples to use per positive sample.
-    parallel: bool (optional, default False)
+    parallel: bool, default=False
         Whether to run the computation using numba parallel.
         Running in parallel is non-deterministic, and is not used
         if a random seed has been set, to ensure reproducibility.
-    verbose: bool (optional, default False)
+    verbose: bool, default=False
         Whether to report information on the current progress of the algorithm.
-    densmap: bool (optional, default False)
+    densmap: bool, default=False
         Whether to use the density-augmented densMAP objective
-    densmap_kwds: dict (optional, default {})
+    densmap_kwds: dict, default={}
         Auxiliary data for densMAP
 
     Returns
@@ -460,13 +460,13 @@ def optimize_layout_generic(
         Parameter of differentiable approximation of right adjoint functor
     rng_state: array of int64, shape (3,)
         The internal state of the rng
-    gamma: float (optional, default 1.0)
+    gamma: float, default=1.0
         Weight to apply to negative samples.
-    initial_alpha: float (optional, default 1.0)
+    initial_alpha: float, default=1.0
         Initial learning rate for the SGD.
-    negative_sample_rate: int (optional, default 5)
+    negative_sample_rate: int, default=5
         Number of negative samples to use per positive sample.
-    verbose: bool (optional, default False)
+    verbose: bool, default=False
         Whether to report information on the current progress of the algorithm.
 
     Returns
@@ -609,13 +609,13 @@ def optimize_layout_inverse(
         Parameter of differentiable approximation of right adjoint functor
     rng_state: array of int64, shape (3,)
         The internal state of the rng
-    gamma: float (optional, default 1.0)
+    gamma: float, default=1.0
         Weight to apply to negative samples.
-    initial_alpha: float (optional, default 1.0)
+    initial_alpha: float, default=1.0
         Initial learning rate for the SGD.
-    negative_sample_rate: int (optional, default 5)
+    negative_sample_rate: int, default=5
         Number of negative samples to use per positive sample.
-    verbose: bool (optional, default False)
+    verbose: bool, default=False
         Whether to report information on the current progress of the algorithm.
 
     Returns

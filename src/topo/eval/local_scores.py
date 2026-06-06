@@ -142,7 +142,28 @@ def knn_spearman_r(
     unweighted=False,
     n_jobs=1,
 ):
-    """Spearman correlation between reference and embedding geodesic distances."""
+    """Spearman rank correlation between reference and embedding geodesic distances.
+
+    Parameters
+    ----------
+    data_graph : scipy.sparse.spmatrix or np.ndarray of shape (n_samples, n_samples)
+        Reference distance/affinity graph or matrix.
+    embedding_graph : scipy.sparse.spmatrix or np.ndarray of shape (n_samples, n_samples)
+        Embedding distance/affinity graph or matrix.
+    path_method : str, default="D"
+        Geodesic distance method ('D' for shortest path, etc.).
+    subsample_idx : np.ndarray of shape (n_subsample,), optional
+        Indices to subsample before computing correlation. If None, uses all points.
+    unweighted : bool, default=False
+        If True, compute unweighted shortest paths.
+    n_jobs : int, default=1
+        Number of jobs for parallel processing.
+
+    Returns
+    -------
+    score : float
+        Spearman rank correlation coefficient in [-1, 1]. Higher is better.
+    """
     # data_graph is a (N,N) similarity matrix from the reference high-dimensional data
     # embedding_graph is a (N,N) similarity matrix from the lower dimensional embedding
     geodesic_dist = geodesic_distance(
@@ -167,7 +188,28 @@ def knn_kendall_tau(
     unweighted=False,
     n_jobs=1,
 ):
-    """Kendall's tau between reference and embedding geodesic distances."""
+    """Kendall's tau rank correlation between reference and embedding geodesic distances.
+
+    Parameters
+    ----------
+    data_graph : scipy.sparse.spmatrix or np.ndarray of shape (n_samples, n_samples)
+        Reference distance/affinity graph or matrix.
+    embedding_graph : scipy.sparse.spmatrix or np.ndarray of shape (n_samples, n_samples)
+        Embedding distance/affinity graph or matrix.
+    path_method : str, default="D"
+        Geodesic distance method ('D' for shortest path, etc.).
+    subsample_idx : np.ndarray of shape (n_subsample,), optional
+        Indices to subsample before computing correlation. If None, uses all points.
+    unweighted : bool, default=False
+        If True, compute unweighted shortest paths.
+    n_jobs : int, default=1
+        Number of jobs for parallel processing.
+
+    Returns
+    -------
+    score : float
+        Kendall's tau coefficient in [-1, 1]. Higher is better.
+    """
     geodesic_dist = geodesic_distance(
         data_graph, method=path_method, unweighted=unweighted, n_jobs=n_jobs
     )
@@ -196,10 +238,44 @@ def geodesic_correlation(
     verbose=False,
     **kwargs,
 ):
-    """Correlate geodesic distances of ``data`` and embedding ``emb``.
+    """Rank correlation between reference and embedding geodesic distances.
 
-    Builds neighborhood graphs for both, computes geodesic distances (optionally
-    on landmarks) and returns their rank correlation under ``cor_method``.
+    Builds neighborhood graphs for both data and embedding, computes geodesic distances
+    (optionally on landmarks), and returns their rank correlation.
+
+    Parameters
+    ----------
+    data : np.ndarray of shape (n_samples, n_features) or scipy.sparse.spmatrix
+        Original high-dimensional data. If square, treated as a distance/affinity matrix.
+    emb : np.ndarray of shape (n_samples, n_components) or scipy.sparse.spmatrix
+        Low-dimensional embedding. If square, treated as a distance/affinity matrix.
+    landmarks : int or None, default=None
+        Number of landmarks. If None, uses all points.
+    landmark_method : str, default="random"
+        How to select landmarks ('random', 'kmeans', etc.).
+    metric : str, default="euclidean"
+        Distance metric for data/embedding kNN graphs.
+    n_neighbors : int, default=3
+        Number of neighbors for kNN graphs.
+    n_jobs : int, default=-1
+        Number of parallel jobs.
+    cor_method : str, default="spearman"
+        Rank correlation method ('spearman' or 'kendall').
+    random_state : int or RandomState, optional
+        RNG seed.
+    return_graphs : bool, default=False
+        If True, also return the computed graphs.
+    verbose : bool, default=False
+        Verbosity flag.
+    **kwargs
+        Extra arguments for kNN.
+
+    Returns
+    -------
+    score : float
+        Rank correlation in [-1, 1]. Higher is better.
+    (data_graph, emb_graph) : tuple, optional
+        If return_graphs=True, also return the neighborhood graphs.
     """
     if random_state is None:
         random_state = np.random.RandomState()

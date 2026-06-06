@@ -91,22 +91,22 @@ def fuzzy_embedding(
         The dimensionality of the euclidean space into which to embed the data.
     initial_alpha : float
         Initial learning rate for the SGD.
-    min_dist : float (optional, default 0.3)
+    min_dist : float, default=0.3
         The effective minimum distance between embedded points. Smaller values will result in a more
         clustered/clumped embedding where nearby points on the manifold are drawn closer together,
         while larger values will result on a more even dispersal of points. The value should be set
         relative to the spread value, which determines the scale at which embedded points will be spread out.
-    spread : float (optional, default 1.0)
+    spread : float, default=1.0
         The effective scale of embedded points. In combination with min_dist this determines
         how clustered/clumped the embedded points are.
     gamma : float
         Weight to apply to negative samples.
-    negative_sample_rate : int (optional, default 5)
+    negative_sample_rate : int, default=5
         The number of negative samples to select per positive sample
         in the optimization process. Increasing this value will result
         in greater repulsive force being applied, greater optimization
         cost, but slightly more accuracy.
-    n_epochs : int (optional, default 0)
+    n_epochs : int, default=0
         The number of training epochs to be used in optimizing the
         low dimensional embedding. Larger values result in more accurate
         embeddings. If 0 is specified a value will be selected based on
@@ -152,11 +152,11 @@ def fuzzy_embedding(
         each snapshot. Use this to persist to disk and avoid RAM growth.
     include_init_snapshot : bool, default True
         If True, also store a snapshot at epoch=0 (post initialisation/pre-SGD).
-    parallel : bool (optional, default False)
+    parallel : bool, default=False
         Whether to run the computation using numba parallel.
         Running in parallel is non-deterministic, and is not used
         if a random seed has been set, to ensure reproducibility.
-    verbose : bool (optional, default False)
+    verbose : bool, default=False
         Whether to report information on the current progress of the algorithm.
     a : float
         Parameter of differentiable approximation of right adjoint functor

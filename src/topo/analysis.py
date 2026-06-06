@@ -103,32 +103,59 @@ def spectral_selectivity(
     P: sp.spmatrix | None = None,
     smooth_t: int = 0,
 ) -> dict:
-    """
-    Per-sample spectral selectivity diagnostics on a scaffold *Z*.
+    """Measure how each sample uses the axes of a spectral scaffold.
+
+    These diagnostics summarize per-sample structure in a fitted DM/msDM
+    scaffold. They are useful for exploratory interpretation: identifying points
+    dominated by one spectral mode, points lying far from the scaffold center,
+    and neighborhoods that are locally axis-like. They are not clustering labels
+    and should be interpreted together with the embedding and graph metrics.
 
     Parameters
     ----------
     Z : ndarray, shape (n, m)
-        Scaffold coordinates.
+        Spectral scaffold coordinates, where rows are samples and columns are
+        eigenvector-derived coordinates.
     evals : ndarray or None
-        Eigenvalues for axis weighting.  If None, uniform weights are used.
+        Eigenvalues matching the scaffold columns. If provided, they weight axes
+        so smoother or more persistent modes can contribute more strongly. If
+        None, all axes are weighted equally.
     weight_mode : {'lambda_over_one_minus_lambda', 'lambda', 'none'}
-        How eigenvalues are converted to weights.
+        How eigenvalues are converted to axis weights. ``'lambda_over_one_minus_lambda'``
+        mirrors msDM weighting, ``'lambda'`` uses raw eigenvalues, and any other
+        value gives uniform weights.
     standardize : bool
-        Column-standardize Z before computing metrics.
+        If True, center and scale scaffold columns before computing diagnostics.
     k_neighbors : int
-        Neighborhood size for radiality / LAC.
+        Neighborhood size used for radiality and local axial coherence.
     metric : str
-        Metric for neighborhood search.
+        Metric used for scaffold-space nearest-neighbor searches.
     P : sparse matrix or None
-        Diffusion operator for optional smoothing of scalar fields.
+        Optional diffusion operator used to smooth scalar diagnostic fields.
     smooth_t : int
-        Number of diffusion steps (requires *P*).
+        Number of smoothing steps when ``P`` is provided.
 
     Returns
     -------
     dict
-        Keys: ``EAS``, ``RayScore``, ``LAC``, ``axis``, ``axis_sign``, ``radius``.
+        Dictionary with one value per sample:
+
+        ``EAS``
+            Entropy-based axis selectivity; larger values mean the sample's
+            scaffold energy is concentrated in fewer axes.
+        ``RayScore``
+            Axis selectivity modulated by radial separation from neighboring
+            samples.
+        ``LAC``
+            Local axial coherence; larger values mean nearby points are arranged
+            more like a one-dimensional local direction in scaffold space.
+        ``axis``
+            Index of the dominant scaffold axis for each sample.
+        ``axis_sign``
+            Sign of the dominant axis coordinate, encoded as 0/1.
+        ``radius``
+            Euclidean distance of each standardized sample from the scaffold
+            origin.
     """
     Zs = _std_cols(Z) if standardize else np.asarray(Z, float)
     w = _spectral_weights(evals, m=Z.shape[1], mode=weight_mode)
@@ -161,21 +188,26 @@ def spectral_selectivity(
 
 
 def filter_signal(signal, P, t: int = 8) -> np.ndarray:
-    """
-    Diffusion-filter a 1-D signal by applying ``P^t``.
+    """Smooth a one-dimensional graph signal by applying ``P^t``.
+
+    The input is one scalar value per sample. Repeated multiplication by the
+    diffusion operator averages that signal over graph neighborhoods, with
+    larger ``t`` spreading information farther across the fitted geometry.
 
     Parameters
     ----------
     signal : array-like, shape (n,)
         Scalar per-sample values to smooth.
     P : sparse matrix
-        Row-stochastic diffusion operator.
+        Diffusion/operator matrix whose rows and columns correspond to samples.
     t : int
-        Number of diffusion steps.
+        Number of diffusion steps. ``t=0`` returns the input signal as a float
+        array; larger values smooth more strongly.
 
     Returns
     -------
     ndarray, shape (n,)
+        Smoothed signal with one value per sample.
     """
     y = np.asarray(signal, float).copy().ravel()
     for _ in range(int(t)):
@@ -184,25 +216,31 @@ def filter_signal(signal, P, t: int = 8) -> np.ndarray:
 
 
 def impute(X, P, t: int = 8, output: str = "auto", dtype=np.float64):
-    """
-    Diffusion-based imputation using ``P^t``.
+    """Diffuse every column of a data matrix over a graph operator.
+
+    This treats each feature column as a graph signal and applies ``P^t``. The
+    result is a geometry-smoothed version of the input matrix. It is useful for
+    denoising or exploratory imputation, but the amount of smoothing is entirely
+    controlled by the fitted operator and ``t``.
 
     Parameters
     ----------
     X : array-like or sparse, shape (n, d)
-        Data matrix.
+        Data matrix with one row per graph sample and one column per feature or
+        signal.
     P : sparse matrix
-        Row-stochastic diffusion operator.
+        Diffusion/operator matrix with shape ``(n, n)``.
     t : int
-        Diffusion steps.
+        Number of diffusion steps. Larger values smooth more aggressively.
     output : {'auto', 'sparse', 'dense'}
-        Output format.  ``'auto'`` preserves input sparsity.
+        Output format. ``'auto'`` preserves input sparsity when possible.
     dtype : numpy dtype
-        Computation dtype.
+        Numeric dtype used for the diffusion computation.
 
     Returns
     -------
     sparse or ndarray
+        Diffused matrix with the same shape as ``X``.
     """
     if sp.issparse(X):
         Xc = X.tocsr(copy=True).astype(dtype)
@@ -233,30 +271,52 @@ def riemann_diagnostics(
     compute_metric: bool = True,
     compute_scalars: bool = True,
 ) -> dict:
-    """
-    Riemann metric in 2-D and derived scalars (anisotropy, log det G, deformation).
+    """Estimate local distortion of a two-dimensional embedding.
+
+    The function computes a Riemannian metric field for a 2-D layout relative to
+    a graph Laplacian/operator and optionally derives scalar deformation maps.
+    It is intended for diagnosing where a visualization contracts, expands, or
+    distorts local directions.
 
     Parameters
     ----------
     Y : ndarray, shape (n, 2)
-        2-D embedding.
+        Two-dimensional embedding to diagnose.
     L : array-like
-        Graph Laplacian.
+        Graph Laplacian or operator defining the reference geometry.
     center : {'median', 'mean'}
+        Center used when converting metric tensors into deformation values.
     diffusion_t : int
-        Diffusion smoothing steps for deformation maps.
+        Number of diffusion smoothing steps for deformation maps.
     diffusion_op : sparse matrix or None
-        Operator for smoothing (if *diffusion_t* > 0).
+        Operator used for smoothing when ``diffusion_t > 0``.
     normalize : str
+        Normalization mode passed to the deformation calculation.
     clip_percentile : float
+        Percentile used to clip deformation extremes for stable visualization
+        limits.
     return_limits : bool
+        If True, include suggested plotting limits for deformation fields.
     compute_metric : bool
+        If True, include the local metric tensor ``G``.
     compute_scalars : bool
+        If True, include scalar summaries derived from ``G``.
 
     Returns
     -------
     dict
-        Keys: ``G``, ``anisotropy``, ``logdetG``, ``deformation``, ``limits``.
+        Dictionary that may include:
+
+        ``G``
+            Local metric tensor for each sample, shape ``(n, 2, 2)``.
+        ``anisotropy``
+            Log ratio between the largest and smallest local metric eigenvalues.
+        ``logdetG``
+            Log determinant of the local metric tensor.
+        ``deformation``
+            Centered/scaled deformation scalar useful for plotting.
+        ``limits``
+            Suggested robust plotting limits when ``return_limits=True``.
     """
     from topo.eval.rmetric import RiemannMetric, calculate_deformation
 

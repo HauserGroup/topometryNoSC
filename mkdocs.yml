@@ -46,6 +46,10 @@ theme:
 extra_css:
   - stylesheets/extra.css
 
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
 plugins:
   - search
   - mkdocstrings:
@@ -71,8 +75,14 @@ nav:
       - Data provenance: tutorials/data-provenance.md
   - Concepts: concepts.md
   - Math details: math_details.md
-  - Background &amp; reading: background.md
-  - API Reference: api.md
+  - Background & reading: background.md
+  - API Reference:
+      - Overview: api/index.md
+      - 'Main workflow: TopOGraph': api/topograph.md
+      - Advanced estimators: api/advanced.md
+      - Evaluation metrics: api/metrics.md
+      - Plotting: api/plotting.md
+      - Developer reference: api/internal.md
   - Citation: citation.md
   - Changelog: changelog.md
 
@@ -84,3 +94,5 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.highlight
   - pymdownx.inlinehilite
+  - pymdownx.arithmatex:
+      generic: true

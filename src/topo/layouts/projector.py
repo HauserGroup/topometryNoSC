@@ -2,7 +2,7 @@
 # Defining a projection class in a scikit-learn fashion to handle all projection methods
 """Unified projection interface.
 
-The :class:`Projector` dispatches to the available projection backends
+The `Projector` dispatches to the available projection backends
 (MAP, Isomap, t-SNE, UMAP, PaCMAP, TriMAP, MDE, …) behind a single
 scikit-learn-style estimator, with optional landmarks and checkpointing.
 """
@@ -170,13 +170,13 @@ class Projector(BaseEstimator, TransformerMixin):
             The set of points to compute the kernel matrix for. Accepts np.ndarrays and scipy.sparse matrices or a `topo.Kernel()` object.
             If precomputed, assumed to be a square symmetric semidefinite matrix.
 
-        kwargs : dict (optional, default {}).
+        **kwargs
             Additional keyword arguments for the desired projection method.
 
         Returns
         -------
-        Projector() class with populated Projector.Y_ attribute.
-
+        self : Projector
+            The fitted Projector instance with populated `Y_` attribute.
         """
         self.random_state = check_random_state(self.random_state)
 
@@ -526,8 +526,8 @@ class Projector(BaseEstimator, TransformerMixin):
 
         Returns
         -------
-        Y : np.ndarray (n_samples, n_components).
-            Projection results
+        Y : ndarray of shape (n_samples, n_components)
+            Projection results.
         """
         if self.projection_method == "UMAP":
             return cast(np.ndarray, cast(Any, self.estimator_).transform(X))
@@ -539,9 +539,18 @@ class Projector(BaseEstimator, TransformerMixin):
 
         If the desired method does not have a fit_transform method, returns the results from the fit method.
 
+        Parameters
+        ----------
+        X : array-like or Kernel, shape (n_samples, n_features)
+            The input data to fit and transform.
+        y : None
+            Ignored.
+        **kwargs
+            Additional arguments passed to the underlying backend.
+
         Returns
         -------
-        Y : np.ndarray (n_samples, n_components).
+        Y : ndarray of shape (n_samples, n_components)
             Projection results.
         """
         self.fit(X, **kwargs)

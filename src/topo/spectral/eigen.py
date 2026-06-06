@@ -354,11 +354,10 @@ class EigenDecomposition(BaseEstimator, TransformerMixin, auto_wrap_output_keys=
 
         Returns
         -------
-        self : object
-            Returns the instance itself, with eigenvectors stored at EigenDecomposition.eigenvectors
-            and eigenvalues stored at EigenDecomposition.eigenvalues. If method is 'DM', stores Diffusion Maps at EigenDecomposition.embedding.
-            If 'method' is 'DM' or 'LE', the diffusion operator or graph laplacian is stored at EigenDecomposition.diffusion_operator
-            or EigenDecomposition.graph_laplacian, respectively.
+        self : EigenDecomposition
+            The fitted instance itself. Eigenvectors and eigenvalues are stored
+            as attributes. If method is 'DM' or 'msDM', the diffusion operator
+            is cached as well.
         """
         symmetric = False
         if self.method not in ["msDM", "DM", "LE", "top", "bottom"]:
@@ -464,9 +463,14 @@ class EigenDecomposition(BaseEstimator, TransformerMixin, auto_wrap_output_keys=
 
         Parameters
         ----------
-        use_eigs : int, default 50
+        use_eigs : int, default=50
             Number of eigenvectors to include in the embedding
             (must be ≤ the number retained during ``fit``).
+
+        Returns
+        -------
+        self : EigenDecomposition
+            The modified instance with the scaled embedding updated.
         """
         if self.eigenvectors is None or self.eigenvalues is None:
             raise ValueError("The estimator has not been fitted yet.")
@@ -490,6 +494,19 @@ class EigenDecomposition(BaseEstimator, TransformerMixin, auto_wrap_output_keys=
         Return the fitted representation.
 
         For DM/msDM, this computes the embedding from stored eigenpairs if needed.
+
+        Parameters
+        ----------
+        return_evals : bool, default=None
+            Whether to return eigenvalues along with the representation.
+            Overrides the constructor setting if provided.
+
+        Returns
+        -------
+        embedding : ndarray of shape (n_samples, n_components)
+            The low-dimensional spectral representation.
+        evals : ndarray of shape (n_components,), optional
+            The corresponding eigenvalues (if return_evals=True).
         """
         if self.eigenvectors is None:
             raise ValueError("The estimator has not been fitted yet.")
@@ -517,7 +534,17 @@ class EigenDecomposition(BaseEstimator, TransformerMixin, auto_wrap_output_keys=
         """Return the current representation.
 
         ``X`` is ignored; the representation is computed from the eigenpairs
-        stored during :meth:`fit`. Present for scikit-learn compatibility.
+        stored during `fit`. Present for scikit-learn compatibility.
+
+        Parameters
+        ----------
+        X : None
+            Ignored.
+
+        Returns
+        -------
+        embedding : ndarray of shape (n_samples, n_components)
+            The computed spectral representation.
         """
         return self._represent()
 
@@ -569,7 +596,22 @@ class EigenDecomposition(BaseEstimator, TransformerMixin, auto_wrap_output_keys=
             return self.embedding
 
     def fit_transform(self, X=None, y=None, **fit_params):  # type: ignore[override]
-        """Fit the model on ``X`` and return the resulting representation."""
+        """Fit the model on ``X`` and return the resulting representation.
+
+        Parameters
+        ----------
+        X : array-like or Kernel, shape (n_samples, n_samples)
+            Matrix or operator to be decomposed.
+        y : None
+            Ignored.
+        **fit_params
+            Additional arguments passed to `fit`.
+
+        Returns
+        -------
+        embedding : ndarray of shape (n_samples, n_components)
+            The computed spectral representation.
+        """
         if X is None:
             raise ValueError("X is required for fit_transform().")
         return self.fit(X)._represent()

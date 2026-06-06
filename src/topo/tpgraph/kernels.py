@@ -7,7 +7,7 @@
 # Defining graph kernels in a scikit-learn fashion
 """Graph-kernel construction and graph operators.
 
-Provides :func:`compute_kernel` and the scikit-learn-style :class:`Kernel`
+Provides `compute_kernel` and the scikit-learn-style `Kernel`
 estimator, which build neighborhood-graph affinity matrices (adaptive bandwidth,
 fuzzy simplicial sets, continuous kNN) and expose graph operators: adjacency,
 Laplacian, diffusion operator, shortest paths, sparsification and imputation.
@@ -131,20 +131,18 @@ def _cosine_knn_requires_unit_vectors(backend: str) -> bool:
     return backend in ("hnswlib", "faiss")
 
 
-def _cosine_distance_to_angle(dists):
-    """Convert cosine distances to angles in radians.
+def _cosine_distance_to_angle_from_sparse_triplets(x_idx, y_idx, dists):
+    """Convert sparse cosine-distance triplets to angles (radians).
 
-    Given cosine *distance* d = 1 - cos in [0, 2], converts to
-    angle θ = arccos(cos) with cos = 1 - d.
+    Given triplets of cosine *distance* d = 1 - cos in [0, 2],
+    converts to angle θ = arccos(cos) with cos = 1 - d.
+    Returns in-place modified dists (angles in radians).
     """
+    # cos = 1 - d
+    # clamp to [-1, 1] before arccos
     cos_vals = 1.0 - dists
     cos_vals = np.clip(cos_vals, -1.0, 1.0)
     return np.arccos(cos_vals)
-
-
-def _cosine_distance_to_angle_from_sparse_triplets(x_idx, y_idx, dists):
-    """Convert sparse cosine-distance triplets to angles (radians)."""
-    return _cosine_distance_to_angle(dists)
 
 
 def _ensure_nonneg_and_finite(arr, eps=0.0):
@@ -371,8 +369,6 @@ def compute_kernel(
     else:
         if adaptive_bw:
             adap_sd = _adap_bw(K, k)
-            if metric == "cosine" and use_angular:
-                adap_sd = _cosine_distance_to_angle(adap_sd)
             # Get an indirect measure of the local density
             pm = np.interp(adap_sd, (adap_sd.min(), adap_sd.max()), (2, k))
             if return_densities:
@@ -386,7 +382,7 @@ def compute_kernel(
                     expand_nbr_search = False
                 else:
                     new_K = kNN(
-                        X_for_knn,
+                        X,
                         metric=metric,
                         n_neighbors=new_k,
                         backend=backend,
@@ -394,8 +390,6 @@ def compute_kernel(
                         **kwargs,
                     )
                     adap_sd_new = _adap_bw(new_K, new_k)
-                    if metric == "cosine" and use_angular:
-                        adap_sd_new = _cosine_distance_to_angle(adap_sd_new)
 
                     pm_new = np.interp(
                         adap_sd_new, (adap_sd_new.min(), adap_sd_new.max()), (2, new_k)
@@ -413,7 +407,7 @@ def compute_kernel(
 
         # If using cosine metric and 'use_angular', convert cosine distance (=1-cos) to angle (radians)
         if metric == "cosine" and use_angular:
-            dists = _cosine_distance_to_angle(dists)
+            dists = _cosine_distance_to_angle_from_sparse_triplets(x, y, dists)
 
         # Numerical guards for distances (important for arccos and exponent)
         # For cosine distance we expect [0, 2]; for angles [0, pi]; Euclidean ≥ 0.
@@ -501,75 +495,80 @@ class Kernel(BaseEstimator, TransformerMixin):
     on the resulting graph, such as obtaining its Laplacian, sparsifying it, filtering and interpolating signals,
     obtaining diffusion operators, imputing missing values and computing shortest paths.
 
+    Use this only when you want to manually construct a graph or diffusion operator.
+
+    **Example**
+    ```python
+    from topo.tpgraph import Kernel
+    from topo.spectral import EigenDecomposition
+    from topo.layouts import Projector
+    kernel = Kernel(n_neighbors=30, metric="cosine").fit(X)
+    Z = EigenDecomposition(n_components=64, method="msDM").fit_transform(kernel)
+    Y = Projector(projection_method="MAP").fit_transform(Z)
+    ```
+
     Parameters
     ----------
-    metric : string (optional, default 'cosine')
+    metric : str, default='cosine'
         The metric to use when computing the kernel matrix.
         Possible values are: 'cosine', 'euclidean' and others, depending on the chosen nearest-neighbors backend. Accepts precomputed distances as 'precomputed'.
 
-    n_neighbors : int (optional, default 10).
+    n_neighbors : int, default=10
         The number of neighbors to use when computing the kernel matrix. Ignored if `pairwise` set to `True`.
 
-    fuzzy : bool, optional (default False).
+    fuzzy : bool, default=False
         Whether to build the kernel matrix using fuzzy simplicial sets, similarly to UMAP.
         If set to `True`, the `pairwise`, `sigma`, `adaptive_bw`, `expand_nbr_search` and `alpha_decaying` parameters are ignored.
         If set to `True` at the same time that `cknn` is set to `True`, the `cknn` parameter is ignored.
 
-    cknn : bool, optional (default False).
+    cknn : bool, default=False
         Whether to build the adjacency and affinity matrices using continuous k-nearest-neighbors.
         If set to `True`, the `pairwise`, `sigma`, `adaptive_bw`, `expand_nbr_search` and `alpha_decaying` parameters are ignored.
         If set to `True`, `laplacian_type` is automatically set to 'unnormalized'.
 
-    pairwise : bool (optional, default False).
+    pairwise : bool, default=False
         Whether to compute the kernel using dense pairwise distances.
         If set to `True`, the `n_neighbors` and `backend` parameters are ignored.
         Uses `numba` for computations if available. If not, uses `sklearn`.
 
-    sigma : float (optional, default None)
+    sigma : float or None, default=None
         Scaling factor if using fixed bandwidth kernel (only used if `adaptive_bw` is set to `False`).
 
-    adaptive_bw : bool (optional, default True).
+    adaptive_bw : bool, default=True
         Whether to use an adaptive bandwidth based on the distance to median k-nearest-neighbor.
 
-    expand_nbr_search : bool (optional, default False).
+    expand_nbr_search : bool, default=False
         Whether to expand the neighborhood search (mitigates a choice of too small a number of k-neighbors).
 
-    alpha_decaying : bool (optional, default False).
+    alpha_decaying : bool, default=False
         Whether to use an adaptively decaying kernel.
 
-    laplacian_type : string (optional, default 'normalized')
-        The type of Laplacian to compute. Possible values are: 'normalized', 'unnormalized', 'random_walk' and 'geometric'.
-
-    anisotropy : float (optional, default 0).
+    anisotropy : float, default=1.0
         The anisotropy (alpha) parameter in the diffusion maps literature for kernel reweighting.
 
-    semi_aniso : bool (optional, default False).
+    semi_aniso : bool, default=False
         Whether to use semi-anisotropic diffusion. This reweights the original kernel (not the renormalized kernel) by the renormalized degree.
 
-    symmetrize : bool (optional, default True).
+    symmetrize : bool, default=True
         Whether to symmetrize the kernel matrix after normalizations.
 
-    backend : str (optional, default 'nmslib').
+    backend : {"hnswlib", "nmslib", "faiss", "annoy", "sklearn"}, default="hnswlib"
         Which backend to use for k-nearest-neighbor computations. Defaults to 'nmslib'.
         Options are 'nmslib', 'hnswlib', 'faiss', 'annoy' and 'sklearn'.
 
-    n_jobs : int (optional, default 1).
+    n_jobs : int, default=-1
         The number of jobs to use for parallel computations. If -1, all CPUs are used.
         Parallellization (multiprocessing) is ***highly*** recommended whenever possible.
 
-    laplacian_type : str (optional, default 'normalized').
-            The type of laplacian to use. Can be 'unnormalized', 'normalized', or 'random_walk'.
+    laplacian_type : {"normalized", "unnormalized", "random_walk"}, default="normalized"
+        The type of laplacian to use.
 
-
-    Properties
+    Attributes
     ----------
-    knn : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
+    knn_ : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
         The computed k-nearest-neighbors graph.
 
-    A : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
-        The adjacency matrix of the kernel graph.
-
-    K : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
+    _K : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
         The kernel matrix.
 
     dens_dict : dict
@@ -664,7 +663,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.anisotropy = anisotropy
 
     def __repr__(self, N_CHAR_MAX=700):
-        """Return a short summary of the fitted state and kernel method."""
+        """Return a short summary of the fitted state, sample count, and kernel method."""
         if self._K is not None:
             if self.metric == "precomputed":
                 msg = "Kernel() estimator fitted with precomputed distance matrix"
@@ -725,27 +724,22 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.backend = resolved
 
     def fit(self, X, recompute=False, **kwargs):
-        """
-        Fits the kernel matrix to the data.
+        """Fit the kernel matrix to the data.
 
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_features).
-            Input data. Takes in numpy arrays and scipy csr sparse matrices.
-            Use with sparse data for top performance. You can adjust a series of
-            parameters that can make the process faster and more informational depending
-            on your dataset.
-
-        recompute : bool (optional, default False).
+        X : array-like or sparse matrix, shape (n_samples, n_features)
+            Input data. Accepts NumPy arrays and SciPy CSR sparse matrices.
+            If `metric="precomputed"`, this should be a square distance matrix.
+        recompute : bool, default=False
             Whether to recompute the kernel if it has already been computed.
-
-        **kwargs : dict, optional
+        **kwargs
             Additional arguments to be passed to the k-nearest-neighbor backend.
 
         Returns
         -------
-            The kernel matrix.
-
+        self : Kernel
+            The fitted Kernel instance, populating properties like `K` and `knn`.
         """
         self._parse_backend()
         _check_2d_input(X)
@@ -803,27 +797,42 @@ class Kernel(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X=None):
-        """Return the kernel matrix (scikit-learn compatibility)."""
+        """Return the fitted kernel (affinity) matrix.
+
+        Provided for scikit-learn compatibility in pipelines. `X` is ignored
+        because out-of-sample extension for the kernel is not supported.
+        """
         if self._K is None:
             raise ValueError("No kernel matrix has been fitted yet. Call fit() first.")
 
         return self._K
 
     def fit_transform(self, X, y=None, **fit_params):  # type: ignore
-        """Fit the kernel to the data and return the kernel matrix.
+        """Fit the kernel to the data and return the affinity matrix.
 
-        Here for compatibility with scikit-learn only.
+        Parameters
+        ----------
+        X : array-like or sparse matrix, shape (n_samples, n_features)
+            Input data.
+        y : None
+            Ignored.
+        **fit_params
+            Additional parameters passed to `fit`.
+
+        Returns
+        -------
+        K : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
+            The computed kernel (affinity) matrix.
         """
         self.fit(X, **fit_params)
         return self.K
 
     def adjacency(self):
-        """
-        Graph adjacency matrix (the binary version of W).
+        """Compute the binary graph adjacency matrix.
 
-        The adjacency matrix defines which edges exist on the graph.
-        It is represented as an N-by-N matrix of booleans.
-        :math:`A_{i,j}` is True if :math:`W_{i,j} > 0`.
+        The adjacency matrix defines the unweighted connectivity of the graph.
+        It is represented as an N-by-N sparse matrix where entry A_{i,j} is 1
+        if the kernel affinity K_{i,j} > 0, and 0 otherwise.
         """
         if self._K is None:
             raise ValueError("No kernel matrix has been fitted yet. Call fit() first.")
@@ -833,12 +842,10 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def knn(self):
-        """Sparse k-nearest-neighbor distance graph fitted in input space.
+        """The k-nearest-neighbors graph (sparse distance matrix).
 
-        This is the raw neighbor graph used to build the affinity kernel. Rows
-        correspond to samples and nonzero entries store neighbor distances. It is
-        available after :meth:`fit` when the kernel was built from feature data;
-        it is not populated for precomputed-distance inputs.
+        Contains the raw nearest-neighbor distances used to compute the
+        bandwidths and affinities. Represented as a CSR sparse matrix.
         """
         if self.knn_ is None:
             raise ValueError(
@@ -848,13 +855,11 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def K(self):
-        """Sparse weighted affinity matrix learned by the kernel.
+        """The kernel (affinity) matrix.
 
-        ``K[i, j]`` is the edge weight between samples ``i`` and ``j`` after the
-        selected kernel construction, such as adaptive bandwidth, fuzzy
-        simplicial-set affinities, continuous kNN, or Gaussian weighting. This is
-        the main graph representation passed to Laplacian and diffusion
-        operators.
+        Represents the pairwise similarities between samples on the manifold,
+        typically decaying from 1 (identical) to 0 (disconnected). Used as
+        the weighted adjacency matrix for graph operators.
         """
         if self._K is None:
             raise ValueError("No kernel matrix has been fitted yet. Call fit() first.")
@@ -862,12 +867,10 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def A(self):
-        """Binary adjacency matrix derived from the affinity support.
+        """The binary graph adjacency matrix.
 
-        ``A`` has the same shape as :attr:`K`, but stores only whether an edge is
-        present. Nonzero affinities in ``K`` become 1 and absent edges remain 0.
-        Use this when graph connectivity matters but affinity magnitude should
-        not affect the calculation.
+        Unweighted representation of the graph connectivity, generated from
+        the non-zero entries of the kernel affinity matrix (K).
         """
         if self._K is None:
             raise ValueError("No kernel matrix has been fitted yet. Call fit() first.")
@@ -877,11 +880,10 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def degree(self):
-        """Per-sample binary degree of the adjacency graph.
+        """The node degrees of the binary adjacency matrix.
 
-        This is the row degree of :attr:`A`, so each edge contributes one unit
-        regardless of its affinity weight. It is useful for checking graph
-        connectivity and neighborhood support.
+        A 1-D array containing the number of connected neighbors for each
+        sample, ignoring the affinity weights.
         """
         if self._degree is None:
             if self._K is None:
@@ -893,11 +895,10 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def weighted_degree(self):
-        """Per-sample weighted degree of the affinity graph.
+        """The weighted node degrees of the kernel affinity matrix.
 
-        This is the row sum of :attr:`K`, so each edge contributes according to
-        its learned affinity. It is the degree notion used by weighted graph
-        operators such as Laplacians and diffusion matrices.
+        A 1-D array containing the sum of affinity weights for each sample.
+        Used to normalize graph Laplacians and diffusion operators.
         """
         if self._weighted_degree is None:
             if self._K is None:
@@ -915,14 +916,14 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         Parameters
         ----------
-        laplacian_type : str (optional, default None).
-            The type of laplacian to use. Can be 'unnormalized', 'normalized', or 'random_walk'. If not provided, will use
-            the default laplacian type specified in the constructor.
+        laplacian_type : str, default=None
+            The type of laplacian to use. Can be 'unnormalized', 'normalized', or 'random_walk'.
+            If not provided, uses the default `laplacian_type` specified in the constructor.
 
         Returns
         -------
-        L : scipy.sparse.csr_matrix
-            The graph Laplacian.
+        L : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
+            The computed graph Laplacian matrix.
         """
         if self._L is None:
             if laplacian_type is None:
@@ -934,12 +935,14 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def L(self):
-        """Cached graph Laplacian for the fitted affinity matrix.
+        """The graph Laplacian matrix.
 
-        Accessing this property computes :meth:`laplacian` with the kernel's
-        configured ``laplacian_type`` if the Laplacian is not already cached.
-        Use :meth:`laplacian` directly when you need to request a specific
-        Laplacian normalization.
+        Object synonym for the `laplacian` method. Evaluates and caches the
+        Laplacian on first access using the `laplacian_type` specified during
+        initialization.
+
+        Use this property for the default cached result. Use the `laplacian()`
+        method when you need to pass options or recompute with non-default settings.
         """
         if self._L is None:
             return self.laplacian()
@@ -950,22 +953,23 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         Parameters
         ----------
-        anisotropy : float (optional, default None).
-            Anisotropy to apply. 'Alpha' in the diffusion maps literature. Defaults to the anisotropy defined in the constructor.
-
-        symmetric : bool (optional, default False).
+        anisotropy : float, default=1.0
+            Anisotropy to apply. 'Alpha' in the diffusion maps literature.
+            Defaults to the anisotropy defined in the constructor.
+        symmetric : bool, default=True
             Whether to use a symmetric version of the diffusion operator. This is particularly useful to yield a symmetric operator
-            when using anisotropy (alpha > 0), as the diffusion operator P would be assymetric otherwise, which can be problematic
-            during matrix decomposition. Eigenvalues are the same of the assymetric version, and the eigenvectors of the original assymetric
-            operator can be obtained by left multiplying by Kernel.D_inv_sqrt_.
+            when using anisotropy (alpha > 0), as the diffusion operator P would be asymmetric otherwise, which can be problematic
+            during matrix decomposition. Eigenvalues are the same as the asymmetric version, and the right eigenvectors of the original asymmetric
+            operator can be recovered by left multiplying by `Kernel.D_inv_sqrt_`.
 
         Returns
         -------
-        P : scipy.sparse.csr_matrix
-            The graph diffusion operator.
+        P : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
+            The graph diffusion operator (Markov transition matrix).
 
-        Populates the Kernel.D_inv_sqrt_ slot.
-
+        Notes
+        -----
+        Populates the `Kernel.D_inv_sqrt_` attribute when `symmetric=True`.
         """
         if anisotropy is None:
             anisotropy = self.anisotropy
@@ -1004,36 +1008,40 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def P(self):
-        """Cached diffusion operator for the fitted affinity matrix.
+        """The graph diffusion operator (Markov transition matrix).
 
-        Accessing this property computes :meth:`diff_op` with the default
-        anisotropy and symmetric normalization if the operator is not already
-        cached. The result is the Markov/diffusion operator used by diffusion
-        maps and related spectral scaffolds.
+        Object synonym for the `diff_op` method. Evaluates and caches the
+        operator on first access. Describes the probabilities of random walks
+        across the graph.
+
+        Use this property for the default cached result. Use the `diff_op()`
+        method when you need to pass options or recompute with non-default settings.
         """
         if self._P is None:
             return self.diff_op()
         return self._P
 
     def shortest_paths(self, landmark=False, indices=None):
-        """Compute the shortest paths between all pairs of nodes.
+        """Compute the shortest paths (geodesic distances) on the graph.
 
-        If landmark is True, the shortest paths are computed between all pairs of landmarks,
-        not all sample nodes.
+        Notes
+        -----
+        This method may require O(n_samples^2) memory and heavy computation if
+        all-pairs distances are materialized. For large datasets, use landmark mode.
 
         Parameters
         ----------
-        landmark : bool (optional, default False).
+        landmark : bool, default=False
             If True, the shortest paths are computed between all pairs of landmarks,
-            not all sample nodes.
-        indices : list of int (optional, default None).
+            rather than all sample nodes.
+        indices : list of int, default=None
             If None, the shortest paths are computed between all pairs of nodes. Else,
             the shortest paths are computed between all pairs of nodes and nodes with specified indices.
 
         Returns
         -------
-        D : scipy.sparse.csr_matrix
-            The shortest paths matrix.
+        D : ndarray, shape (n_samples, n_samples)
+            The shortest paths matrix. Unreachable nodes evaluate to infinity.
         """
         if self._SP is None:
             if self._K is None:
@@ -1062,19 +1070,26 @@ class Kernel(BaseEstimator, TransformerMixin):
 
     @property
     def SP(self):
-        """Cached all-pairs graph shortest-path distance matrix.
+        """The shortest-paths (geodesic distance) matrix.
 
-        Accessing this property computes :meth:`shortest_paths` on the fitted
-        affinity graph if the matrix is not already cached. The returned dense
-        matrix contains graph geodesic distances between samples and can be
-        expensive for large datasets.
+        Object synonym for the `shortest_paths` method. Evaluates and caches
+        the all-pairs shortest paths on the graph on first access.
+
+        Use this property for the default cached result. Use the `shortest_paths()`
+        method when you need to pass options or recompute with non-default settings.
         """
         if self._SP is None:
             return self.shortest_paths()
         return self._SP
 
     def get_indices_distances(self, n_neighbors=None, kernel=True):
-        """Return per-row neighbor indices and distances from the kernel or kNN graph."""
+        """Return per-row neighbor indices and distances from the kernel or kNN graph.
+
+        Returns
+        -------
+        indices, distances : tuple of ndarray
+            The extracted arrays.
+        """
         if n_neighbors is None:
             n_neighbors = self.n_neighbors
         if kernel:
@@ -1117,18 +1132,18 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         Parameters
         ----------
-        Y : np.ndarray (optional, default None).
+        Y : np.ndarray, default=None
             The input data to impute. If None, the input data X is imputed (if it was cached by setting
             the `cache_input` parameter to True). Otherwise, you'll have to specify it as Y.
 
-        t : int (optional, default None).
+        t : int, default=None
             The number of steps to perform during diffusion. The default `None` iterates until the Procrustes disparity value
             is below the `threshold` parameter.
 
-        threshold : float (optional, default 0.001).
+        threshold : float, default=0.01
             The threshold value for the Procrustes disparity when finding an optimal `t`.
 
-        tmax : int (optional, default 30).
+        tmax : int, default=10
             The maximum number of steps to perform during diffusion when estimating an optimal `t`.
 
         Returns
@@ -1224,6 +1239,10 @@ class Kernel(BaseEstimator, TransformerMixin):
         chebyshev_order : int (optional, default 100).
             Order of chebyshev approximation to use.
 
+        Returns
+        -------
+        densities : DataFrame
+            The filtered sample densities.
         """
         if self._sample_densities is None:
             try:
@@ -1384,6 +1403,11 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         See Klein and Randic [manuscript](https://doi.org/10.1007%2FBF01164627) for details.
 
+        Notes
+        -----
+        This method computes a dense matrix inverse and requires O(n_samples^2)
+        memory. It should not be used on very large graphs.
+
         Returns
         -------
         rd : sparse matrix
@@ -1418,14 +1442,19 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         Parameters
         ----------
-        epsilon : float (optional, default 0.1).
+        epsilon : float, default=0.1
             Sparsification parameter, which must be between ``1/sqrt(N)`` and 1.
 
-        maxiter : int (optional, default 10).
+        maxiter : int, default=10
             Maximum number of iterations.
 
-        random_state : {None, int, RandomState, Generator} (optional, default None)
+        random_state : int or RandomState, default=None
             Seed for the random number generator (for reproducible sparsification).
+
+        Notes
+        -----
+        This depends on `resistance_distance()` and thus inherits its heavy
+        computational requirements.
 
         Returns
         -------
@@ -1553,15 +1582,3 @@ class Kernel(BaseEstimator, TransformerMixin):
             graph, f_subsampled, keep_inds, order, reg_eps
         )
         return signal_interpolated
-
-    def write_pkl(self, wd=None, filename="mykernel.pkl"):
-        """Pickle this kernel to ``wd/filename`` (defaults to the working directory)."""
-        import os
-        import pickle
-
-        if wd is None:
-            wd = os.getcwd()
-        path = os.path.join(wd, filename)
-        with open(path, "wb") as output:
-            pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
-        logger.info("Kernel saved at %s", path)

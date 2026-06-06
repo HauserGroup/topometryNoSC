@@ -15,6 +15,8 @@
 # %%
 # # TopOMetry demo
 #
+# **Purpose:** a compact first-run path through the full TopOMetry workflow.
+#
 # This notebook gives a compact tour of the TopOMetry workflow:
 #
 # 1. load or generate data;

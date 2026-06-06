@@ -15,6 +15,8 @@
 # %%
 # # TopOMetry explained example
 #
+# **Purpose:** a documented interpretation guide for every major output.
+#
 # This notebook is the documented version of the basic and extended examples.
 # It runs the same helper-driven workflow, but explains each reported object,
 # plot, and metric next to the cell that produces it.
@@ -32,6 +34,11 @@
 # The implementation details live in `_example_utils.py`. This notebook is
 # intentionally descriptive: it should help you understand the output, not hide
 # the method choices.
+#
+# For the full theory, see the docs on
+# [concepts](../docs/concepts.md),
+# [mathematical details](../docs/math_details.md), and
+# [background reading](../docs/background.md).
 
 # %%
 from dataclasses import replace
@@ -74,8 +81,13 @@ from _example_utils import (
 # - `backend` chooses the neighbor-search implementation.
 # - `kernel_version` controls how distances are converted into affinities.
 # - `sigma` is used by the fixed-bandwidth Gaussian kernel.
-# - `anisotropy` controls diffusion normalization. Values near 1 reduce the
-#   influence of sampling density; values near 0 preserve more density signal.
+# - `anisotropy` is the diffusion-map alpha normalization parameter. Values near
+#   1 reduce sampling-density bias; values near 0 preserve more density signal.
+#
+# See the docs on [kernel graphs](../docs/concepts.md#kernel-graph),
+# [nearest-neighbor graphs](../docs/background.md#1-nearest-neighbor-graphs),
+# [kernels and the Laplace-Beltrami operator](../docs/background.md#2-kernels-and-the-laplacebeltrami-operator),
+# and [density-bias correction](../docs/math_details.md#6-removing-the-density-bias-two-approaches).
 #
 # **Spectral scaffold parameters**
 #
@@ -86,10 +98,17 @@ from _example_utils import (
 # - `diffusion_time=0` gives the multiscale diffusion representation when using
 #   diffusion maps. Positive values give a fixed diffusion time.
 #
+# See the docs on the [diffusion operator](../docs/concepts.md#diffusion-operator),
+# [diffusion eigenvalues](../docs/math_details.md#7-the-diffusion-operator-and-its-eigenvalues),
+# [spectral scaffolds](../docs/concepts.md#spectral-scaffold), and
+# [DM/msDM](../docs/math_details.md#8-the-spectral-scaffold-dm-and-msdm).
+#
 # **Layout parameters**
 #
 # - `projection_method` chooses the final 2-D optimizer or projection method.
 # - `num_iters` affects iterative methods such as MAP, UMAP, and PaCMAP.
+#
+# See the docs on [layouts and projections](../docs/background.md#6-layouts-and-projections).
 
 config = DemoConfig(
     # -- Data source ---------------------------------------------------------
@@ -167,14 +186,16 @@ config = DemoConfig(
 #
 # **Kernel versions**
 #
-# - `bw_adaptive`: adaptive-bandwidth Gaussian affinities.
+# - `bw_adaptive`: adaptive-bandwidth Gaussian affinities with density
+#   correction.
 # - `bw_adaptive_alpha_decaying`: adaptive bandwidth with alpha-decaying
 #   exponent behavior.
 # - `bw_adaptive_nbr_expansion`: adaptive bandwidth with expanded neighbor
 #   search.
 # - `bw_adaptive_alpha_decaying_nbr_expansion`: combines both extensions.
 # - `fuzzy`: UMAP-style fuzzy simplicial set affinities.
-# - `cknn`: continuous k-nearest-neighbor affinities.
+# - `cknn`: continuous k-nearest-neighbor graph construction for density-aware
+#   geometry.
 # - `gaussian`: fixed-bandwidth Gaussian affinities; tune `sigma`.
 #
 # **Spectral scaffold methods**
@@ -186,7 +207,11 @@ config = DemoConfig(
 # **Projection methods**
 #
 # `MAP`, `PaCMAP`, `Isomap`, `UMAP`, `t-SNE`, `TriMAP`, `IsomorphicMDE`, and
-# `IsometricMDE` are common choices. Some require optional layout dependencies.
+# `IsometricMDE` are common choices. They trade off local, global, and distortion
+# objectives differently. Some require optional layout dependencies.
+#
+# See [background: layouts and projections](../docs/background.md#6-layouts-and-projections)
+# for method references.
 
 print_options()
 
@@ -226,6 +251,9 @@ data = load_demo_data(config)
 # The printed lines summarize the kernel matrix, scaffold, and final projection
 # shapes. Sparse matrix `nnz` values tell you how many nonzero graph or kernel
 # entries were retained.
+#
+# See [math details: full pipeline](../docs/math_details.md#10-topometrys-pipeline-putting-it-all-together)
+# for the operator-level view of these steps.
 
 result = run_pipeline(data, config)
 
@@ -250,6 +278,11 @@ result = run_pipeline(data, config)
 # - Very flat leading eigenvalues can indicate weak spectral separation.
 # - If `Z` has fewer useful dimensions than expected, increase data quality,
 #   adjust `n_neighbors`, or try a different kernel.
+#
+# Related docs:
+# [diffusion operator](../docs/concepts.md#diffusion-operator),
+# [diffusion eigenvalues](../docs/math_details.md#7-the-diffusion-operator-and-its-eigenvalues),
+# and [spectral scaffold](../docs/concepts.md#spectral-scaffold).
 
 print("Input")
 print(f"  X                  {data.X.shape}")
@@ -279,12 +312,16 @@ print(np.array2string(result.evals[:10], precision=4))
 # overview.
 #
 # - **Eigenvalue spectrum**: shows the strength of the first spectral
-#   components. Large gaps suggest natural low-dimensional structure.
+#   components. For DM/msDM, large values near 1 indicate smooth, persistent
+#   modes. Gaps can suggest natural geometric scales.
 # - **Spectral scaffold**: plots the first two coordinates of `Z`, colored by
 #   `data.color`. This is not the final embedding; it is the geometry-aware
 #   coordinate system used before optimization.
 # - **Final layout**: plots `Y`, the 2-D output that most users inspect or use
 #   downstream.
+#
+# See [math details: DM and msDM](../docs/math_details.md#8-the-spectral-scaffold-dm-and-msdm)
+# for how diffusion eigenvectors become scaffold coordinates.
 
 fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 
@@ -326,6 +363,9 @@ plt.show()
 #
 # The 3x3 overview explains how the data move through the pipeline.
 #
+# See [math details: TopoMetry's pipeline](../docs/math_details.md#10-topometrys-pipeline-putting-it-all-together)
+# for the corresponding mathematical pipeline.
+#
 # Row 1: input space
 #
 # - **(a) Input data**: raw input coordinates. For the default Swiss roll this
@@ -334,12 +374,15 @@ plt.show()
 #   long tail can indicate uneven sampling density, outliers, or too many
 #   neighbors.
 # - **(c) Distance to affinity**: shows how graph distances become kernel
-#   weights. Nearby points should generally receive stronger affinity.
+#   weights. Nearby points should generally receive stronger affinity, with the
+#   exact curve determined by the selected kernel.
 #
 # Row 2: spectral scaffold
 #
 # - **(d) Spectrum**: leading eigenvalues. A visible gap can suggest an
-#   intrinsic scale or dimensionality.
+#   intrinsic scale or dimensionality. DM/msDM eigenvalues are ordered
+#   decreasingly; LE eigenvalues follow the Laplacian convention and should not
+#   be interpreted on the same scale.
 # - **(e) First scaffold dimensions**: first two spectral coordinates.
 # - **(f) Higher harmonics**: later spectral coordinates, useful for seeing
 #   structure that is not captured by the first pair.
@@ -362,11 +405,12 @@ plot_pipeline_overview(data, result, config)
 #
 # **Global scores**
 #
-# - `global_score_pca(X, Y)` returns a value in `[0, 1]`. Higher means `Y`
-#   preserves global variance structure better relative to a PCA baseline.
-# - `global_score_laplacian(X, Y)` also returns a value in `[0, 1]`. Higher
-#   means `Y` preserves graph-aware global structure better relative to a
-#   Laplacian Eigenmaps baseline.
+# - `global_score_pca(X, Y)` returns a clipped value in `(0, 1]`. A value near
+#   1 means `Y` preserves at least as much global linear reconstruction
+#   structure as a same-dimensional PCA baseline.
+# - `global_score_laplacian(X, Y)` returns a clipped value in `(0, 1]`. A value
+#   near 1 means `Y` preserves at least as much graph-aware reconstruction
+#   structure as a same-dimensional Laplacian Eigenmaps baseline.
 #
 # **Local and geodesic score**
 #
@@ -388,6 +432,9 @@ plot_pipeline_overview(data, result, config)
 # - `Rank diffusion corr.`: rank correlation between diffusion similarities.
 # - `Spectral similarity`: eigen-spectrum similarity between operators.
 #
+# See [concepts: topology-preservation metrics](../docs/concepts.md#topology-preservation-metrics)
+# and [background: evaluation diagnostics](../docs/background.md#7-evaluation-and-geometry-diagnostics).
+#
 # **Riemannian deformation**
 #
 # The deformation values come from a local Riemannian metric estimated on the
@@ -398,6 +445,8 @@ plot_pipeline_overview(data, result, config)
 # - A narrow distribution around 0 indicates more uniform local area
 #   preservation.
 # - Large absolute values identify regions to inspect in the deep-dive plots.
+#
+# See [math details: measuring distortion](../docs/math_details.md#9-measuring-distortion-the-riemannian-metric).
 
 metrics = compute_metrics(data, result, config)
 print_metric_summary(metrics)
@@ -406,6 +455,9 @@ print_metric_summary(metrics)
 # ## 8. Metric overview figure
 #
 # This 2x2 diagnostic figure is a compact dashboard for the metric output.
+#
+# See [background: evaluation and geometry diagnostics](../docs/background.md#7-evaluation-and-geometry-diagnostics)
+# and [math details: Riemannian metric](../docs/math_details.md#9-measuring-distortion-the-riemannian-metric).
 #
 # - **(a) Local metric ellipses**: each ellipse represents local stretching
 #   estimated by the Riemannian metric. Nearly circular ellipses mean isotropic
@@ -416,8 +468,8 @@ print_metric_summary(metrics)
 #   in a few regions or spread across the layout. Narrow and centered near zero
 #   is preferable.
 # - **(d) Metrics at a glance**: bar chart of the printed scores. Higher is
-#   better for all displayed scores except deformation is summarized separately
-#   in panel (c).
+#   better for these displayed score metrics. Deformation is summarized
+#   separately in panel (c), where smaller spread around zero is usually better.
 
 plot_metric_overview(data, result, metrics, config)
 
@@ -427,6 +479,9 @@ plot_metric_overview(data, result, metrics, config)
 # This figure is heavier than the overview because it computes per-point and
 # pairwise distortion summaries. Run it when you need to understand where and
 # how an embedding is distorted.
+#
+# See [background: evaluation and geometry diagnostics](../docs/background.md#7-evaluation-and-geometry-diagnostics)
+# for the motivation and references behind these diagnostics.
 #
 # Row 1: Euclidean and rank distortion
 #
@@ -477,6 +532,11 @@ plot_deep_dive(data, result, metrics, config)
 # - try `kernel_version="gaussian"` and tune `sigma`;
 # - compare `dm_method="DM"`, `"msDM"`, and `"LE"`;
 # - compare final layouts such as `"MAP"`, `"PaCMAP"`, `"UMAP"`, and `"Isomap"`.
+#
+# Method background:
+# [kernels](../docs/background.md#2-kernels-and-the-laplacebeltrami-operator),
+# [spectral scaffolds](../docs/background.md#3-spectral-scaffolds-the-eigenbasis),
+# and [layouts](../docs/background.md#6-layouts-and-projections).
 
 RUN_VARIANT = False
 
@@ -554,7 +614,7 @@ else:
 #
 # The `delta` column is `variant - baseline`. Positive values are better for
 # all scores shown here. A useful variant usually improves several metrics
-# without causing an obvious visual artifact or a large deformation increase.
+# without causing an obvious visual artifact or a larger deformation spread.
 
 if variant_metrics is None:
     print("Run the variant cell with RUN_VARIANT = True first.")

@@ -15,6 +15,8 @@
 # %%
 # # TopOMetry extended exploration
 #
+# **Purpose:** hands-on parameter exploration and method comparison.
+#
 # This notebook keeps the same high-level architecture as `example.py`, but adds
 # tuning cells for comparing graph, kernel, spectral, and layout choices.
 #

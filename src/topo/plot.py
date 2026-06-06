@@ -24,33 +24,29 @@ from matplotlib.patches import Circle, Ellipse
 def decay_plot(
     evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=14, wspace=0.3
 ):
-    """
-    Plot the eigenspectrum decay and its first derivatives.
+    """Plot eigenspectrum decay and its first derivatives.
 
     Parameters
     ----------
-    evals : np.ndarray
-        Eigenvalues to be visualized.
+    evals : np.ndarray of shape (n_eigs,)
+        Eigenvalues to visualize.
     title : str, optional
-        Title of the plot.
-    figsize : tuple, default=(9, 5)
-        Figure size.
+        Plot title.
+    figsize : tuple of (float, float), default=(9, 5)
+        Figure width and height.
     fontsize : int, default=14
-        Font size for the title.
+        Title font size.
     label_fontsize : int, default=14
-        Font size for the labels.
+        Axis label font size.
     wspace : float, default=0.3
-        Width spacing.
-
-    Notes
-    -----
-    This method calls `plt.show()`.
+        Width spacing between subplots.
 
     Returns
     -------
     fig : matplotlib.figure.Figure
-        Figure object.
-
+        The figure containing the two subplots.
+    ax : np.ndarray of matplotlib.axes.Axes, shape (2,)
+        Left axes (spectrum decay) and right axes (first derivatives).
     """
     evals = np.asarray(evals, dtype=float).ravel()
     if evals.size == 0:
@@ -67,7 +63,6 @@ def decay_plot(
     ax1.set_ylabel("Eigenvalues", fontsize=label_fontsize)
     ax1.set_xlabel("Eigenvectors", fontsize=label_fontsize)
     if max_eigs == len(evals):
-        # Could not find a discrete eigengap crossing 0
         ax1.vlines(
             eigengap, plt.ylim()[0], plt.ylim()[1], linestyles="--", label="Eigengap"
         )
@@ -88,7 +83,6 @@ def decay_plot(
     ax2.set_ylabel("Eigenvalues first derivatives (abs)", fontsize=label_fontsize)
     ax2.set_xlabel("Eigenvalues", fontsize=label_fontsize)
     if max_eigs == len(evals):
-        # Could not find a discrete eigengap crossing 0
         ax2.vlines(
             eigengap, plt.ylim()[0], plt.ylim()[1], linestyles="--", label="Eigengap"
         )
@@ -97,8 +91,7 @@ def decay_plot(
             max_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label="Eigengap"
         )
     plt.tight_layout()
-    plt.show()
-    return fig
+    return fig, ax
 
 
 def eigsorted(cov):
@@ -129,25 +122,27 @@ def scatter(
 
     Parameters
     ----------
-    res : array-like of shape (n_samples, >=2)
+    res : np.ndarray of shape (n_samples, >=2)
         Embedding coordinates; the first two columns are plotted.
-    labels : array-like, optional
-        Per-point values mapped through ``cmap``.
-    pt_size : float, default 5
+    labels : array-like of shape (n_samples,), optional
+        Per-point values mapped to colors via ``cmap``.
+    pt_size : float, default=5
         Marker size.
-    marker : str, default "o"
+    marker : str, default="o"
         Marker style.
-    opacity : float, default 1
-        Marker alpha.
-    cmap : str, default "Spectral"
+    opacity : float, default=1
+        Marker transparency (alpha).
+    cmap : str, default="Spectral"
         Colormap name.
     **kwargs
-        Forwarded to ``matplotlib.axes.Axes.scatter``.
+        Extra arguments forwarded to ``matplotlib.axes.Axes.scatter``.
 
     Returns
     -------
-    matplotlib.figure.Figure
+    fig : matplotlib.figure.Figure
         The created figure.
+    ax : matplotlib.axes.Axes
+        The axes containing the scatter plot.
     """
     res = _as_2d_array(res, "res")
     _check_n_columns(res, 2, "res")
@@ -165,12 +160,34 @@ def scatter(
         alpha=opacity,
         **kwargs,
     )
-    plt.show()
-    return fig
+    return fig, ax
 
 
 def scatter3d(res, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
-    """Draw a 3-D scatter plot of an embedding (first three columns)."""
+    """Draw a 3-D scatter plot of an embedding (first three columns).
+
+    Parameters
+    ----------
+    res : np.ndarray of shape (n_samples, >=3)
+        Embedding coordinates; the first three columns are plotted.
+    labels : array-like of shape (n_samples,), optional
+        Per-point values mapped to colors via ``cmap``.
+    pt_size : float, default=5
+        Marker size.
+    marker : str, default="o"
+        Marker style.
+    opacity : float, default=1
+        Marker transparency (alpha).
+    cmap : str, default="Spectral"
+        Colormap name.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The created figure.
+    ax : matplotlib.axes.Axes
+        The 3-D axes containing the scatter plot.
+    """
     res = _as_2d_array(res, "res")
     _check_n_columns(res, 3, "res")
     fig = plt.figure()
@@ -185,20 +202,41 @@ def scatter3d(res, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral
         marker=marker,
         alpha=opacity,
     )
-    plt.show()
-    return fig
+    return fig, ax
 
 
 def hyperboloid(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
-    """Plot a 2-D embedding on the hyperboloid (Lorentz) model."""
+    """Plot a 2-D embedding on the hyperboloid (Lorentz) model.
+
+    Parameters
+    ----------
+    emb : np.ndarray of shape (n_samples, 2)
+        2-D embedding coordinates.
+    labels : array-like of shape (n_samples,), optional
+        Per-point labels for coloring.
+    pt_size : float, default=5
+        Marker size.
+    marker : str, default="o"
+        Marker style.
+    opacity : float, default=1
+        Marker transparency.
+    cmap : str, default="Spectral"
+        Colormap name.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The figure.
+    ax : matplotlib.axes.Axes
+        The 3-D axes.
+    """
     x, y, z = two_to_3d_hyperboloid(emb)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
     ax.scatter(x, y, z, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
     ax.view_init(35, 80)
     ax.set_aspect("equal", adjustable="datalim")
-    plt.show()
-    return fig
+    return fig, ax
 
 
 def two_to_3d_hyperboloid(emb):
@@ -212,7 +250,30 @@ def two_to_3d_hyperboloid(emb):
 
 
 def poincare(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
-    """Plot a 2-D embedding on the Poincaré disk model."""
+    """Plot a 2-D embedding on the Poincaré disk model.
+
+    Parameters
+    ----------
+    emb : np.ndarray of shape (n_samples, 2)
+        2-D embedding coordinates.
+    labels : array-like of shape (n_samples,), optional
+        Per-point labels for coloring.
+    pt_size : float, default=5
+        Marker size.
+    marker : str, default="o"
+        Marker style.
+    opacity : float, default=1
+        Marker transparency.
+    cmap : str, default="Spectral"
+        Colormap name.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The figure.
+    ax : matplotlib.axes.Axes
+        The axes.
+    """
     emb = _as_2d_array(emb, "emb")
     _check_n_columns(emb, 2, "emb")
     x = emb[:, 0]
@@ -230,12 +291,34 @@ def poincare(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"
     ax.axis("off")
     ax.set_aspect("equal", adjustable="datalim")
     ax.set_box_aspect(1)
-    plt.show()
-    return fig
+    return fig, ax
 
 
 def sphere(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
-    """Plot a 2-D (angular) embedding on the surface of a 3-D sphere."""
+    """Plot a 2-D (angular) embedding on the surface of a 3-D sphere.
+
+    Parameters
+    ----------
+    emb : np.ndarray of shape (n_samples, 2)
+        2-D angular embedding (azimuth, elevation).
+    labels : array-like of shape (n_samples,), optional
+        Per-point labels for coloring.
+    pt_size : float, default=5
+        Marker size.
+    marker : str, default="o"
+        Marker style.
+    opacity : float, default=1
+        Marker transparency.
+    cmap : str, default="Spectral"
+        Colormap name.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The figure.
+    ax : matplotlib.axes.Axes
+        The 3-D axes.
+    """
     emb = _as_2d_array(emb, "emb")
     _check_n_columns(emb, 2, "emb")
     x = np.sin(emb[:, 0]) * np.cos(emb[:, 1])
@@ -244,14 +327,36 @@ def sphere(emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
     fig = plt.figure()
     ax = cast(Any, fig.add_subplot(111, projection="3d"))
     ax.scatter(x, y, z, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
-    plt.show()
-    return fig
+    return fig, ax
 
 
 def sphere_projection(
     emb, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"
 ):
-    """Plot a 2-D spherical embedding as a flat (azimuth/elevation) projection."""
+    """Plot a 2-D spherical embedding as a flat (azimuth/elevation) projection.
+
+    Parameters
+    ----------
+    emb : np.ndarray of shape (n_samples, 2)
+        2-D angular embedding (azimuth, elevation).
+    labels : array-like of shape (n_samples,), optional
+        Per-point labels for coloring.
+    pt_size : float, default=5
+        Marker size.
+    marker : str, default="o"
+        Marker style.
+    opacity : float, default=1
+        Marker transparency.
+    cmap : str, default="Spectral"
+        Colormap name.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The figure.
+    ax : matplotlib.axes.Axes
+        The axes.
+    """
     emb = _as_2d_array(emb, "emb")
     _check_n_columns(emb, 2, "emb")
     x = np.sin(emb[:, 0]) * np.cos(emb[:, 1])
@@ -262,14 +367,40 @@ def sphere_projection(
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.scatter(x, y, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
-    plt.show()
-    return fig
+    return fig, ax
 
 
 def toroid(
     emb, R=3, r=1, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"
 ):
-    """Plot a 2-D (angular) embedding on the surface of a torus."""
+    """Plot a 2-D (angular) embedding on the surface of a torus.
+
+    Parameters
+    ----------
+    emb : np.ndarray of shape (n_samples, 2)
+        2-D angular embedding (two angles on the torus).
+    R : float, default=3
+        Major radius of the torus.
+    r : float, default=1
+        Minor radius of the torus.
+    labels : array-like of shape (n_samples,), optional
+        Per-point labels for coloring.
+    pt_size : float, default=5
+        Marker size.
+    marker : str, default="o"
+        Marker style.
+    opacity : float, default=1
+        Marker transparency.
+    cmap : str, default="Spectral"
+        Colormap name.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The figure.
+    ax : matplotlib.axes.Axes
+        The 3-D axes.
+    """
     emb = _as_2d_array(emb, "emb")
     _check_n_columns(emb, 2, "emb")
     x = (R + r * np.cos(emb[:, 0])) * np.cos(emb[:, 1])
@@ -280,8 +411,7 @@ def toroid(
     ax.scatter(x, y, z, cmap=cmap, c=labels, s=pt_size, marker=marker, alpha=opacity)
     ax.set_zlim3d(-3, 3)
     ax.view_init(35, 70)
-    plt.show()
-    return fig
+    return fig, ax
 
 
 def draw_simple_ellipse(
@@ -324,7 +454,32 @@ def gaussian_potential(
     opacity=1,
     cmap="Spectral",
 ):
-    """Scatter a 2-D embedding overlaid with per-point Gaussian-potential ellipses."""
+    """Scatter a 2-D embedding overlaid with per-point Gaussian-potential ellipses.
+
+    Parameters
+    ----------
+    emb : np.ndarray of shape (n_samples, >=max(dims)+1)
+        Multi-dimensional embedding; first two columns are plotted.
+    dims : tuple of int, default=(2, 3, 4)
+        Dimensions of the embedding to use for ellipse width, height, angle.
+    labels : array-like of shape (n_samples,), optional
+        Per-point labels for coloring.
+    pt_size : float, default=5
+        Marker size.
+    marker : str, default="o"
+        Marker style.
+    opacity : float, default=1
+        Marker transparency.
+    cmap : str, default="Spectral"
+        Colormap name.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The figure.
+    ax : matplotlib.axes.Axes
+        The axes.
+    """
     emb = np.asarray(emb)
 
     if emb.ndim != 2:
@@ -378,7 +533,7 @@ def gaussian_potential(
         marker=marker,
         alpha=opacity,
     )
-    return plt.show()
+    return fig, ax
 
 
 @numba.njit(fastmath=True)
@@ -461,8 +616,6 @@ def plot_bases_scores(bases_scores, return_plot=True, figsize=(20, 8), fontsize=
     ax2.set_xticks(x)
     ax2.set_xticklabels(keys, fontsize=fontsize, rotation=90)
     fig.tight_layout()
-    if return_plot:
-        plt.show()
     return fig
 
 
@@ -480,8 +633,6 @@ def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20, 8), fontsiz
     ax1.set_xticks(x)
     ax1.set_xticklabels(keys, fontsize=fontsize // 2, rotation=90)
     fig.tight_layout()
-    if return_plot:
-        plt.show()
     return fig
 
 
@@ -505,8 +656,6 @@ def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20, 8), fonts
     ax2.set_xticks(x)
     ax2.set_xticklabels(keys, fontsize=fontsize // 2, rotation=90)
     fig.tight_layout()
-    if return_plot:
-        plt.show()
     return fig
 
 
@@ -547,58 +696,56 @@ def plot_riemann_metric(
     random_state=None,
     **kwargs,
 ):
-    """
-    Plot Riemannian metric using ellipses. Adapted from Megaman (https://github.com/mmp2/megaman).
+    """Plot Riemannian metric using ellipses. Adapted from Megaman.
 
     Parameters
     ----------
-    emb: numpy.ndarray, shape = (n, n_dim)
-        Embedding matrix.
+    emb : np.ndarray of shape (n_samples, n_features)
+        Embedding coordinates. Must have at least 2 columns.
+    L : scipy.sparse.spmatrix of shape (n_samples, n_samples), optional
+        Graph Laplacian defining the reference geometry. Required if H_emb is None.
+    H_emb : np.ndarray of shape (n_samples, n_features, n_features), optional
+        Inverse (dual) Riemannian metric at each point. If None, computed from L using RiemannMetric.
+    ax : matplotlib.axes.Axes, optional
+        Existing axes to draw into. If None, creates a new figure and axes.
+    n_plot : int, default=50
+        Number of ellipses to draw (subset of points).
+    std : float, default=1
+        Standard deviation scaling for ellipse size. Adjust manually for clarity.
+    alpha : float, default=0.1
+        Transparency of ellipses.
+    title : str, default="Riemannian metric"
+        Plot title.
+    title_fontsize : int, default=10
+        Title font size.
+    labels : array-like of shape (n_samples,), optional
+        Per-point labels mapped to colors via cmap.
+    pt_size : float, default=1
+        Marker size for points.
+    cmap : str, default="Spectral"
+        Colormap for labels.
+    figsize : tuple of (float, float), default=(8, 8)
+        Figure width and height.
+    random_state : int or RandomState, optional
+        RNG seed for sampling points.
+    **kwargs : dict
+        Extra arguments forwarded to matplotlib.
 
-    L: numpy.ndarray
-        Graph Laplacian matrix. Should be provided if H_emb is not provided.
-
-    H_emb : Dual Riemann metric, shape = (n, n_dim, n_dim)
-        The inverse (dual) Riemann metric matrix at each point. Should be provided if Laplacian is not provided.
-        Computed with the class `topo.eval.rmetric.RiemannMetric`.
-
-    n_plot: int, default=50
-        Number of ellipses to plot.
-
-    std: int, default=1
-        Standard deviation of the ellipses. This should be adjusted by hand for visualization purposes.
-
-    labels: numpy.ndarray, default=None
-        Labels for the points.
-
-    pt_size: int, default=1
-        Size of the points.
-
-    cmap: str, default='Spectral'
-        Color map for the points.
-
-    figsize: tuple, default=(8,8)
-        Figure size.
-
-    random_state: int, default=None
-        Random state for sampling points to plot ellipses of.
-
-    **kwargs: dict
-        Additional arguments for matplotlib.
+    Returns
+    -------
+    ax : matplotlib.axes.Axes
+        The axes containing the plot.
 
     Notes
     -----
-    This method may require O(n_samples^2) memory if all-pairs distances are
+    Computing the Riemannian metric may require O(n_samples²) memory if all-pairs distances are
     materialized. For large datasets, use landmark mode or avoid this method.
-    This method calls `plt.show()` implicitly if not returning an ax (or might not depending on ax).
 
     References
     ----------
-    "Non-linear dimensionality reduction: Riemannian metric estimation and
-    the problem of geometric discovery",
-    Dominique Perraul-Joncas, Marina Meila, arXiv:1305.7255
-
-
+    Perraul-Joncas, D., & Meila, M. (2013).
+    Non-linear dimensionality reduction: Riemannian metric estimation and the problem of geometric discovery.
+    arXiv preprint arXiv:1305.7255.
     """
     emb = np.asarray(emb)
 
@@ -705,8 +852,6 @@ def plot_scores(
     if log:
         ax1.set_yscale("log")
     fig.tight_layout()
-    if return_plot:
-        plt.show()
     return fig
 
 
@@ -758,7 +903,6 @@ def plot_eigenvectors(
             ax.set_xticks([])
             ax.set_yticks([])
         plt.subplots_adjust(left=0.02, right=0.98, bottom=0.05, top=0.9, wspace=0.05)
-        plt.show()
         return fig
 
     # --- Vertical (stacked) slender composition ---
@@ -806,7 +950,6 @@ def plot_eigenvectors(
     axes[-1].set_xticks([])  # keep minimalist look; add ticks if you want
     # slim margins; no tight_layout to avoid warnings
     fig.subplots_adjust(left=0.12, right=0.98, top=0.98, bottom=0.04)
-    plt.show()
     return fig
 
 
@@ -852,7 +995,6 @@ def plot_dimensionality_histograms(
     ax.set_xlabel("Estimated intrinsic dimension", fontsize=legend_fontsize)
     ax.set_ylabel("Frequency", fontsize=legend_fontsize)
     ax.legend(prop={"size": 10})
-    plt.show()
     return fig
 
 
@@ -887,7 +1029,6 @@ def plot_dimensionality_histograms_multiple(
     ax.set_title(title)
     ax.legend(prop={"size": 10})
     fig.tight_layout()
-    plt.show()
     return fig
 
 

@@ -7,6 +7,9 @@ These scikit-learn compatible transformers can be used individually to build cus
       heading_level: 3
       show_root_heading: true
       show_root_toc_entry: true
+      filters:
+        - "!^__"
+        - "!^_"
 
 ::: topo.tpgraph.kernels.Kernel
     options:
@@ -16,6 +19,7 @@ These scikit-learn compatible transformers can be used individually to build cus
       inherited_members: false
       filters:
         - "!^__"
+        - "!^_"
         - "!^resistance_distance$"
         - "!^sparsify$"
         - "!^interpolate$"
@@ -28,6 +32,7 @@ These scikit-learn compatible transformers can be used individually to build cus
       inherited_members: false
       filters:
         - "!^__"
+        - "!^_"
 
 ::: topo.layouts.projector.Projector
     options:
@@ -37,6 +42,7 @@ These scikit-learn compatible transformers can be used individually to build cus
       inherited_members: false
       filters:
         - "!^__"
+        - "!^_"
 
 ::: topo.tpgraph.intrinsic_dim.IntrinsicDim
     options:
@@ -46,3 +52,4 @@ These scikit-learn compatible transformers can be used individually to build cus
       inherited_members: false
       filters:
         - "!^__"
+        - "!^_"

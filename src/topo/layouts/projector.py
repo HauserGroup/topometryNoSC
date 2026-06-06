@@ -33,15 +33,16 @@ warnings.simplefilter("ignore", SparseEfficiencyWarning)
 class Projector(BaseEstimator, TransformerMixin):
     """Scikit-learn compatible class that handles all projection methods.
 
+    Use this when you already have a spectral representation or graph and only want the final 2-D/3-D layout.
     Ideally, it takes in either a orthonormal eigenbasis or a graph kernel learned from such an eigenbasis.
     It is included in TopoMetry to allow custom `TopOGraph`-like pipelines (projection is the final step).
 
     Parameters
     ----------
-    n_components : int (optional, default 2).
+    n_components : int, default=2
         Number of dimensions to optimize the layout to. Usually 2 or 3 if you're into visualizing data.
 
-    projection_method : str (optional, default 'Isomap').
+    projection_method : str, default='Isomap'
         Which projection method to use. Only 'Isomap', 't-SNE' and 'MAP' are implemented out of the box. 't-SNE' uses and 'MAP' relies
         on code that is adapted from UMAP. Current options are:
             * 'Isomap' - one of the first manifold learning methods
@@ -55,26 +56,26 @@ class Projector(BaseEstimator, TransformerMixin):
             * ['NCVis'](https://github.com/stat-ml/ncvis) (Noise Contrastive Visualization) - a UMAP-like method with blazing fast performance
         These are frankly quite direct to add, so feel free to make a feature request if your favorite method is not listed here.
 
-    metric : str (optional, default 'euclidean').
+    metric : str, default='euclidean'
         The metric to use when computing distances.
         Possible values are: 'cosine', 'euclidean' and others. Accepts precomputed distances ('precomputed').
 
-    n_neighbors : int (optional, default 10).
+    n_neighbors : int, default=10
         The number of neighbors to use when computing the kernel matrix. Ignored if `pairwise` set to `True`.
 
-    landmarks : int or np.ndarray (optional, default None).
+    landmarks : int or np.ndarray, default=None
         If passed as `int`, will obtain the number of landmarks. If passed as `np.ndarray`, will use the specified indexes in the array.
         Any value other than `None` will result in only the specified landmarks being used in the layout optimization, and will
         populate the Projector.landmarks_ slot.
 
-    landmark_method : str (optional, default 'kmeans').
+    landmark_method : str, default='kmeans'
         The method to use for selecting landmarks. If `landmarks` is passed as an `int`, this will be used to select the landmarks.
         Can be either 'kmeans' or 'random'.
 
-    num_iters : int (optional, default 1000).
+    num_iters : int, default=1000
         Most (if not all) methods optimize the layout up to a limit number of iterations. Use this parameter to set this number.
 
-    keep_estimator : bool (optional, default False).
+    keep_estimator : bool, default=False
         Whether to keep the used estimator as Projector.estimator_ after fitting. Useful if you want to use it later (e.g. UMAP
         allows inverse transforms and out-of-sample mapping).
 
@@ -630,36 +631,36 @@ if _HAS_PYMDE:
             Callable that constructs a distortion function, given negative
             weights. (If ``None``, only positive weights are used.) For example,
             ``pymde.penalties.Log`` or ``pymde.penalties.InversePower``.
-        constraint: pymde.constraints.Constraint (optional)
+        constraint: pymde.constraints.Constraint, optional
             Embedding constraint, like ``pymde.Standardized()`` or
             ``pymde.Anchored(anchors, values)`` (or ``None``). Defaults to no
             constraint when a repulsive penalty is provided, otherwise defaults to
             ``pymde.Standardized()``.
-        n_neighbors: int (optional)
+        n_neighbors: int, optional
             The number of nearest neighbors to compute for each row (item) of
             ``data``. A sensible value is chosen by default, depending on the
             number of items.
-        repulsive_fraction: float (optional)
+        repulsive_fraction: float, optional
             How many repulsive edges to include, relative to the number
             of attractive edges. ``1`` means as many repulsive edges as attractive
             edges. The higher this number, the more uniformly spread out the
             embedding will be. Defaults to ``0.5`` for standardized embeddings, and
             ``1`` otherwise. (If ``repulsive_penalty`` is ``None``, this argument
             is ignored.)
-        max_distance: float (optional)
+        max_distance: float, optional
             If not None, neighborhoods are restricted to have a radius
             no greater than ``max_distance``.
-        init: str or np.ndarray (optional, default 'quadratic')
+        init: str or np.ndarray, default='quadratic'
             Initialization strategy; np.ndarray, 'quadratic' or 'random'.
-        eps :float (optional)
+        eps :float, optional
             Residual norm threshold; quit when the residual norm is smaller than eps.
         max_iter: int
             Maximum number of iterations.
         memory_size : int
             The quasi-Newton memory. Larger values may lead to more stable behavior, but will increase the amount of time each iteration takes.
-        print_every : int (optional)
+        print_every : int, optional
             Print verbose output every print_every iterations.
-        device: str (optional)
+        device: str, optional
             Device for the embedding (eg, 'cpu', 'cuda').
         verbose: bool
             If ``True``, print verbose output.
@@ -863,7 +864,7 @@ if _HAS_PYMDE:
             original distances. Typically one of the classes defined in
             ``pymde.losses``, such as ``pymde.losses.Absolute``, or
             ``pymde.losses.WeightedQuadratic``.
-        constraint: pymde.constraints.Constraint (optional)
+        constraint: pymde.constraints.Constraint, optional
             Embedding constraint, such as ``pymde.Standardized()`` or
             ``pymde.Anchored(anchors, values)`` (or ``None``). Defaults to no
             constraint. Note: when the constraint is ``pymde.Standardized()``,
@@ -872,7 +873,7 @@ if _HAS_PYMDE:
             distance can be).
         max_distances: int
             Maximum number of distances to compute.
-        device: str (optional)
+        device: str, optional
             Device for the embedding (eg, 'cpu', 'cuda').
         verbose: bool
             If ``True``, print verbose output.

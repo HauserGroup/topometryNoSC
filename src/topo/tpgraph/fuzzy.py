@@ -95,11 +95,11 @@ def fuzzy_simplicial_set(
         miss finer detail, while smaller values will focus on fine manifold
         structure to the detriment of the larger picture.
 
-    backend : str (optional, default 'nmslib').
+    backend : str, default='nmslib'
         Which backend to use for neighborhood search. Options are 'nmslib', 'hnswlib',
         'pynndescent','annoy', 'faiss' and 'sklearn'.
 
-    metric : str (optional, default 'cosine').
+    metric : str, default='cosine'
         Accepted metrics. Defaults to 'cosine'. Accepted metrics include:
         -'sqeuclidean'
         -'euclidean'
@@ -113,10 +113,10 @@ def fuzzy_simplicial_set(
         -'jaccard'
         -'jansen-shan'
 
-    n_jobs : int (optional, default 1).
+    n_jobs : int, default=1
         Number of threads to be used in computation of nearest neighbors.  Set to -1 to use all available CPUs.
 
-    set_op_mix_ratio : float (optional, default 1.0).
+    set_op_mix_ratio : float, default=1.0
         Interpolate between (fuzzy) union and intersection as the set operation
         used to combine local fuzzy simplicial sets to obtain a global fuzzy
         simplicial sets. Both fuzzy set operations use the product t-norm.
@@ -124,17 +124,17 @@ def fuzzy_simplicial_set(
         1.0 will use a pure fuzzy union, while 0.0 will use a pure fuzzy
         intersection.
 
-    local_connectivity : int (optional, default 1)
+    local_connectivity : int, default=1
         The local connectivity required -- i.e. the number of nearest
         neighbors that should be assumed to be connected at a local level.
         The higher this value the more connected the manifold becomes
         locally. In practice this should be not more than the local intrinsic
         dimension of the manifold.
 
-    verbose : bool (optional, default False)
+    verbose : bool, default=False
         Whether to report information on the current progress of the algorithm.
 
-    return_dists : bool or None (optional, default none)
+    return_dists : bool or None, default=none
         Whether to return the pairwise distance associated with each edge.
 
     **kwargs : dict (optional, default {}).
@@ -288,16 +288,16 @@ def smooth_knn_dist(distances, k, n_iter=64, local_connectivity=1.0, bandwidth=1
         sorted list of distances to a given samples nearest neighbors.
     k: float
         The number of nearest neighbors to approximate for.
-    n_iter: int (optional, default 64)
+    n_iter: int, default=64
         We need to binary search for the correct distance value. This is the
         max number of iterations to use in such a search.
-    local_connectivity: int (optional, default 1)
+    local_connectivity: int, default=1
         The local connectivity required -- i.e. the number of nearest
         neighbors that should be assumed to be connected at a local level.
         The higher this value the more connected the manifold becomes
         locally. In practice this should be not more than the local intrinsic
         dimension of the manifold.
-    bandwidth: float (optional, default 1)
+    bandwidth: float, default=1
         The target bandwidth of the kernel, larger values will produce
         larger return values.
 

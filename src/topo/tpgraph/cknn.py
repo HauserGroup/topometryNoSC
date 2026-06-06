@@ -67,7 +67,7 @@ def cknn_graph(
     include_self : bool (optional, default=True).
             All diagonal elements are 1.0 if this parameter is True.
 
-    backend : str 'hnwslib', 'nmslib' or 'sklearn' (optional, default 'nmslib').
+    backend : str 'hnwslib', 'nmslib' or 'sklearn', default='nmslib'
         Which backend to use to compute nearest-neighbors. Options for fast, approximate nearest-neighbors
         are 'hnwslib'  and 'nmslib' (default). For exact nearest-neighbors, use 'sklearn'.
 
@@ -77,13 +77,13 @@ def cknn_graph(
         is relatively sparse, you should use 'nmslib', which operates on sparse matrices by default on
         TopoMetry and will automatically convert the input array to csr_matrix for performance.
 
-    n_jobs : int (optional, default 1).
+    n_jobs : int, default=1
         The number of jobs to use in the k-nearest-neighbors computation. Defaults to one (I highly recommend you use all available).
 
-    verbose : bool (optional, default False).
+    verbose : bool, default=False
         If True, print progress messages.
 
-    kwargs : dict (optional, default {}).
+    kwargs : dict, default={}
         Additional parameters to pass to the k-nearest-neighbors backend.
 
 

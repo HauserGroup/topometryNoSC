@@ -29,13 +29,27 @@ def decay_plot(
 
     Parameters
     ----------
-    evals : Eigenvalues to be visualized.
+    evals : np.ndarray
+        Eigenvalues to be visualized.
+    title : str, optional
+        Title of the plot.
+    figsize : tuple, default=(9, 5)
+        Figure size.
+    fontsize : int, default=14
+        Font size for the title.
+    label_fontsize : int, default=14
+        Font size for the labels.
+    wspace : float, default=0.3
+        Width spacing.
 
-    title : Title of the plot.
+    Notes
+    -----
+    This method calls `plt.show()`.
 
     Returns
     -------
-    A simple plot of the eigenspectrum decay.
+    fig : matplotlib.figure.Figure
+        Figure object.
 
     """
     evals = np.asarray(evals, dtype=float).ravel()
@@ -548,29 +562,35 @@ def plot_riemann_metric(
         The inverse (dual) Riemann metric matrix at each point. Should be provided if Laplacian is not provided.
         Computed with the class `topo.eval.rmetric.RiemannMetric`.
 
-    n_plot: int (optional, default 50)
+    n_plot: int, default=50
         Number of ellipses to plot.
 
-    std: int (optional, default 1)
+    std: int, default=1
         Standard deviation of the ellipses. This should be adjusted by hand for visualization purposes.
 
-    labels: numpy.ndarray (optional, default None)
+    labels: numpy.ndarray, default=None
         Labels for the points.
 
-    pt_size: int (optional, default 1)
+    pt_size: int, default=1
         Size of the points.
 
-    cmap: str (optional, default 'Spectral')
+    cmap: str, default='Spectral'
         Color map for the points.
 
-    figsize: tuple (optional, default (8,8))
+    figsize: tuple, default=(8,8)
         Figure size.
 
-    random_state: int (optional, default None)
+    random_state: int, default=None
         Random state for sampling points to plot ellipses of.
 
     **kwargs: dict
         Additional arguments for matplotlib.
+
+    Notes
+    -----
+    This method may require O(n_samples^2) memory if all-pairs distances are
+    materialized. For large datasets, use landmark mode or avoid this method.
+    This method calls `plt.show()` implicitly if not returning an ax (or might not depending on ax).
 
     References
     ----------

@@ -75,8 +75,14 @@ nav:
       - Data provenance: tutorials/data-provenance.md
   - Concepts: concepts.md
   - Math details: math_details.md
-  - Background &amp; reading: background.md
-  - API Reference: api.md
+  - Background & reading: background.md
+  - API Reference:
+      - Overview: api/index.md
+      - 'Main workflow: TopOGraph': api/topograph.md
+      - Advanced estimators: api/advanced.md
+      - Evaluation metrics: api/metrics.md
+      - Plotting: api/plotting.md
+      - Developer reference: api/internal.md
   - Citation: citation.md
   - Changelog: changelog.md
 

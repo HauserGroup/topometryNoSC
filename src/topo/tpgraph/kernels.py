@@ -210,58 +210,58 @@ def compute_kernel(
         The set of points to compute the kernel matrix for. Accepts np.ndarrays and scipy.sparse matrices.
         If precomputed, assumed to be a square symmetric semidefinite matrix.
 
-    metric : string (optional, default 'cosine').
+    metric : string, default='cosine'
         The metric to use when computing the kernel matrix.
         Possible values are: 'cosine', 'euclidean' and others. Accepts precomputed distances.
 
-    n_neighbors : int (optional, default 10).
+    n_neighbors : int, default=10
         The number of neighbors to use when computing the kernel matrix. Ignored if `pairwise` set to `True`.
 
-    fuzzy : bool (optional, default False).
+    fuzzy : bool, default=False
         Whether to build the kernel matrix using fuzzy simplicial sets, similarly to UMAP.
         If set to `True`, the `pairwise`, `sigma`, `adaptive_bw`, `expand_nbr_search` and `alpha_decaying` parameters are ignored.
         If set to `True` at the same time that `cknn` is set to `True`, the `cknn` parameter is ignored.
 
-    cknn : bool (optional, default False).
+    cknn : bool, default=False
         Whether to build the adjacency and affinity matrices using continuous k-nearest-neighbors.
         If set to `True`, the `pairwise`, `sigma`, `adaptive_bw`, `expand_nbr_search` and `alpha_decaying` parameters are ignored.
 
-    delta : float (optional, default 1.0).
+    delta : float, default=1.0
         The scaling factor for the CkNN kernel. Ignored if `cknn` set to `False`.
 
-    pairwise : bool (optional, default False).
+    pairwise : bool, default=False
         Whether to compute the kernel using dense pairwise distances.
         If set to `True`, the `n_neighbors` and `backend` parameters are ignored.
         Uses `numba` for computations if available. If not, uses `sklearn`.
 
-    sigma : float (optional, default None).
+    sigma : float, default=None
         Scaling factor if using fixed bandwidth kernel (only used if `adaptive_bw` is set to `False`).
 
-    adaptive_bw : bool (optional, default True).
+    adaptive_bw : bool, default=True
         Whether to use an adaptive bandwidth based on the distance to median k-nearest-neighbor.
 
-    expand_nbr_search : bool (optional, default False).
+    expand_nbr_search : bool, default=False
         Whether to expand the neighborhood search (mitigates a choice of too small a number of k-neighbors).
 
-    alpha_decaying : bool (optional, default False).
+    alpha_decaying : bool, default=False
         Whether to use an adaptively decaying kernel.
 
-    return_densities : bool (optional, default False).
+    return_densities : bool, default=False
         Whether to return the bandwidth metrics as a dictinary. If set to `True`, the function
         returns a tuple containing the kernel matrix and a dictionary containing the
         bandwidth metric.
 
-    symmetrize : bool (optional, default True).
+    symmetrize : bool, default=True
         Whether to symmetrize the kernel matrix after normalizations.
 
-    backend : str (optional, default 'hnswlib').
+    backend : str, default='hnswlib'
         Which backend to use for neighborhood computations. Defaults to 'hnswlib'.
         Options are 'nmslib', 'hnswlib' and 'sklearn'.
 
-    n_jobs : int (optional, default 1).
+    n_jobs : int, default=1
         The number of jobs to use for parallel computations. If set to -1, all available cores are used.
 
-    verbose : bool (optional, default False).
+    verbose : bool, default=False
         Whether to print progress messages.
 
     **kwargs : dict, optional
@@ -563,8 +563,8 @@ class Kernel(BaseEstimator, TransformerMixin):
     laplacian_type : {"normalized", "unnormalized", "random_walk"}, default="normalized"
         The type of laplacian to use.
 
-    Attributes
-    ----------
+    Fitted Attributes
+    -----------------
     knn_ : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
         The computed k-nearest-neighbors graph.
 
@@ -937,7 +937,10 @@ class Kernel(BaseEstimator, TransformerMixin):
     def L(self):
         """The graph Laplacian matrix.
 
-        Object synonym for the `laplacian` method. Evaluates and caches the
+        Use this property for the default cached result. Use the `laplacian` method
+        when you need to pass options or recompute with non-default settings.
+
+        Evaluates and caches the
         Laplacian on first access using the `laplacian_type` specified during
         initialization.
 
@@ -1010,7 +1013,10 @@ class Kernel(BaseEstimator, TransformerMixin):
     def P(self):
         """The graph diffusion operator (Markov transition matrix).
 
-        Object synonym for the `diff_op` method. Evaluates and caches the
+        Use this property for the default cached result. Use the `diff_op` method
+        when you need to pass options or recompute with non-default settings.
+
+        Evaluates and caches the
         operator on first access. Describes the probabilities of random walks
         across the graph.
 
@@ -1072,7 +1078,10 @@ class Kernel(BaseEstimator, TransformerMixin):
     def SP(self):
         """The shortest-paths (geodesic distance) matrix.
 
-        Object synonym for the `shortest_paths` method. Evaluates and caches
+        Use this property for the default cached result. Use the `shortest_paths` method
+        when you need to pass options or recompute with non-default settings.
+
+        Evaluates and caches
         the all-pairs shortest paths on the graph on first access.
 
         Use this property for the default cached result. Use the `shortest_paths()`
@@ -1213,30 +1222,30 @@ class Kernel(BaseEstimator, TransformerMixin):
         replicates: array-like, optional (default None)
             Replicate labels for each sample. If None, no replicates are assumed.
 
-        beta : int (optional, default 50).
+        beta : int, default=50
             Amount of smoothing to apply. Vary this parameter to get good estimates
             - this can vary widely from dataset to dataset.
 
-        target : array-like (optional, default None).
+        target : array-like, default=None
             Similarity matrix to use for filtering. If None, uses the kernel matrix.
 
-        filterfunc : function (optional, default None).
+        filterfunc : function, default=None
             Function to use for filtering. If None, the default is to use a Laplacian filter.
 
-        offset: float (optional, default 0)
+        offset: float, default=0
             Amount to shift the filter in the eigenvalue spectrum.
             Recommended to use an eigenvalue from the graph based on the
             spectral distribution. Should be in interval [0,1]
 
-        order: int (optional, default 1).
+        order: int, default=1
             Falloff and smoothness of the filter.
             High order leads to square-like filters.
 
-        solver : string (optional, default 'chebyshev').
+        solver : string, default='chebyshev'
             Method to solve convex problem. If 'chebyshev', uses a chebyshev polynomial approximation of the corresponding
             filter. Else, if 'exact', uses the eigenvalue solution to the problem
 
-        chebyshev_order : int (optional, default 100).
+        chebyshev_order : int, default=100
             Order of chebyshev approximation to use.
 
         Returns
@@ -1380,7 +1389,7 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         Parameters
         ----------
-        target : array-like (optional, default None).
+        target : array-like, default=None
             The target matrix to find the connected components of. If None, uses the kernel matrix.
 
         Returns
@@ -1550,7 +1559,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         keep_inds : ndarray
             List of indices on which the signal is sampled.
 
-        target : array-like (optional, default None).
+        target : array-like, default=None
             Similarity matrix to use for interpolation. If None, uses the kernel matrix.
 
         order : int

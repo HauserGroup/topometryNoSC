@@ -17,6 +17,7 @@ from topo.utils._utils import get_indices_distances_from_sparse_matrix
 class IntrinsicDim(BaseEstimator, TransformerMixin):
     """Scikit-learn flavored estimator of intrinsic dimensionality.
 
+    Use this to estimate manifold dimensionality or inspect local geometric complexity.
     This class iterates over a range of possible values of k-nearest-neighbors to consider in calculations
     using two different methods: the Farahmand-Szepesvári-Audibert (FSA) dimension estimator and the Maximum Likelihood Estimator (MLE).
 
@@ -39,15 +40,15 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
     metric : str (default 'euclidean')
         The metric to use when calculating distance between instances in a feature array.
 
-    backend : str (optional, default 'nmslib').
+    backend : str, default='nmslib'
         Which backend to use for k-nearest-neighbor computations. Defaults to 'nmslib'.
         Options are 'nmslib', 'hnswlib', 'faiss', 'annoy' and 'sklearn'.
 
-    n_jobs : int (optional, default 1).
+    n_jobs : int, default=1
         The number of jobs to use for parallel computations. If -1, all CPUs are used.
         Parallellization (multiprocessing) is ***highly*** recommended whenever possible.
 
-    plot : bool (optional, default True).
+    plot : bool, default=True
         Whether to plot the results when using the `fit()` method.
 
     random_state : int or numpy.random.RandomState() (optional, default None).
@@ -306,6 +307,11 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
 
         ``IntrinsicDim`` exposes its estimates via attributes (``local_id``,
         ``global_id``); this method returns ``self`` unchanged.
+
+        Returns
+        -------
+        self : IntrinsicDim
+            The estimator itself.
         """
         return self
 

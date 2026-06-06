@@ -220,16 +220,17 @@ def eigendecompose(
 class EigenDecomposition(BaseEstimator, TransformerMixin, auto_wrap_output_keys=None):
     """Scikit-learn flavored transformer for eigendecomposing sparse symmetric matrices.
 
+    Use this when you already have a kernel, Laplacian, adjacency matrix, or diffusion operator and want spectral coordinates.
     Computes and explores the associated eigenvectors and eigenvalues.
     Takes as main input a `topo.tpgraph.Kernel()` object or a symmetric matrix, which can be either an adjacency/affinity matrix,
     a kernel, a graph laplacian, or a diffusion operator.
 
     Parameters
     ----------
-    n_components : int (optional, default 10).
+    n_components : int, default=10
         Number of eigenpairs to be computed.
 
-    method : string (optional, default 'DM').
+    method : string, default='DM'
         Method for organizing the eigendecomposition. Can be either 'top', 'bottom', 'msDM', 'DM' or 'LE'.
         * 'top' : computes the top eigenpairs of the matrix.
         * 'bottom' : computes the bottom eigenpairs of the matrix.
@@ -237,7 +238,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin, auto_wrap_output_keys=
         * 'DM' : computes the eigenpairs of the diffusion operator on the matrix. If a `Kernel()` object is provided, will use the computed diffusion operator if available.
         * 'LE' : computes the eigenpairs of the graph laplacian on the matrix. If a `Kernel()` object is provided, will use the computed graph laplacian if available.
 
-    eigensolver : string (optional, default 'arpack').
+    eigensolver : string, default='arpack'
         Method for computing the eigendecomposition. Can be either 'arpack', 'lobpcg', 'amg' or 'dense'.
         * 'dense' :
             use standard dense matrix operations for the eigenvalue decomposition.
@@ -255,20 +256,20 @@ class EigenDecomposition(BaseEstimator, TransformerMixin, auto_wrap_output_keys=
             It can be faster on very large, sparse problems, but requires
             setting a random seed for better reproducibility.
 
-    laplacian_type : string (optional, default 'normalized')
+    laplacian_type : string, default='normalized'
         The type of Laplacian to compute. Possible values are: 'normalized', 'unnormalized', 'random_walk' and 'geometric'.
 
-    anisotropy : float (optional, default 0).
+    anisotropy : float, default=0
         The anisotropy (alpha) parameter in the diffusion maps literature for kernel reweighting.
 
-    eigen_tol : float (optional, default 0.0).
+    eigen_tol : float, default=0.0
         Error tolerance for the eigenvalue solver. If 0, machine precision is used.
 
 
-    t : int (optional, default 1).
+    t : int, default=1
         Time parameter for the diffusion operator, if 'method' is 'DM'. The diffusion operator will be powered by t. Ignored for other methods.
 
-    return_evals : bool (optional, default False).
+    return_evals : bool, default=False
         Whether to return the eigenvalues along with the eigenvectors.
 
     random_state : int or numpy.random.RandomState() (optional, default None).
@@ -625,7 +626,7 @@ class EigenDecomposition(BaseEstimator, TransformerMixin, auto_wrap_output_keys=
         ----------
         X : sparse matrix
             The (weighted) adjacency matrix of the graph as a sparse matrix.
-        laplacian_type : string (optional, default 'normalized').
+        laplacian_type : string, default='normalized'
             The type of laplacian to use. Can be 'unnormalized', 'symmetric' or 'random_walk'.
         return_evals : bool
             Whether to also return the eigenvalues of the laplacian.

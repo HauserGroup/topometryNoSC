@@ -214,8 +214,8 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     uom : bool, default False
         Enable Union-of-Manifolds (block-diagonal scaffolds).
 
-    Attributes
-    ----------
+    Fitted Attributes
+    -----------------
     BaseKernelDict : dict
         Cached base kernels.
     EigenbasisDict : dict
@@ -554,8 +554,25 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.layout_verbose = self.verbosity >= 2
         self.bases_graph_verbose = self.verbosity >= 3
 
-    def spectral_scaffold(self, multiscale: bool = True):
-        """Return scaffold coordinates (n_samples × n_eigs)."""
+    def spectral_scaffold(self, multiscale: bool = True) -> np.ndarray:
+        """Return spectral scaffold coordinates.
+
+        Parameters
+        ----------
+        multiscale : bool, default=True
+            If True, return the multiscale diffusion-map scaffold. If False,
+            return the fixed-time diffusion-map scaffold.
+
+        Returns
+        -------
+        Z : np.ndarray of shape (n_samples, n_components)
+            Spectral coordinates used to build refined graph operators and layouts.
+
+        Raises
+        ------
+        AttributeError
+            If called before `fit`.
+        """
         if self.uom_enabled:
             arr = self.msZ_uom if multiscale else self.Z_uom
             if arr is None:
@@ -573,7 +590,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     # ------------------------------------------------------------------
 
     @property
-    def eigenvalues(self):
+    def eigenvalues(self) -> np.ndarray | dict[str, Any]:
         """Eigenvalues of the active spectral scaffold.
 
         For diffusion maps (DM/msDM), large values (near 1) indicate smooth,
@@ -599,7 +616,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return self.EigenbasisDict[self.current_eigenbasis].eigenvalues
 
     @property
-    def knn_msZ(self):
+    def knn_msZ(self) -> csr_matrix:
         """The k-nearest-neighbors graph built in the msDM scaffold space.
 
         Represents the refined neighborhood structure after multiscale spectral
@@ -617,7 +634,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return self._knn_msZ
 
     @property
-    def knn_Z(self):
+    def knn_Z(self) -> csr_matrix:
         """The k-nearest-neighbors graph built in the fixed-time DM scaffold space.
 
         Represents the refined neighborhood structure after fixed-time spectral
@@ -686,7 +703,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         raise AttributeError("P_of_Z is a read-only fitted property.")
 
     @property
-    def knn_X(self):
+    def knn_X(self) -> csr_matrix:
         """The base k-nearest-neighbors graph in the original input space.
 
         Contains the raw neighbor distances before any density correction
@@ -704,7 +721,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return self.base_knn_graph
 
     @property
-    def P_of_X(self):
+    def P_of_X(self) -> csr_matrix:
         """The base diffusion operator on the original input space.
 
         The density-corrected Markov transition matrix from which the
@@ -722,7 +739,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return self.base_kernel.P
 
     @property
-    def global_id(self):
+    def global_id(self) -> float:
         """The estimated global intrinsic dimensionality of the dataset.
 
         A scalar value representing the effective number of continuous dimensions
@@ -737,7 +754,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return self.global_dimensionality
 
     @property
-    def intrinsic_dim(self):
+    def intrinsic_dim(self) -> dict[str, Any]:
         """Structured intrinsic-dimensionality information.
 
         Returns a dictionary containing the method used, the global ID estimate,
@@ -760,7 +777,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     # --- Embedding properties ---
 
     @property
-    def TopoMAP(self):
+    def TopoMAP(self) -> np.ndarray:
         """2-D MAP layout optimized on the fixed-time DM refined graph.
 
         A low-dimensional visualization preserving the fuzzy simplicial set
@@ -774,7 +791,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return self._get_projection("MAP", multiscale=False)
 
     @property
-    def msTopoMAP(self):
+    def msTopoMAP(self) -> np.ndarray:
         """2-D MAP layout optimized on the msDM refined graph.
 
         A low-dimensional visualization preserving the fuzzy simplicial set
@@ -789,7 +806,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return self._get_projection("MAP", multiscale=True)
 
     @property
-    def TopoPaCMAP(self):
+    def TopoPaCMAP(self) -> np.ndarray:
         """2-D PaCMAP layout optimized on the fixed-time DM refined graph.
 
         A low-dimensional visualization preserving the pairwise relationships
@@ -803,7 +820,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return self._get_projection("PaCMAP", multiscale=False)
 
     @property
-    def msTopoPaCMAP(self):
+    def msTopoPaCMAP(self) -> np.ndarray:
         """2-D PaCMAP layout optimized on the msDM refined graph.
 
         A low-dimensional visualization preserving the pairwise relationships

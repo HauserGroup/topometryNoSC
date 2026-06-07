@@ -178,7 +178,13 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     sigma : float, default=0.1
         Bandwidth for Gaussian kernels.
     delta : float, default=1.0
-        Radius parameter for cKNN kernels.
+        Unitless edge threshold for CkNN kernels.
+    cknn_candidate_neighbors : int or None, default=None
+        Number of candidate neighbors tested in approximate CkNN mode. If None,
+        a conservative value larger than the CkNN scale rank is chosen.
+    cknn_exact : bool, default=False
+        If True, threshold all pairwise distances for paper-faithful CkNN
+        construction. This is quadratic in samples.
     n_jobs : int, default=-1
         Threads for kNN searches; -1 uses all cores.
     low_memory : bool, default=False
@@ -243,6 +249,8 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         graph_metric: str = "euclidean",
         diff_t: int = 0,
         delta: float = 1.0,
+        cknn_candidate_neighbors: int | None = None,
+        cknn_exact: bool = False,
         sigma: float = 0.1,
         low_memory: bool = False,
         eigen_tol: float = 1e-8,
@@ -280,6 +288,8 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.graph_metric = graph_metric
         self.diff_t = diff_t
         self.delta = delta
+        self.cknn_candidate_neighbors = cknn_candidate_neighbors
+        self.cknn_exact = cknn_exact
         self.sigma = sigma
         self.low_memory = low_memory
         self.eigen_tol = eigen_tol
@@ -288,7 +298,12 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.cache = cache
         self.verbosity = verbosity
         self.random_state = random_state
-        self.laplacian_type = laplacian_type
+        uses_cknn = base_kernel_version == "cknn" or graph_kernel_version == "cknn"
+        self.laplacian_type = (
+            "unnormalized"
+            if uses_cknn and laplacian_type == "normalized"
+            else laplacian_type
+        )
 
         # ID config
         self.id_method = id_method
@@ -411,25 +426,29 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
         cfg = _KERNEL_CONFIGS[kernel_version].copy()
 
-        # Expansion versions need the original data + correct metric
-        if cfg.get("expand_nbr_search"):
+        uses_raw_data = cfg.get("expand_nbr_search") or kernel_version == "cknn"
+        # Expansion versions and CkNN need the original data + correct metric.
+        if uses_raw_data:
             metric = self.base_metric if base else self.graph_metric
             if data_for_expansion is None:
                 raise ValueError(
                     f"data_for_expansion is required for kernel version '{kernel_version}'."
                 )
-            if metric == "precomputed":
+            if cfg.get("expand_nbr_search") and metric == "precomputed":
                 raise ValueError(
                     f"kernel version '{kernel_version}' expands neighbor search and "
                     "therefore requires raw feature data; it cannot be used with "
                     "metric='precomputed'. Use a non-expansion kernel version or pass "
                     "raw data."
                 )
-            if data_for_expansion.shape[0] != knn.shape[0]:
+            if metric == "precomputed":
+                fit_input = knn
+            elif data_for_expansion.shape[0] != knn.shape[0]:
                 raise ValueError(
                     "data_for_expansion must have the same number of rows as the kNN graph."
                 )
-            fit_input = data_for_expansion
+            else:
+                fit_input = data_for_expansion
         else:
             metric = "precomputed"
             fit_input = knn
@@ -437,6 +456,10 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         # Gaussian uses self.sigma
         if kernel_version == "gaussian":
             cfg["sigma"] = self.sigma
+        if kernel_version == "cknn":
+            cfg["cknn_delta"] = self.delta
+            cfg["cknn_candidate_neighbors"] = self.cknn_candidate_neighbors
+            cfg["cknn_exact"] = self.cknn_exact
 
         kernel = Kernel(
             metric=metric,
@@ -541,6 +564,16 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             if k >= n_samples:
                 raise ValueError(
                     f"{name}={k} must be smaller than n_samples={n_samples}."
+                )
+        if self.delta <= 0:
+            raise ValueError("delta must be positive for CkNN.")
+        if self.cknn_candidate_neighbors is not None:
+            candidate_k = int(self.cknn_candidate_neighbors)
+            if candidate_k < 1:
+                raise ValueError("cknn_candidate_neighbors must be >= 1.")
+            if candidate_k >= n_samples:
+                raise ValueError(
+                    "cknn_candidate_neighbors must be smaller than n_samples."
                 )
 
         max_eigs = max(1, n_samples - 2)

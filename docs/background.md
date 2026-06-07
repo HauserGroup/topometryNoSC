@@ -26,8 +26,10 @@ its closest neighbors. *(Package: `topo.base.ann`.)*
   Navigable Small World graphs give fast, scalable neighbor search — the default
   backend for large data. [IEEE TPAMI 2020 / arXiv:1603.09320](https://arxiv.org/abs/1603.09320)
 - **Continuous k-nearest neighbors (CkNN).** Berry & Sauer show that a
-  *continuous* kNN graph yields a Laplacian that converges to the
-  Laplace–Beltrami operator, capturing topology in a single unweighted graph.
+  *continuous* kNN graph yields an unweighted, undirected graph whose
+  unnormalised Laplacian converges to the Laplace-Beltrami operator. Given
+  local scale radii `rho_i` and `rho_j`, CkNN connects samples when
+  `d(i, j) < delta * sqrt(rho_i * rho_j)`.
   [*Foundations of Data Science* 2019 / arXiv:1606.02353](https://arxiv.org/abs/1606.02353)
 
 ## 2. Kernels and the Laplace–Beltrami operator

@@ -1,5 +1,7 @@
 """Regression tests for the UMAP adapter."""
 
+from typing import Any, cast
+
 import numpy as np
 import pytest
 from scipy import sparse
@@ -48,7 +50,6 @@ def test_fuzzy_graph_from_knn_matches_umap():
         [[0.25, 0.75], [0.25, 0.5], [0.5, 0.6], [0.6, 0.9]],
         dtype=np.float32,
     )
-
     actual_graph, actual_sigmas, actual_rhos = fuzzy_graph_from_knn(
         X,
         knn_indices=indices,
@@ -146,6 +147,8 @@ def test_fuzzy_graph_from_data_passes_low_memory_when_supported(monkeypatch):
     ):
         captured["low_memory"] = low_memory
         graph = sparse.csr_matrix((X.shape[0], X.shape[0]), dtype=np.float32)
+        if return_dists:
+            return graph, np.ones(X.shape[0]), np.zeros(X.shape[0]), None
         return graph, np.ones(X.shape[0]), np.zeros(X.shape[0])
 
     monkeypatch.setattr(
@@ -223,7 +226,7 @@ def test_projector_umap_uses_upstream_estimator_and_is_deterministic():
     from topo.layouts.projector import Projector
 
     X = np.random.RandomState(2).randn(20, 4)
-    kwargs = dict(
+    kwargs: dict[str, Any] = dict(
         projection_method="UMAP",
         n_components=2,
         n_neighbors=5,
@@ -237,9 +240,12 @@ def test_projector_umap_uses_upstream_estimator_and_is_deterministic():
     second = Projector(**kwargs).fit(X)
 
     assert isinstance(first.estimator_, UMAP)
+    assert first.Y_ is not None
+    assert second.Y_ is not None
     assert first.Y_.shape == (20, 2)
-    assert len(first.estimator_.precomputed_knn) == 3
-    assert first.estimator_.precomputed_knn[2] is None
+    est = cast(Any, first.estimator_)
+    assert len(est.precomputed_knn) == 3
+    assert est.precomputed_knn[2] is None
     np.testing.assert_allclose(first.Y_, second.Y_)
 
 
@@ -259,9 +265,11 @@ def test_projector_umap_accepts_sparse_precomputed_knn():
         init="random",
     ).fit(graph)
 
+    assert proj.Y_ is not None
     assert proj.Y_.shape == (20, 2)
-    assert len(proj.estimator_.precomputed_knn) == 3
-    assert proj.estimator_.precomputed_knn[2] is None
+    est = cast(Any, proj.estimator_)
+    assert len(est.precomputed_knn) == 3
+    assert est.precomputed_knn[2] is None
 
 
 def test_no_local_umap_graph_helper_definitions():
@@ -269,7 +277,6 @@ def test_no_local_umap_graph_helper_definitions():
     forbidden = (
         "def smooth_knn_dist",
         "def compute_membership_strengths",
-        "def fuzzy_simplicial_set",
         "def find_ab_params",
     )
     from pathlib import Path

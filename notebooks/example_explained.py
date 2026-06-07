@@ -79,7 +79,7 @@ from _example_utils import (
 #   larger values make the graph more connected and more global.
 # - `metric` is the distance used for nearest-neighbor search.
 # - `backend` chooses the neighbor-search implementation.
-# - `kernel_version` controls how distances are converted into affinities.
+# - `kernel_version` controls how distances become a graph or affinities.
 # - `sigma` is used by the fixed-bandwidth Gaussian kernel.
 # - `anisotropy` is the diffusion-map alpha normalization parameter. Values near
 #   1 reduce sampling-density bias; values near 0 preserve more density signal.
@@ -139,7 +139,7 @@ config = DemoConfig(
     # "nmslib" can be useful on large data if installed.
     backend="hnswlib",
     # -- Kernel --------------------------------------------------------------
-    # Converts neighbor distances into affinities. Try "cknn" and "fuzzy" first.
+    # Converts neighbor distances into a graph/affinities. Try "cknn" and "fuzzy" first.
     # Other options: "bw_adaptive", "bw_adaptive_alpha_decaying",
     # "bw_adaptive_nbr_expansion", "bw_adaptive_alpha_decaying_nbr_expansion",
     # and "gaussian".
@@ -194,8 +194,8 @@ config = DemoConfig(
 #   search.
 # - `bw_adaptive_alpha_decaying_nbr_expansion`: combines both extensions.
 # - `fuzzy`: UMAP-style fuzzy simplicial set affinities.
-# - `cknn`: continuous k-nearest-neighbor graph construction for density-aware
-#   geometry.
+# - `cknn`: binary continuous k-nearest-neighbor graph construction for
+#   density-aware geometry.
 # - `gaussian`: fixed-bandwidth Gaussian affinities; tune `sigma`.
 #
 # **Spectral scaffold methods**

@@ -8,9 +8,10 @@
 """Graph-kernel construction and graph operators.
 
 Provides `compute_kernel` and the scikit-learn-style `Kernel`
-estimator, which build neighborhood-graph affinity matrices (adaptive bandwidth,
-fuzzy simplicial sets, continuous kNN) and expose graph operators: adjacency,
-Laplacian, diffusion operator, shortest paths, sparsification and imputation.
+estimator, which build neighborhood-graph matrices (adaptive-bandwidth
+affinities, fuzzy simplicial sets, binary continuous kNN graphs) and expose
+graph operators: adjacency, Laplacian, diffusion operator, shortest paths,
+sparsification and imputation.
 """
 
 import logging
@@ -193,7 +194,9 @@ def compute_kernel(
     n_neighbors=10,
     fuzzy=False,
     cknn=False,
-    delta=1.0,
+    cknn_delta=1.0,
+    cknn_candidate_neighbors=None,
+    cknn_exact=False,
     pairwise=False,
     sigma=None,
     adaptive_bw=True,
@@ -231,11 +234,18 @@ def compute_kernel(
         If set to `True` at the same time that `cknn` is set to `True`, the `cknn` parameter is ignored.
 
     cknn : bool, default=False
-        Whether to build the adjacency and affinity matrices using continuous k-nearest-neighbors.
+        Whether to build the binary, unweighted continuous k-nearest-neighbors graph.
         If set to `True`, the `pairwise`, `sigma`, `adaptive_bw`, `expand_nbr_search` and `alpha_decaying` parameters are ignored.
 
-    delta : float, default=1.0
-        The scaling factor for the CkNN kernel. Ignored if `cknn` set to `False`.
+    cknn_delta : float, default=1.0
+        Unitless CkNN edge threshold. Ignored if `cknn` is ``False``.
+
+    cknn_candidate_neighbors : int or None, default=None
+        Number of candidate neighbors tested in approximate CkNN mode. Ignored
+        when ``cknn_exact=True``.
+
+    cknn_exact : bool, default=False
+        If True, threshold all pairwise distances for CkNN construction.
 
     pairwise : bool, default=False
         Whether to compute the kernel using dense pairwise distances.
@@ -283,7 +293,7 @@ def compute_kernel(
     densities : dict, optional (if `return_densities` is set to `True`)
         If `fuzzy` and `cknn` are `False`, is a dictionary containing the bandwidth metrics.
         If `fuzzy` is set to `True`, the dictionary contains sigma and rho estimates.
-        If `cknn` is set to `True`, the dictionary contains the bandwidth metric.
+        If `cknn` is set to `True`, the dictionary contains the binary adjacency.
     """
     _check_2d_input(X)
 
@@ -313,6 +323,28 @@ def compute_kernel(
 
         n_jobs = cpu_count()
     k = n_neighbors
+
+    if cknn and not fuzzy:
+        if cknn_delta <= 0:
+            raise ValueError("cknn_delta must be positive.")
+        W = cknn_graph(
+            X,
+            scale_k=n_neighbors,
+            delta=cknn_delta,
+            metric=metric,
+            candidate_k=cknn_candidate_neighbors,
+            exact=cknn_exact,
+            include_self=False,
+            symmetrize="or",
+            backend=backend,
+            n_jobs=n_jobs,
+            verbose=verbose,
+            **kwargs,
+        )
+        if return_densities:
+            dens_dict["unweighted_adjacency"] = W
+            return W, dens_dict
+        return W
 
     if metric == "precomputed":
         K = _as_csr_matrix(X)
@@ -360,23 +392,6 @@ def compute_kernel(
         if return_densities:
             dens_dict["sigma"] = sigmas
             dens_dict["rho"] = rhos
-    elif cknn:
-        res = cknn_graph(
-            K,
-            n_neighbors=n_neighbors,
-            delta=delta,
-            metric="precomputed",
-            weighted=None,
-            include_self=False,
-            return_densities=True,
-            verbose=verbose,
-        )
-        A = res[0]
-        W = res[1]
-        adap_sd = res[2]  # type: ignore
-        if return_densities:
-            dens_dict["unweighted_adjacency"] = A
-            dens_dict["adaptive_bw"] = adap_sd
     else:
         if adaptive_bw:
             adap_sd = _adap_bw(K, k)
@@ -539,9 +554,8 @@ class Kernel(BaseEstimator, TransformerMixin):
         If set to `True` at the same time that `cknn` is set to `True`, the `cknn` parameter is ignored.
 
     cknn : bool, default=False
-        Whether to build the adjacency and affinity matrices using continuous k-nearest-neighbors.
+        Whether to build the binary, unweighted continuous k-nearest-neighbors graph.
         If set to `True`, the `pairwise`, `sigma`, `adaptive_bw`, `expand_nbr_search` and `alpha_decaying` parameters are ignored.
-        If set to `True`, `laplacian_type` is automatically set to 'unnormalized'.
 
     pairwise : bool, default=False
         Whether to compute the kernel using dense pairwise distances.
@@ -614,6 +628,9 @@ class Kernel(BaseEstimator, TransformerMixin):
         n_neighbors=10,
         fuzzy=False,
         cknn=False,
+        cknn_delta=1.0,
+        cknn_candidate_neighbors=None,
+        cknn_exact=False,
         pairwise=False,
         sigma=None,
         adaptive_bw=True,
@@ -634,6 +651,9 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.n_neighbors = n_neighbors
         self.fuzzy = fuzzy
         self.cknn = cknn
+        self.cknn_delta = cknn_delta
+        self.cknn_candidate_neighbors = cknn_candidate_neighbors
+        self.cknn_exact = cknn_exact
         self.pairwise = pairwise
         self.n_jobs = n_jobs
         self.backend = backend
@@ -645,7 +665,11 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.alpha_decaying = alpha_decaying
         self.symmetrize = symmetrize
         self.n_landmarks = n_landmarks
-        self.laplacian_type = laplacian_type
+        self.laplacian_type = (
+            "unnormalized"
+            if cknn and laplacian_type == "normalized"
+            else laplacian_type
+        )
         self.cache_input = cache_input
         self.verbose = verbose
         self.random_state = random_state
@@ -785,6 +809,9 @@ class Kernel(BaseEstimator, TransformerMixin):
                 metric=self.metric,
                 fuzzy=self.fuzzy,
                 cknn=self.cknn,
+                cknn_delta=self.cknn_delta,
+                cknn_candidate_neighbors=self.cknn_candidate_neighbors,
+                cknn_exact=self.cknn_exact,
                 pairwise=self.pairwise,
                 n_neighbors=self.n_neighbors,
                 sigma=self.sigma,
@@ -802,7 +829,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             )
             self._reset_graph_caches()
         assert self.dens_dict is not None
-        if self.metric != "precomputed":
+        if self.metric != "precomputed" and "knn" in self.dens_dict:
             self.knn_ = self.dens_dict["knn"]
         if self.fuzzy:
             self.sigma_ = self.dens_dict["sigma"]
@@ -811,7 +838,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             self.umap_rhos_ = self.rho_
         elif self.cknn:
             self._A = self.dens_dict["unweighted_adjacency"]
-            self.adaptive_bw_ = self.dens_dict["adaptive_bw"]
+            self.adaptive_bw_ = self.dens_dict.get("adaptive_bw")
         else:
             if self.adaptive_bw:
                 self.adaptive_bw_ = self.dens_dict["adaptive_bw"]

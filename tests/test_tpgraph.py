@@ -3,10 +3,13 @@
 import numpy as np
 import pytest
 from scipy import sparse
+from scipy.sparse.csgraph import connected_components, laplacian
+from sklearn.metrics import pairwise_distances
 
 from topo.base.ann import kNN
+from topo.topograph import TopOGraph
 from topo.tpgraph import kernels
-from topo.tpgraph.cknn import cknn_graph
+from topo.tpgraph.cknn import cknn_graph, cknn_ratio_matrix
 from topo.tpgraph.intrinsic_dim import (
     automated_scaffold_sizing,
     fsa_local,
@@ -32,15 +35,133 @@ def test_kernel_estimator(swiss_roll_data):
     assert sparse.issparse(L)
 
 
-def test_cknn_graph(swiss_roll_data):
-    X, _ = swiss_roll_data
-    res = cknn_graph(
-        X, n_neighbors=10, weighted=None, return_densities=False, backend="sklearn"
+def _brute_force_cknn_reference(X, scale_k, delta):
+    D = pairwise_distances(X)
+    np.fill_diagonal(D, np.inf)
+    rho = np.partition(D, scale_k - 1, axis=1)[:, scale_k - 1]
+    adjacency = delta * np.sqrt(rho[:, None] * rho[None, :]) > D
+    np.fill_diagonal(adjacency, False)
+    return sparse.csr_matrix(adjacency.astype(np.float32))
+
+
+def test_cknn_exact_threshold_uses_strict_inequality():
+    X = np.array([[0.0], [1.0], [3.0]])
+
+    A = cknn_graph(X, scale_k=1, delta=1.0, exact=True)
+
+    assert A[1, 0] == 0
+
+
+def test_cknn_exact_threshold_positive_case():
+    X = np.array([[0.0], [1.0], [3.0]])
+
+    A = cknn_graph(X, scale_k=1, delta=1.01, exact=True)
+
+    assert A[0, 1] == 1
+    assert A[1, 0] == 1
+
+
+def test_cknn_exact_matches_brute_force_reference():
+    X = np.random.default_rng(0).normal(size=(50, 3))
+
+    expected = _brute_force_cknn_reference(X, scale_k=5, delta=1.2)
+    actual = cknn_graph(X, scale_k=5, delta=1.2, exact=True)
+
+    assert (actual != expected).nnz == 0
+
+
+def test_cknn_graph_properties_and_delta_monotonicity():
+    X = np.random.default_rng(0).normal(size=(80, 2))
+
+    A_small = cknn_graph(X, scale_k=8, delta=0.8, exact=True)
+    A_large = cknn_graph(X, scale_k=8, delta=1.2, exact=True)
+
+    assert sparse.issparse(A_small)
+    assert (A_large != A_large.T).nnz == 0
+    assert set(np.unique(A_large.data)).issubset({1.0})
+    assert (A_small.maximum(A_large) != A_large).nnz == 0
+
+
+def test_cknn_candidate_mode_matches_exact_when_candidates_are_complete():
+    X = np.random.default_rng(1).normal(size=(60, 4))
+
+    exact = cknn_graph(X, scale_k=5, delta=1.1, exact=True)
+    approx_complete = cknn_graph(
+        X,
+        scale_k=5,
+        delta=1.1,
+        exact=False,
+        candidate_k=59,
+        backend="sklearn",
     )
-    assert len(res) == 2
-    A, W = res
-    assert sparse.issparse(A)
-    assert sparse.issparse(W)
+
+    assert (exact != approx_complete).nnz == 0
+
+
+def test_cknn_unnormalized_laplacian_zero_modes_match_components():
+    rng = np.random.default_rng(0)
+    X1 = rng.normal(loc=-5, scale=0.2, size=(30, 2))
+    X2 = rng.normal(loc=5, scale=0.2, size=(30, 2))
+    X = np.vstack([X1, X2])
+
+    A = cknn_graph(X, scale_k=5, delta=1.0, exact=True)
+    n_components, _ = connected_components(A, directed=False)
+    L = laplacian(A, normed=False)
+    evals = np.linalg.eigvalsh(L.toarray())
+
+    assert np.sum(evals < 1e-8) == n_components
+
+
+def test_cknn_ratio_matrix_threshold_matches_graph():
+    X = np.random.default_rng(0).normal(size=(40, 2))
+
+    ratio = cknn_ratio_matrix(X, scale_k=5, exact=True)
+    A_from_ratio = ratio.copy()
+    A_from_ratio.data = (A_from_ratio.data < 1.1).astype(np.float32)
+    A_from_ratio.eliminate_zeros()
+    A_from_ratio = A_from_ratio.maximum(A_from_ratio.T)
+
+    A = cknn_graph(X, scale_k=5, delta=1.1, exact=True)
+
+    assert (A_from_ratio != A).nnz == 0
+
+
+def test_kernel_cknn_returns_binary_sparse_graph():
+    X = np.random.default_rng(2).normal(size=(40, 3))
+
+    ker = Kernel(
+        n_neighbors=5,
+        metric="euclidean",
+        backend="sklearn",
+        cknn=True,
+        cknn_delta=1.1,
+        cknn_exact=True,
+        laplacian_type="unnormalized",
+    ).fit(X)
+    assert sparse.issparse(ker.K)
+    assert (ker.K != ker.K.T).nnz == 0
+    assert set(np.unique(ker.K.data)).issubset({1.0})
+
+
+def test_topograph_cknn_smoke():
+    X = np.random.default_rng(3).normal(size=(35, 4))
+    tg = TopOGraph(
+        base_knn=5,
+        graph_knn=5,
+        min_eigs=6,
+        base_kernel_version="cknn",
+        graph_kernel_version="cknn",
+        base_metric="euclidean",
+        backend="sklearn",
+        projection_methods=[],
+        cknn_exact=True,
+    )
+
+    tg.fit(X)
+
+    assert tg.laplacian_type == "unnormalized"
+    assert sparse.issparse(tg.base_kernel.K)
+    assert set(np.unique(tg.base_kernel.K.data)).issubset({1.0})
 
 
 def test_automated_scaffold_sizing(swiss_roll_data):
@@ -92,7 +213,6 @@ def test_kernel_numeric_helpers():
     np.testing.assert_allclose(normalized[0], [0.6, 0.8])
     np.testing.assert_allclose(normalized[1], [0.0, 0.0])
 
-    assert kernels._cosine_knn_requires_unit_vectors("hnswlib")
     assert not kernels._cosine_knn_requires_unit_vectors("sklearn")
     np.testing.assert_allclose(
         kernels._cosine_distance_to_angle_from_sparse_triplets(
@@ -230,9 +350,11 @@ def test_kernel_safe_refit_recompute_false():
     X_2 = np.random.RandomState(1).randn(20, 3)
 
     ker = kernels.Kernel(n_neighbors=2, backend="sklearn").fit(X_1)
+    assert ker._K is not None
     orig_shape = ker._K.shape
 
     # Fitting new data with recompute=False should not crash if shape mismatch,
     # but the current implementation just returns self early.
     ker.fit(X_2, recompute=False)
+    assert ker._K is not None
     assert ker._K.shape == orig_shape

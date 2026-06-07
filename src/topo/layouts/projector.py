@@ -368,7 +368,7 @@ class Projector(BaseEstimator, TransformerMixin):
             if issparse(K):
                 knn_indices, knn_dists = _csr_to_fixed_knn(K, self.n_neighbors)
                 n_samples = knn_indices.shape[0]
-                if not isinstance(X, Kernel) and np.shape(X)[0] != n_samples:
+                if not isinstance(X, Kernel) and cast(Any, X).shape[0] != n_samples:
                     raise ValueError(
                         "X and precomputed_knn must have the same number of samples."
                     )
@@ -389,7 +389,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 knn_indices, knn_dists = validate_knn_for_umap(
                     K[0],
                     K[1],
-                    n_samples=np.shape(X)[0],
+                    n_samples=cast(Any, X).shape[0],
                     n_neighbors=self.n_neighbors,
                 )
                 search_index = K[2] if len(K) == 3 else None

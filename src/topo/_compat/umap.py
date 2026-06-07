@@ -7,7 +7,7 @@ these wrappers so kNN-array validation and return contracts stay centralized.
 from __future__ import annotations
 
 from inspect import signature
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from scipy.sparse import csr_matrix, issparse
@@ -69,6 +69,17 @@ def _call_fuzzy_simplicial_set(**kwargs: Any):
     return fuzzy_simplicial_set(**kwargs)
 
 
+def _as_csr_matrix(graph: Any) -> csr_matrix:
+    return cast(csr_matrix, graph.tocsr())
+
+
+def _as_optional_array(value: Any) -> np.ndarray | None:
+    if value is None:
+        return None
+    arr = np.asarray(value)
+    return None if arr.ndim == 0 else arr
+
+
 def fuzzy_graph_from_data(
     X: np.ndarray,
     *,
@@ -106,25 +117,29 @@ def fuzzy_graph_from_data(
             return_dists=return_dists,
         )
 
-    result = _call_fuzzy_simplicial_set(
-        X=X,
-        n_neighbors=int(n_neighbors),
-        random_state=random_state,
-        metric=metric,
-        metric_kwds={} if metric_kwds is None else metric_kwds,
-        angular=angular,
-        set_op_mix_ratio=set_op_mix_ratio,
-        local_connectivity=local_connectivity,
-        apply_set_operations=True,
-        verbose=verbose,
-        return_dists=return_dists,
-        low_memory=low_memory,
+    result = cast(
+        tuple[Any, ...],
+        _call_fuzzy_simplicial_set(
+            X=X,
+            n_neighbors=int(n_neighbors),
+            random_state=random_state,
+            metric=metric,
+            metric_kwds={} if metric_kwds is None else metric_kwds,
+            angular=angular,
+            set_op_mix_ratio=set_op_mix_ratio,
+            local_connectivity=local_connectivity,
+            apply_set_operations=True,
+            verbose=verbose,
+            return_dists=return_dists,
+            low_memory=low_memory,
+        ),
     )
     graph, sigmas, rhos = result[:3]
     dists = result[3] if len(result) > 3 else None
     if return_dists:
-        return graph.tocsr(), np.asarray(sigmas), np.asarray(rhos), dists
-    return graph.tocsr(), np.asarray(sigmas), np.asarray(rhos)
+        dists_array = _as_optional_array(dists)
+        return _as_csr_matrix(graph), np.asarray(sigmas), np.asarray(rhos), dists_array
+    return _as_csr_matrix(graph), np.asarray(sigmas), np.asarray(rhos)
 
 
 def fuzzy_graph_from_knn(
@@ -151,21 +166,30 @@ def fuzzy_graph_from_knn(
         n_samples=n_samples,
         n_neighbors=n_neighbors,
     )
-    result = _call_fuzzy_simplicial_set(
-        X=X,
-        n_neighbors=int(n_neighbors),
-        random_state=random_state,
-        metric=metric,
-        knn_indices=indices,
-        knn_dists=dists,
-        set_op_mix_ratio=set_op_mix_ratio,
-        local_connectivity=local_connectivity,
-        apply_set_operations=True,
-        verbose=verbose,
-        return_dists=return_dists,
+    result = cast(
+        tuple[Any, ...],
+        _call_fuzzy_simplicial_set(
+            X=X,
+            n_neighbors=int(n_neighbors),
+            random_state=random_state,
+            metric=metric,
+            knn_indices=indices,
+            knn_dists=dists,
+            set_op_mix_ratio=set_op_mix_ratio,
+            local_connectivity=local_connectivity,
+            apply_set_operations=True,
+            verbose=verbose,
+            return_dists=return_dists,
+        ),
     )
     graph, sigmas, rhos = result[:3]
     if return_dists:
         returned_dists = result[3] if len(result) > 3 else dists
-        return graph.tocsr(), np.asarray(sigmas), np.asarray(rhos), returned_dists
-    return graph.tocsr(), np.asarray(sigmas), np.asarray(rhos)
+        dists_array = _as_optional_array(returned_dists)
+        return (
+            _as_csr_matrix(graph),
+            np.asarray(sigmas),
+            np.asarray(rhos),
+            dists_array,
+        )
+    return _as_csr_matrix(graph), np.asarray(sigmas), np.asarray(rhos)

@@ -1,11 +1,10 @@
-"""Regression tests for the UMAP compatibility adapter."""
+"""Regression tests for the UMAP adapter."""
 
 import numpy as np
 import pytest
 from scipy import sparse
 
 from topo._compat.umap import (
-    check_umap_version,
     find_umap_ab_params,
     fuzzy_graph_from_data,
     fuzzy_graph_from_knn,
@@ -26,7 +25,6 @@ def test_umap_dependency_importable_and_supported():
     assert umap is not None
     assert find_ab_params is not None
     assert fuzzy_simplicial_set is not None
-    check_umap_version()
 
 
 def test_find_ab_params_parity():
@@ -110,6 +108,60 @@ def test_fuzzy_graph_from_data_matches_umap():
     np.testing.assert_allclose(actual_rhos, expected_rhos)
 
 
+def test_fuzzy_graph_from_data_return_dists_contract():
+    X = np.random.RandomState(3).randn(12, 3).astype(np.float32)
+
+    graph, sigmas, rhos, dists = fuzzy_graph_from_data(
+        X,
+        n_neighbors=4,
+        random_state=42,
+        metric="euclidean",
+        return_dists=True,
+    )
+
+    assert sparse.issparse(graph)
+    assert sigmas.shape == (12,)
+    assert rhos.shape == (12,)
+    assert dists is None or dists.shape[0] == 12
+
+
+def test_fuzzy_graph_from_data_passes_low_memory_when_supported(monkeypatch):
+    import umap.umap_ as umap_internal
+
+    captured = {}
+
+    def fake_fuzzy_simplicial_set(
+        X,
+        n_neighbors,
+        random_state,
+        metric,
+        metric_kwds=None,
+        angular=False,
+        set_op_mix_ratio=1.0,
+        local_connectivity=1.0,
+        apply_set_operations=True,
+        verbose=False,
+        return_dists=False,
+        low_memory=True,
+    ):
+        captured["low_memory"] = low_memory
+        graph = sparse.csr_matrix((X.shape[0], X.shape[0]), dtype=np.float32)
+        return graph, np.ones(X.shape[0]), np.zeros(X.shape[0])
+
+    monkeypatch.setattr(
+        umap_internal, "fuzzy_simplicial_set", fake_fuzzy_simplicial_set
+    )
+
+    fuzzy_graph_from_data(
+        np.zeros((3, 2), dtype=np.float32),
+        n_neighbors=2,
+        random_state=42,
+        low_memory=False,
+    )
+
+    assert captured["low_memory"] is False
+
+
 def test_validate_knn_for_umap_rejects_bad_arrays():
     indices = np.array([[1, -1], [0, 1]], dtype=np.int32)
     dists = np.array([[0.1, 0.2], [0.1, 0.2]], dtype=np.float32)
@@ -124,6 +176,29 @@ def test_validate_knn_for_umap_rejects_bad_arrays():
             n_samples=2,
             n_neighbors=2,
         )
+
+
+def test_validate_knn_for_umap_accepts_and_slices_extra_columns():
+    indices = np.array(
+        [[1, 2, 3], [0, 2, 3], [1, 3, 0], [2, 1, 0]],
+        dtype=np.int64,
+    )
+    dists = np.array(
+        [[0.1, 0.2, 0.3], [0.1, 0.25, 0.4], [0.2, 0.3, 0.5], [0.1, 0.4, 0.6]],
+        dtype=np.float64,
+    )
+
+    out_indices, out_dists = validate_knn_for_umap(
+        indices,
+        dists,
+        n_samples=4,
+        n_neighbors=2,
+    )
+
+    assert out_indices.dtype == np.int32
+    assert out_dists.dtype == np.float32
+    np.testing.assert_array_equal(out_indices, indices[:, :2])
+    np.testing.assert_allclose(out_dists, dists[:, :2])
 
 
 def test_kernel_fuzzy_delegates_to_umap_graph():
@@ -163,7 +238,30 @@ def test_projector_umap_uses_upstream_estimator_and_is_deterministic():
 
     assert isinstance(first.estimator_, UMAP)
     assert first.Y_.shape == (20, 2)
+    assert len(first.estimator_.precomputed_knn) == 3
+    assert first.estimator_.precomputed_knn[2] is None
     np.testing.assert_allclose(first.Y_, second.Y_)
+
+
+def test_projector_umap_accepts_sparse_precomputed_knn():
+    from topo.base.ann import kNN
+    from topo.layouts.projector import Projector
+
+    X = np.random.RandomState(4).randn(20, 4)
+    graph = kNN(X, n_neighbors=5, backend="sklearn", metric="euclidean")
+    proj = Projector(
+        projection_method="UMAP",
+        metric="precomputed",
+        n_components=2,
+        n_neighbors=5,
+        num_iters=10,
+        random_state=42,
+        init="random",
+    ).fit(graph)
+
+    assert proj.Y_.shape == (20, 2)
+    assert len(proj.estimator_.precomputed_knn) == 3
+    assert proj.estimator_.precomputed_knn[2] is None
 
 
 def test_no_local_umap_graph_helper_definitions():

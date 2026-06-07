@@ -20,7 +20,7 @@ from scipy.sparse import SparseEfficiencyWarning, csr_matrix, issparse
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils import check_random_state
 
-from topo._compat.umap import check_umap_version
+from topo._compat.umap import validate_knn_for_umap
 from topo.base.ann import kNN
 from topo.layouts.isomap import Isomap
 from topo.layouts.map import fuzzy_embedding
@@ -359,18 +359,42 @@ class Projector(BaseEstimator, TransformerMixin):
             )
 
         elif self.projection_method == "UMAP":
-            check_umap_version()
             from umap import UMAP
 
-            # UMAP's precomputed_knn expects a (indices, distances) tuple, not a
-            # sparse matrix.  Convert K (CSR) to the required format.
+            # UMAP's estimator expects precomputed_knn as
+            # (indices, distances, search_index). We reuse TopoMetry's graph
+            # and set search_index=None because out-of-sample UMAP transform is
+            # unavailable for this precomputed graph path.
             if issparse(K):
                 knn_indices, knn_dists = _csr_to_fixed_knn(K, self.n_neighbors)
-                precomputed_knn = (knn_indices, knn_dists)
+                n_samples = knn_indices.shape[0]
+                if not isinstance(X, Kernel) and np.shape(X)[0] != n_samples:
+                    raise ValueError(
+                        "X and precomputed_knn must have the same number of samples."
+                    )
+                knn_indices, knn_dists = validate_knn_for_umap(
+                    knn_indices,
+                    knn_dists,
+                    n_samples=n_samples,
+                    n_neighbors=knn_indices.shape[1],
+                )
+                precomputed_knn = (knn_indices, knn_dists, None)
                 k_nbrs = knn_indices.shape[1]
             elif isinstance(K, tuple):
-                precomputed_knn = K
-                k_nbrs = K[0].shape[1]
+                if len(K) not in {2, 3}:
+                    raise ValueError(
+                        "precomputed_knn must be a 2- or 3-tuple of "
+                        "(indices, distances[, search_index])."
+                    )
+                knn_indices, knn_dists = validate_knn_for_umap(
+                    K[0],
+                    K[1],
+                    n_samples=np.shape(X)[0],
+                    n_neighbors=self.n_neighbors,
+                )
+                search_index = K[2] if len(K) == 3 else None
+                precomputed_knn = (knn_indices, knn_dists, search_index)
+                k_nbrs = knn_indices.shape[1]
             else:
                 precomputed_knn = K
                 k_nbrs = self.n_neighbors

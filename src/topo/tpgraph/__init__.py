@@ -13,7 +13,6 @@ __all__ = [
     "compute_kernel",
     "Kernel",
     "cknn_graph",
-    "fuzzy_simplicial_set",
     "IntrinsicDim",
     "automated_scaffold_sizing",
 ]
@@ -22,7 +21,6 @@ _EXPORTS = {
     "compute_kernel": (".kernels", "compute_kernel"),
     "Kernel": (".kernels", "Kernel"),
     "cknn_graph": (".cknn", "cknn_graph"),
-    "fuzzy_simplicial_set": (".fuzzy", "fuzzy_simplicial_set"),
     "IntrinsicDim": (".intrinsic_dim", "IntrinsicDim"),
     "automated_scaffold_sizing": (
         ".intrinsic_dim",
@@ -32,7 +30,6 @@ _EXPORTS = {
 
 if TYPE_CHECKING:
     from .cknn import cknn_graph as cknn_graph
-    from .fuzzy import fuzzy_simplicial_set as fuzzy_simplicial_set
     from .intrinsic_dim import IntrinsicDim as IntrinsicDim
     from .intrinsic_dim import automated_scaffold_sizing as automated_scaffold_sizing
     from .kernels import Kernel as Kernel

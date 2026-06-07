@@ -52,6 +52,8 @@ class DummyEigenBuilder(EigenBuildMixin):
         self._scaffold_components_ms = None
         self._scaffold_components_dm = None
         self.n_eigs = 2
+        self.n_eigs_ = 2
+        self.selected_scaffold_components_ = None
         self.global_dimensionality = None
         self.local_dimensionality = None
 
@@ -128,13 +130,15 @@ def test_automated_sizing_updates_component_state(monkeypatch):
     builder = DummyEigenBuilder()
 
     def fake_sizing(*args, **kwargs):
-        return 5, {"local_id": np.array([2.0, 3.0])}
+        return 5, {"local_id": np.array([2.0, 3.0]), "quantile_value": 3.0}
 
     monkeypatch.setattr(eigen_pipeline, "automated_scaffold_sizing", fake_sizing)
     builder._automated_sizing(np.ones((8, 3)))
 
-    assert builder.n_eigs == 5
-    assert builder.global_dimensionality == 5
+    assert builder.n_eigs == 2
+    assert builder.n_eigs_ == 5
+    assert builder.selected_scaffold_components_ == 5
+    assert builder.global_dimensionality == 3.0
     assert builder._scaffold_components_ms == 5
     assert builder._scaffold_components_dm == 5
     np.testing.assert_array_equal(builder.local_dimensionality, [2.0, 3.0])
@@ -160,3 +164,18 @@ def test_layout_spectral_layout_requires_graph():
     layout = DummyLayoutBuilder()
     with pytest.raises(ValueError, match="No graph kernel"):
         layout.spectral_layout()
+
+
+def test_layout_run_projections_raises_when_all_fail():
+    layout = DummyLayoutBuilder()
+    layout.projection_methods = ["MAP"]
+
+    def fail_project(*args, **kwargs):
+        raise ValueError("boom")
+
+    layout.project = fail_project
+    with (
+        pytest.warns(RuntimeWarning, match="failed"),
+        pytest.raises(RuntimeError, match="All requested projections failed"),
+    ):
+        layout._run_projections()

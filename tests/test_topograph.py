@@ -5,6 +5,7 @@ import tempfile
 
 import numpy as np
 import pytest
+from sklearn.exceptions import NotFittedError
 
 from topo import TopOGraph, load_topograph, save_topograph
 
@@ -89,6 +90,36 @@ class TestTopOGraphFit:
             fitted_topograph.global_id, (int, float, np.integer, np.floating)
         )
         assert fitted_topograph.global_id > 0
+        info = fitted_topograph.intrinsic_dim
+        assert "selected_components" in info
+        assert info["selected_components"] is not None
+        assert fitted_topograph.n_eigs_ >= info["selected_components"]
+
+    def test_global_id_raises_before_fit(self):
+        tg = TopOGraph()
+        with pytest.raises(NotFittedError):
+            _ = tg.global_id
+
+    def test_fit_does_not_mutate_constructor_params(self):
+        X = np.random.RandomState(0).randn(30, 4)
+        tg = TopOGraph(
+            base_knn=5,
+            graph_knn=5,
+            backend="sklearn",
+            n_jobs=-1,
+            random_state=0,
+            min_eigs=128,
+            projection_methods=[],
+        )
+        before = tg.get_params(deep=False)
+
+        tg.fit(X)
+        after = tg.get_params(deep=False)
+
+        for key in ("backend", "n_jobs", "random_state", "min_eigs"):
+            assert after[key] == before[key]
+        assert tg.n_eigs == before["min_eigs"]
+        assert tg.n_eigs_ <= X.shape[0] - 2
 
     def test_diffusion_operators(self, fitted_topograph):
         P_X = fitted_topograph.P_of_X
@@ -218,6 +249,54 @@ class TestTopOGraphSaveLoad:
 
         assert fitted_topograph.base_nbrs_class is not None
         assert loaded.base_nbrs_class is None
+
+    def test_load_rejects_non_topograph_pickle(self):
+        import pickle
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "not_tg.pkl")
+            with open(path, "wb") as f:
+                pickle.dump({"not": "a topograph"}, f)
+
+            with pytest.raises(TypeError, match="TopOGraph"):
+                load_topograph(path)
+
+
+def test_expanded_kernel_fits_on_expansion_data(monkeypatch):
+    import topo.topograph as topograph_module
+
+    fit_shapes = []
+
+    class FakeKernel:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def fit(self, X):
+            fit_shapes.append(X.shape)
+            return self
+
+    monkeypatch.setattr(topograph_module, "Kernel", FakeKernel)
+    tg = TopOGraph(
+        graph_kernel_version="bw_adaptive_nbr_expansion",
+        graph_metric="euclidean",
+        backend="sklearn",
+        n_jobs=1,
+    )
+    tg._backend_resolved = "sklearn"
+    tg._n_jobs_effective = 1
+    knn = np.ones((6, 6))
+    raw = np.ones((6, 2))
+
+    tg._build_kernel(
+        knn,
+        2,
+        "bw_adaptive_nbr_expansion",
+        {},
+        data_for_expansion=raw,
+        base=False,
+    )
+
+    assert fit_shapes == [(6, 2)]
 
 
 def test_kernel_degree_lazily_builds_adjacency(fitted_topograph):

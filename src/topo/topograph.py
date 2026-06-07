@@ -20,6 +20,7 @@ from typing import Any, cast
 import numpy as np
 from scipy.sparse import csr_matrix, issparse
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.exceptions import NotFittedError
 
 from topo import analysis as _analysis
 from topo._pipeline.eigen import EigenBuildMixin
@@ -301,6 +302,11 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         # Fitted state
         self.n = cast(Any, None)
         self.m = cast(Any, None)
+        self.n_eigs_ = None
+        self.selected_scaffold_components_ = None
+        self._backend_resolved = backend
+        self._n_jobs_effective = n_jobs
+        self._random_state_resolved = None
         self.base_nbrs_class = None
         self.base_knn_graph = None
         self.eigenbasis = None
@@ -368,13 +374,15 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     def _parse_backend(self):
         from topo._optional import best_ann_backend
 
-        self.backend = best_ann_backend(self.backend)
+        self._backend_resolved = best_ann_backend(self.backend)
 
     def _parse_random_state(self):
         if self.random_state is None:
-            self.random_state = np.random.RandomState()
+            self._random_state_resolved = np.random.RandomState()
         elif isinstance(self.random_state, int):
-            self.random_state = np.random.RandomState(self.random_state)
+            self._random_state_resolved = np.random.RandomState(self.random_state)
+        else:
+            self._random_state_resolved = self.random_state
 
     # ------------------------------------------------------------------
     # Data-driven kernel builder (Phase 3)
@@ -421,8 +429,10 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
                 raise ValueError(
                     "data_for_expansion must have the same number of rows as the kNN graph."
                 )
+            fit_input = data_for_expansion
         else:
             metric = "precomputed"
+            fit_input = knn
 
         # Gaussian uses self.sigma
         if kernel_version == "gaussian":
@@ -432,16 +442,16 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             metric=metric,
             n_neighbors=n_neighbors,
             pairwise=False,
-            backend=self.backend,
-            n_jobs=self.n_jobs,
+            backend=self._backend_resolved,
+            n_jobs=self._n_jobs_effective,
             laplacian_type=self.laplacian_type,
             semi_aniso=False,
             anisotropy=1.0,
             cache_input=False,
             verbose=self.bases_graph_verbose,
-            random_state=self.random_state,
+            random_state=self._random_state_resolved,
             **cfg,
-        ).fit(knn)
+        ).fit(fit_input)
 
         gc.collect()
         if not low_memory:
@@ -475,7 +485,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             if self.verbosity >= 1:
                 logger.info(
                     f"Automated sizing → target components: {self._scaffold_components_ms} "
-                    f"(n_eigs={self.n_eigs})"
+                    f"(n_eigs_={self.n_eigs_})"
                 )
 
         self.uom_eigenvalues_dm_list, self.uom_eigenvalues_ms_list = [], []
@@ -535,8 +545,10 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
         max_eigs = max(1, n_samples - 2)
         if self.n_eigs > max_eigs:
-            self.n_eigs = max_eigs
+            self.n_eigs_ = max_eigs
             warnings.warn(f"Clamped n_eigs to {max_eigs} (n_samples={n_samples})")
+        else:
+            self.n_eigs_ = int(self.n_eigs)
 
     def _setup_environment(self):
         from topo._logging import configure
@@ -544,13 +556,16 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         configure(self.verbosity)
         self._parse_backend()
         self._parse_random_state()
+        self._n_jobs_effective = self.n_jobs
         if self.n_jobs == -1:
             try:
                 from joblib import cpu_count
 
-                self.n_jobs = cpu_count()
+                self._n_jobs_effective = cpu_count()
             except Exception:
                 pass
+        if self.n_eigs_ is None:
+            self.n_eigs_ = int(self.n_eigs)
         self.layout_verbose = self.verbosity >= 2
         self.bases_graph_verbose = self.verbosity >= 3
 
@@ -751,7 +766,12 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         dim : float
             The global intrinsic dimensionality estimate.
         """
-        return self.global_dimensionality
+        if self.global_dimensionality is None:
+            raise NotFittedError(
+                "Global intrinsic dimensionality is unavailable. Call fit(X) first "
+                "with an input-space metric that supports automated sizing."
+            )
+        return float(self.global_dimensionality)
 
     @property
     def intrinsic_dim(self) -> dict[str, Any]:
@@ -766,11 +786,16 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         info : dict
             Dictionary with keys 'method', 'global', 'local', and 'details'.
         """
+        if self.global_dimensionality is None and self.local_dimensionality is None:
+            raise NotFittedError(
+                "Intrinsic-dimensionality estimates are unavailable. Call fit(X) first."
+            )
         det = (self._id_details or {}).get(self.id_method)
         return {
             "method": self.id_method,
             "global": self.global_dimensionality,
             "local": self.local_dimensionality,
+            "selected_components": self.selected_scaffold_components_,
             "details": det,
         }
 
@@ -1001,11 +1026,15 @@ def save_topograph(
 
 
 def load_topograph(filename: str) -> TopOGraph:
-    """Load a TopOGraph from a pickle file."""
+    """Load a TopOGraph from a trusted pickle file.
+
+    Pickle can execute arbitrary code while loading. Only load files from a
+    trusted source.
+    """
     import pickle
 
     with open(filename, "rb") as f:
         obj = pickle.load(f)
     if not isinstance(obj, TopOGraph):
-        warnings.warn("Loaded object is not a TopOGraph.", RuntimeWarning)
+        raise TypeError(f"Pickle did not contain a TopOGraph: {type(obj)!r}")
     return obj

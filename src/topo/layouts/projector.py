@@ -530,10 +530,11 @@ class Projector(BaseEstimator, TransformerMixin):
         Y : ndarray of shape (n_samples, n_components)
             Projection results.
         """
-        if self.projection_method == "UMAP":
+        if self.Y_ is None:
+            raise ValueError("Projector has not been fitted yet.")
+        if self.projection_method == "UMAP" and X is not None:
             return cast(np.ndarray, cast(Any, self.estimator_).transform(X))
-        else:
-            return cast(np.ndarray, self.Y_)
+        return cast(np.ndarray, self.Y_)
 
     def fit_transform(self, X, y=None, **kwargs) -> np.ndarray:
         """Fit the projection and return the embedding.

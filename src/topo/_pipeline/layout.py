@@ -82,15 +82,22 @@ class LayoutBuildMixin:
         """Compute requested 2-D projections on both scaffolds."""
         if self.projection_methods is None:
             return
+        failures = []
+        successes = 0
         for proj in self.projection_methods:
             for ms in (True, False):
                 try:
                     self.project(projection_method=proj, multiscale=ms)
+                    successes += 1
                 except Exception as e:
                     tag = "msZ" if ms else "Z/DM"
+                    failures.append((proj, tag, e))
                     warnings.warn(
                         f"Projection '{proj}' on {tag} failed: {e}", RuntimeWarning
                     )
+        if successes == 0 and failures:
+            msg = "; ".join(f"{proj} on {tag}: {err}" for proj, tag, err in failures)
+            raise RuntimeError(f"All requested projections failed: {msg}")
 
     def _get_projection(self, method, multiscale):
         """Look up a projection from ProjectionDict."""
@@ -124,7 +131,9 @@ class LayoutBuildMixin:
             else:
                 raise ValueError("No graph kernel available. Call .fit() first.")
         t0 = time.time()
-        rng = check_random_state(self.random_state)
+        rng = check_random_state(
+            getattr(self, "_random_state_resolved", self.random_state)
+        )
         try:
             spt_result = cast(
                 Any,
@@ -223,14 +232,14 @@ class LayoutBuildMixin:
             projection_method=projection_method,
             metric=metric,
             n_neighbors=self.graph_knn,
-            n_jobs=self.n_jobs,
+            n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
             landmarks=landmarks,
             landmark_method=landmark_method,
             num_iters=num_iters,
             init=cast(Any, init_Y),
-            nbrs_backend=self.backend,
+            nbrs_backend=getattr(self, "_backend_resolved", self.backend),
             keep_estimator=False,
-            random_state=self.random_state,
+            random_state=getattr(self, "_random_state_resolved", self.random_state),
             verbose=self.layout_verbose,
             save_every=save_every,
             save_limit=save_limit,

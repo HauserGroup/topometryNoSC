@@ -39,6 +39,8 @@ class EigenBuildMixin:
     _scaffold_components_ms: int | None
     _scaffold_components_dm: int | None
     n_eigs: int
+    n_eigs_: int | None
+    selected_scaffold_components_: int | None
     global_dimensionality: int | float | None
     local_dimensionality: np.ndarray | None
     verbosity: int
@@ -84,14 +86,14 @@ class EigenBuildMixin:
             X,
             method=self.id_method,
             ks=cast(Any, self.id_ks),
-            backend=self.backend,
+            backend=getattr(self, "_backend_resolved", self.backend),
             metric=self.id_metric,
-            n_jobs=self.n_jobs,
+            n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
             quantile=self.id_quantile,
             min_components=int(self.id_min_components),
             max_components=int(max_cap),
             headroom=float(self.id_headroom),
-            random_state=self.random_state,
+            random_state=getattr(self, "_random_state_resolved", self.random_state),
             return_details=True,
         )
         n_eigs_automated, id_details = cast(tuple[int, dict[str, Any]], res)
@@ -99,8 +101,15 @@ class EigenBuildMixin:
         k_sel = int(max(2, min(n_eigs_automated, max_cap)))
         self._scaffold_components_ms = k_sel
         self._scaffold_components_dm = k_sel
-        self.n_eigs = int(max(self.n_eigs, k_sel))
-        self.global_dimensionality = k_sel
+        self.selected_scaffold_components_ = k_sel
+        base_n_eigs = self.n_eigs if self.n_eigs_ is None else self.n_eigs_
+        self.n_eigs_ = int(max(base_n_eigs, k_sel))
+        if "global_id" in id_details:
+            self.global_dimensionality = id_details["global_id"]
+        elif "quantile_value" in id_details:
+            self.global_dimensionality = id_details["quantile_value"]
+        else:
+            self.global_dimensionality = None
         self.local_dimensionality = id_details.get("local_id", None)
 
     # ------------------------------------------------------------------
@@ -119,14 +128,14 @@ class EigenBuildMixin:
         if dm_key not in self.EigenbasisDict:
             t0 = time.time()
             dm_eig = EigenDecomposition(
-                n_components=self.n_eigs,
+                n_components=self.n_eigs_ if self.n_eigs_ is not None else self.n_eigs,
                 method="DM",
                 eigensolver=self.eigensolver,
                 eigen_tol=self.eigen_tol,
                 drop_first=True,
                 weight=True,
                 t=self.diff_t,
-                random_state=self.random_state,
+                random_state=getattr(self, "_random_state_resolved", self.random_state),
                 verbose=self.bases_graph_verbose,
             ).fit(self.base_kernel)
             self.EigenbasisDict[dm_key] = dm_eig
@@ -165,10 +174,14 @@ class EigenBuildMixin:
         """Build kNN and refined kernels in both scaffold spaces."""
         ms_components = self._scaffold_components_ms
         if ms_components is None:
-            ms_components = int(self.n_eigs)
+            ms_components = int(
+                self.n_eigs_ if self.n_eigs_ is not None else self.n_eigs
+            )
         dm_components = self._scaffold_components_dm
         if dm_components is None:
-            dm_components = int(self.n_eigs)
+            dm_components = int(
+                self.n_eigs_ if self.n_eigs_ is not None else self.n_eigs
+            )
 
         # msZ
         if self.verbosity >= 1:
@@ -179,8 +192,8 @@ class EigenBuildMixin:
             ms_target,
             n_neighbors=self.graph_knn,
             metric=self.graph_metric,
-            n_jobs=self.n_jobs,
-            backend=self.backend,
+            n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
+            backend=getattr(self, "_backend_resolved", self.backend),
             return_instance=False,
             verbose=self.bases_graph_verbose,
             **kwargs,
@@ -196,8 +209,8 @@ class EigenBuildMixin:
             dm_target,
             n_neighbors=self.graph_knn,
             metric=self.graph_metric,
-            n_jobs=self.n_jobs,
-            backend=self.backend,
+            n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
+            backend=getattr(self, "_backend_resolved", self.backend),
             return_instance=False,
             verbose=self.bases_graph_verbose,
             **kwargs,
@@ -213,7 +226,7 @@ class EigenBuildMixin:
             self.GraphKernelDict,
             suffix=f" from {ms_key}",
             low_memory=self.low_memory,
-            data_for_expansion=ms_eig.transform(X),
+            data_for_expansion=ms_target,
             base=False,
         )
         self.runtimes["Kernel_msZ"] = time.time() - t0
@@ -226,7 +239,7 @@ class EigenBuildMixin:
             self.GraphKernelDict,
             suffix=f" from {dm_key}",
             low_memory=self.low_memory,
-            data_for_expansion=dm_eig.transform(X),
+            data_for_expansion=dm_target,
             base=False,
         )
         self.runtimes["Kernel_Z"] = time.time() - t0

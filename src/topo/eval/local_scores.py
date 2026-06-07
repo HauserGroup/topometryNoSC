@@ -74,16 +74,21 @@ def geodesic_distance(
     geodesic_distance : array-like, shape (n_vertices, n_vertices)
 
     """
+    if indices is not None and np.issubdtype(type(indices), np.integer):
+        indices = np.array([indices])
     if n_jobs == 1:
         G = csgraph.shortest_path(
-            A, method=method, unweighted=unweighted, directed=directed, indices=None
+            A,
+            method=method,
+            unweighted=unweighted,
+            directed=directed,
+            indices=indices,
         )
-        if indices is not None:
-            G = G.T[indices].T
-        # guarantee symmetry
-        G = (G + G.T) / 2
-        # zero diagonal
-        G[(np.arange(G.shape[0]), np.arange(G.shape[0]))] = 0
+        if G.ndim == 1:
+            G = G.reshape(1, -1)
+        if G.shape[0] == G.shape[1]:
+            G = (G + G.T) / 2
+            G[(np.arange(G.shape[0]), np.arange(G.shape[0]))] = 0
     else:
         import multiprocessing as mp
         from functools import partial
@@ -100,8 +105,6 @@ def geodesic_distance(
             )
         if indices is None:
             indices = np.arange(A.shape[0])
-        elif np.issubdtype(type(indices), np.integer):
-            indices = np.array([indices])
         n = len(indices)
         local_function = partial(
             csgraph.shortest_path, A, method, directed, False, unweighted, False
@@ -123,14 +126,11 @@ def geodesic_distance(
                 raise ValueError(
                     "The shortest path computation could not be completed because a negative cycle is present."
                 ) from err
-        if n == 1:
-            G = G.ravel()
-        # guarantee symmetry
-        G = (G + G.T) / 2
-        #
-        G[np.where(G == 0)] = np.inf
-        # zero diagonal
-        G[(np.arange(G.shape[0]), np.arange(G.shape[0]))] = 0
+        if n == 1 and G.ndim == 1:
+            G = G.reshape(1, -1)
+        if G.shape[0] == G.shape[1]:
+            G = (G + G.T) / 2
+            G[(np.arange(G.shape[0]), np.arange(G.shape[0]))] = 0
     return G
 
 

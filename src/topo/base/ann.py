@@ -60,6 +60,40 @@ def _query_k(n_neighbors: int, n_fit_samples: int) -> int:
     return min(n_neighbors + 1, n_fit_samples)
 
 
+def _drop_self_and_truncate_neighbors(
+    indices: np.ndarray,
+    distances: np.ndarray,
+    *,
+    n_neighbors: int,
+    n_query_samples: int,
+    n_fit_samples: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Remove zero-distance self hits and keep exactly ``n_neighbors`` per row."""
+    n_neighbors = _validate_n_neighbors(n_neighbors)
+    indices = np.asarray(indices)
+    distances = np.asarray(distances)
+    if indices.shape != distances.shape or indices.ndim != 2:
+        raise ValueError("indices and distances must be matching 2-D arrays.")
+
+    out_indices = np.empty((n_query_samples, n_neighbors), dtype=indices.dtype)
+    out_distances = np.empty((n_query_samples, n_neighbors), dtype=distances.dtype)
+    for row in range(n_query_samples):
+        row_indices = indices[row]
+        row_distances = distances[row]
+        if n_query_samples == n_fit_samples:
+            is_self = (row_indices == row) & np.isclose(row_distances, 0.0)
+            row_indices = row_indices[~is_self]
+            row_distances = row_distances[~is_self]
+        if row_indices.shape[0] < n_neighbors:
+            raise ValueError(
+                "Neighbor search returned fewer than n_neighbors non-self results. "
+                "Use n_neighbors < n_samples for self-query graphs."
+            )
+        out_indices[row] = row_indices[:n_neighbors]
+        out_distances[row] = row_distances[:n_neighbors]
+    return out_indices, out_distances
+
+
 def _as_dense_array(data: np.ndarray | csr_matrix | list) -> np.ndarray:
     """Convert supported array-like inputs to a dense numpy array."""
     if isinstance(data, np.ndarray):
@@ -111,7 +145,12 @@ def _check_2d_data(data: Any, name: str = "data") -> None:
 
 
 def _build_sparse_knn_graph(
-    indices: np.ndarray, distances: np.ndarray, n_query_samples: int, n_fit_samples: int
+    indices: np.ndarray,
+    distances: np.ndarray,
+    n_query_samples: int,
+    n_fit_samples: int,
+    *,
+    n_neighbors: int | None = None,
 ) -> csr_matrix:
     """Build a CSR neighbor-distance graph from dense index/distance arrays."""
     indices = np.asarray(indices)
@@ -123,6 +162,14 @@ def _build_sparse_knn_graph(
         raise ValueError("indices and distances must have the same shape.")
     if indices.shape[0] != n_query_samples:
         raise ValueError("indices row count does not match n_query_samples.")
+    if n_neighbors is not None:
+        indices, distances = _drop_self_and_truncate_neighbors(
+            indices,
+            distances,
+            n_neighbors=n_neighbors,
+            n_query_samples=n_query_samples,
+            n_fit_samples=n_fit_samples,
+        )
 
     k = indices.shape[1]
     # Create row pointers for CSR format directly from the regular k-neighbor grid
@@ -317,6 +364,11 @@ def kNN(
     _check_2d_data(X, "X")
     n_neighbors = _validate_n_neighbors(n_neighbors)
     n_jobs = _resolve_n_jobs(n_jobs)
+    if Y is None and n_neighbors >= X.shape[0]:
+        raise ValueError(
+            f"n_neighbors={n_neighbors} must be smaller than n_samples={X.shape[0]} "
+            "for self-query kNN graphs."
+        )
 
     if Y is not None:
         _check_2d_data(Y, "Y")
@@ -363,14 +415,22 @@ def kNN(
         # sklearn estimator does not accept.
         _valid = set(NearestNeighbors().get_params())
         sk_kwargs = {k: v for k, v in kwargs.items() if k in _valid}
+        query_k = _query_k(n_neighbors, int(X.shape[0])) if Y is None else n_neighbors
         nbrs = NearestNeighbors(
-            n_neighbors=n_neighbors,
+            n_neighbors=query_k,
             metric=metric,
             n_jobs=n_jobs,
             **sk_kwargs,
         ).fit(X)
         if Y is None:
-            knn = nbrs.kneighbors_graph(X, mode="distance")
+            distances, indices = nbrs.kneighbors(X, return_distance=True)
+            knn = _build_sparse_knn_graph(
+                indices=indices,
+                distances=distances,
+                n_query_samples=int(X.shape[0]),
+                n_fit_samples=int(X.shape[0]),
+                n_neighbors=n_neighbors,
+            )
         else:
             knn = nbrs.kneighbors_graph(Y, mode="distance")
 
@@ -580,6 +640,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
             distances=distances,
             n_query_samples=n_query_samples,
             n_fit_samples=self.n_samples_fit_,
+            n_neighbors=self.n_neighbors,
         )
 
         if self.verbose:
@@ -634,6 +695,13 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         if self.metric == "sqeuclidean":
             distances = distances**2
+        indices, distances = _drop_self_and_truncate_neighbors(
+            indices,
+            distances,
+            n_neighbors=self.n_neighbors,
+            n_query_samples=n_query_samples,
+            n_fit_samples=self.n_samples_fit_,
+        )
 
         kneighbors_graph = None
         if return_graph:
@@ -984,6 +1052,7 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
             distances=distances,
             n_query_samples=n_query_samples,
             n_fit_samples=self.n_samples_fit_,
+            n_neighbors=self.n_neighbors,
         )
 
         if self.verbose:
@@ -1027,6 +1096,13 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         if self.metric == "euclidean":
             # HNSWlib returns squared L2 distance for space='l2'.
             distances = np.sqrt(distances)
+        indices, distances = _drop_self_and_truncate_neighbors(
+            indices,
+            distances,
+            n_neighbors=self.n_neighbors,
+            n_query_samples=n_query_samples,
+            n_fit_samples=self.n_samples_fit_,
+        )
 
         kneighbors_graph = None
         if return_graph:

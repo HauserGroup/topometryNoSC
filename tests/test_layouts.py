@@ -1,6 +1,7 @@
 """Tests for layout projectors and embeddings."""
 
 import numpy as np
+import pytest
 
 from topo.layouts.map import fuzzy_embedding
 from topo.layouts.projector import Projector
@@ -35,3 +36,18 @@ def test_fuzzy_embedding(swiss_roll_data):
     K = compute_kernel(X, n_neighbors=15, backend="sklearn")
     Y, Y_aux = fuzzy_embedding(K, n_components=2, n_epochs=10)
     assert Y.shape == (X.shape[0], 2)
+
+
+def test_projector_umap_transform_none_returns_fitted_embedding():
+    pytest.importorskip("umap")
+    X = np.random.RandomState(0).randn(20, 3)
+    proj = Projector(
+        projection_method="UMAP",
+        n_components=2,
+        n_neighbors=5,
+        nbrs_backend="sklearn",
+        num_iters=10,
+    )
+
+    Y = proj.fit_transform(X)
+    np.testing.assert_allclose(proj.transform(None), Y)

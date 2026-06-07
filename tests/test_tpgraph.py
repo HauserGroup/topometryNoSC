@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from scipy import sparse
 
+from topo.base.ann import kNN
 from topo.tpgraph import kernels
 from topo.tpgraph.cknn import cknn_graph
 from topo.tpgraph.intrinsic_dim import (
@@ -127,5 +128,83 @@ def test_cosine_use_angular_converts_adaptive_bandwidth_units():
     )
 
     raw_bandwidth = kernels._adap_bw(densities["knn"], n_neighbors=2)
-    expected = kernels._cosine_distance_to_angle(raw_bandwidth)
+    expected = kernels._cosine_distance_to_angle_from_sparse_triplets(
+        None, None, raw_bandwidth
+    )
     np.testing.assert_allclose(densities["adaptive_bw"], expected)
+
+
+@pytest.mark.parametrize("backend", ["sklearn"])
+def test_knn_self_query_returns_requested_nonself_neighbors(backend):
+    X = np.random.RandomState(0).randn(12, 4)
+
+    graph = kNN(X, n_neighbors=3, backend=backend, metric="euclidean")
+
+    assert graph.shape == (12, 12)
+    np.testing.assert_allclose(graph.diagonal(), np.zeros(12))
+    np.testing.assert_array_equal(graph.getnnz(axis=1), np.full(12, 3))
+
+
+def test_kernel_parameterized_operator_caches_recompute_by_key():
+    X = np.random.RandomState(1).randn(18, 3)
+    ker = Kernel(n_neighbors=4, backend="sklearn", metric="euclidean").fit(X)
+
+    L_norm = ker.laplacian("normalized")
+    L_unnorm = ker.laplacian("unnormalized")
+    assert not np.allclose(L_norm.toarray(), L_unnorm.toarray())
+
+    P_alpha0 = ker.diff_op(anisotropy=0.0)
+    P_alpha1 = ker.diff_op(anisotropy=1.0)
+    assert not np.allclose(P_alpha0.toarray(), P_alpha1.toarray())
+
+
+def test_shortest_paths_indices_and_landmark_guard():
+    X = np.random.RandomState(2).randn(10, 2)
+    ker = Kernel(n_neighbors=3, backend="sklearn", metric="euclidean").fit(X)
+
+    subset = ker.shortest_paths(indices=[0, 2])
+
+    assert subset.shape == (2, 10)
+    assert np.isfinite(subset).any()
+    with pytest.raises(NotImplementedError, match="landmark"):
+        ker.shortest_paths(landmark=True, recompute=True)
+
+
+def test_adaptive_density_ranks_constant_bandwidth_guard():
+    adap_sd = np.ones(5)
+    ranks = kernels._density_ranks(adap_sd, high=7)
+
+    np.testing.assert_allclose(ranks, np.full(5, 7.0))
+
+
+def test_resistance_distance_sparsify_and_impute_numerics():
+    graph = sparse.csr_matrix(
+        [
+            [0.0, 1.0, 0.0, 0.0],
+            [1.0, 0.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0, 0.0],
+        ]
+    )
+    ker = Kernel(
+        metric="precomputed",
+        adaptive_bw=False,
+        sigma=1.0,
+        n_neighbors=2,
+        laplacian_type="unnormalized",
+    ).fit(graph)
+
+    rd = ker.resistance_distance().toarray()
+    np.testing.assert_allclose(rd, rd.T)
+    np.testing.assert_allclose(np.diag(rd), np.zeros(4))
+    assert np.isfinite(rd).all()
+    assert (rd >= -1e-12).all()
+
+    sparse_graph = ker.sparsify(epsilon=0.9, maxiter=1, random_state=0).tocsr()
+    np.testing.assert_allclose(sparse_graph.toarray(), sparse_graph.toarray().T)
+    assert (sparse_graph.data >= 0).all()
+
+    Y = sparse.csr_matrix(np.eye(4))
+    Y_imp = ker.impute(Y, t=2)
+    assert Y_imp.shape == (4, 4)
+    assert np.isfinite(Y_imp).all()

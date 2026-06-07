@@ -134,8 +134,12 @@ def test_cosine_use_angular_converts_adaptive_bandwidth_units():
     np.testing.assert_allclose(densities["adaptive_bw"], expected)
 
 
-@pytest.mark.parametrize("backend", ["sklearn"])
+@pytest.mark.parametrize("backend", ["sklearn", "hnswlib", "nmslib"])
 def test_knn_self_query_returns_requested_nonself_neighbors(backend):
+    if backend == "hnswlib":
+        pytest.importorskip("hnswlib")
+    if backend == "nmslib":
+        pytest.importorskip("nmslib")
     X = np.random.RandomState(0).randn(12, 4)
 
     graph = kNN(X, n_neighbors=3, backend=backend, metric="euclidean")
@@ -156,6 +160,17 @@ def test_kernel_parameterized_operator_caches_recompute_by_key():
     P_alpha0 = ker.diff_op(anisotropy=0.0)
     P_alpha1 = ker.diff_op(anisotropy=1.0)
     assert not np.allclose(P_alpha0.toarray(), P_alpha1.toarray())
+
+
+def test_shortest_paths_caches_by_indices():
+    X = np.random.RandomState(2).randn(10, 2)
+    ker = kernels.Kernel(n_neighbors=3, backend="sklearn", metric="euclidean").fit(X)
+
+    sp_all = ker.shortest_paths(indices=None)
+    sp_subset = ker.shortest_paths(indices=[0, 2])
+
+    assert sp_all.shape == (10, 10)
+    assert sp_subset.shape == (2, 10)
 
 
 def test_shortest_paths_indices_and_landmark_guard():
@@ -208,3 +223,16 @@ def test_resistance_distance_sparsify_and_impute_numerics():
     Y_imp = ker.impute(Y, t=2)
     assert Y_imp.shape == (4, 4)
     assert np.isfinite(Y_imp).all()
+
+
+def test_kernel_safe_refit_recompute_false():
+    X_1 = np.random.RandomState(0).randn(10, 3)
+    X_2 = np.random.RandomState(1).randn(20, 3)
+
+    ker = kernels.Kernel(n_neighbors=2, backend="sklearn").fit(X_1)
+    orig_shape = ker._K.shape
+
+    # Fitting new data with recompute=False should not crash if shape mismatch,
+    # but the current implementation just returns self early.
+    ker.fit(X_2, recompute=False)
+    assert ker._K.shape == orig_shape

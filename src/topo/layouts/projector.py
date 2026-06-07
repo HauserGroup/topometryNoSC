@@ -20,6 +20,7 @@ from scipy.sparse import SparseEfficiencyWarning, csr_matrix, issparse
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils import check_random_state
 
+from topo._compat.umap import check_umap_version
 from topo.base.ann import kNN
 from topo.layouts.isomap import Isomap
 from topo.layouts.map import fuzzy_embedding
@@ -43,12 +44,12 @@ class Projector(BaseEstimator, TransformerMixin):
         Number of dimensions to optimize the layout to. Usually 2 or 3 if you're into visualizing data.
 
     projection_method : str, default='Isomap'
-        Which projection method to use. Only 'Isomap', 't-SNE' and 'MAP' are implemented out of the box. 't-SNE' uses and 'MAP' relies
-        on code that is adapted from UMAP. Current options are:
+        Which projection method to use. `UMAP` delegates to `umap-learn`; `MAP`
+        is TopoMetry's local checkpoint-aware graph-layout optimizer. Current options are:
             * 'Isomap' - one of the first manifold learning methods
             * ['t-SNE'](https://github.com/DmitryUlyanov/Multicore-TSNE) - a classic manifold learning method
-            * 'MAP'- a lighter [UMAP](https://umap-learn.readthedocs.io/en/latest/index.html) with looser assumptions
-            * ['UMAP'](https://umap-learn.readthedocs.io/en/latest/index.html)
+            * 'MAP' - local checkpoint-aware graph-layout optimization
+            * ['UMAP'](https://umap-learn.readthedocs.io/en/latest/index.html) - upstream `umap-learn` estimator
             * ['PaCMAP'](http://jmlr.org/papers/v22/20-1061.html) (Pairwise-controlled Manifold Approximation and Projection) - for balanced visualizations
             * ['TriMAP'](https://github.com/eamid/trimap) - dimensionality reduction using triplets
             * 'IsomorphicMDE' - [MDE](https://github.com/cvxgrp/pymde) with preservation of nearest neighbors
@@ -358,12 +359,9 @@ class Projector(BaseEstimator, TransformerMixin):
             )
 
         elif self.projection_method == "UMAP":
-            try:
-                import umap
-            except ImportError:
-                raise ImportError(
-                    "UMAP is not installed. Please install UMAP with 'pip install umap' before using this method."
-                )
+            check_umap_version()
+            from umap import UMAP
+
             # UMAP's precomputed_knn expects a (indices, distances) tuple, not a
             # sparse matrix.  Convert K (CSR) to the required format.
             if issparse(K):
@@ -376,12 +374,15 @@ class Projector(BaseEstimator, TransformerMixin):
             else:
                 precomputed_knn = K
                 k_nbrs = self.n_neighbors
-            self.estimator_ = umap.UMAP(
+            self.estimator_ = UMAP(
                 n_components=self.n_components,
                 precomputed_knn=precomputed_knn,
                 n_neighbors=k_nbrs,
                 init=cast(Any, self.init_Y_),
                 n_epochs=self.num_iters,
+                random_state=self.random_state,
+                low_memory=True,
+                verbose=self.verbose,
                 **kwargs,
             )
             self.Y_ = self.estimator_.fit_transform(X)

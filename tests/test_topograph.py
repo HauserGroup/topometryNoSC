@@ -5,6 +5,7 @@ import tempfile
 
 import numpy as np
 import pytest
+from scipy import sparse
 from sklearn.exceptions import NotFittedError
 
 from topo import TopOGraph, load_topograph, save_topograph
@@ -120,6 +121,29 @@ class TestTopOGraphFit:
             assert after[key] == before[key]
         assert tg.n_eigs == before["min_eigs"]
         assert tg.n_eigs_ <= X.shape[0] - 2
+
+    def test_refit_on_larger_data_unclamps_n_eigs(self):
+        tg = TopOGraph(min_eigs=10, projection_methods=[], base_knn=4, graph_knn=4)
+        X_small = np.random.RandomState(0).randn(8, 3)
+        tg.fit(X_small)
+        assert tg.n_eigs_ <= 6  # Clamped due to max_eigs = 8 - 2 = 6
+
+        X_large = np.random.RandomState(1).randn(20, 3)
+        tg.fit(X_large)
+        assert tg.n_eigs_ >= 10  # Should be back to at least min_eigs
+
+    def test_fit_sparse_input(self):
+        X = sparse.csr_matrix(np.random.RandomState(0).randn(30, 4))
+        tg = TopOGraph(
+            base_knn=5,
+            graph_knn=5,
+            backend="sklearn",
+            n_jobs=-1,
+            random_state=0,
+            projection_methods=[],
+        )
+        tg.fit(X)
+        assert tg.eigenvalues is not None
 
     def test_diffusion_operators(self, fitted_topograph):
         P_X = fitted_topograph.P_of_X

@@ -36,12 +36,12 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import normalize as _l2_normalize_rows
 from sklearn.utils import check_random_state
 
+from topo._compat.umap import fuzzy_graph_from_knn
 from topo.base.ann import kNN
 from topo.base.dists import pairwise_distances
 from topo.spectral._spectral import degree as compute_degree
 from topo.spectral._spectral import diffusion_operator, graph_laplacian
 from topo.tpgraph.cknn import cknn_graph
-from topo.tpgraph.fuzzy import fuzzy_simplicial_set
 from topo.utils._utils import get_indices_distances_from_sparse_matrix
 
 warnings.simplefilter("ignore", SparseEfficiencyWarning)
@@ -206,6 +206,7 @@ def compute_kernel(
     verbose=False,
     use_angular=False,
     square_distances=True,
+    random_state=None,
     **kwargs,
 ):
     """
@@ -342,17 +343,20 @@ def compute_kernel(
             dens_dict["knn"] = K
     if fuzzy:
         cknn = False
-        _fuzzy_res = fuzzy_simplicial_set(
-            K,
+        knn_indices, knn_dists = get_indices_distances_from_sparse_matrix(
+            K, n_neighbors=n_neighbors
+        )
+        W, sigmas, rhos = fuzzy_graph_from_knn(
+            np.zeros((N, 1), dtype=np.float32),
+            knn_indices=knn_indices,
+            knn_dists=knn_dists,
             n_neighbors=n_neighbors,
             metric="precomputed",
             set_op_mix_ratio=1.0,
             local_connectivity=1.0,
-            apply_set_operations=True,
-            return_dists=False,
+            random_state=random_state,
             verbose=verbose,
         )
-        W, sigmas, rhos = _fuzzy_res[0], _fuzzy_res[1], _fuzzy_res[2]
         if return_densities:
             dens_dict["sigma"] = sigmas
             dens_dict["rho"] = rhos
@@ -668,6 +672,8 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.components_indices_ = None
         self.sigma_ = None
         self.rho_ = None
+        self.umap_sigmas_ = None
+        self.umap_rhos_ = None
         self.adaptive_bw_ = None
         self.omega_ = None
         self.expanded_k_neighbor_ = None
@@ -791,6 +797,7 @@ class Kernel(BaseEstimator, TransformerMixin):
                 n_jobs=self.n_jobs,
                 use_angular=self.use_angular,
                 verbose=self.verbose,
+                random_state=self.random_state,
                 **kwargs,
             )
             self._reset_graph_caches()
@@ -800,6 +807,8 @@ class Kernel(BaseEstimator, TransformerMixin):
         if self.fuzzy:
             self.sigma_ = self.dens_dict["sigma"]
             self.rho_ = self.dens_dict["rho"]
+            self.umap_sigmas_ = self.sigma_
+            self.umap_rhos_ = self.rho_
         elif self.cknn:
             self._A = self.dens_dict["unweighted_adjacency"]
             self.adaptive_bw_ = self.dens_dict["adaptive_bw"]

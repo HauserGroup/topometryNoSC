@@ -9,7 +9,7 @@ description = "An independently maintained, heavily modified fork of TopOMetry: 
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "licenses/*.txt"]
 authors = [
     { name = "J. Madsen", email = "jsmadsen@sund.ku.dk" },
 ]
@@ -47,6 +47,8 @@ dependencies = [
     "scikit-learn>=1.2",
     "numba>=0.57",
     "joblib>=1.3",
+    "packaging>=23",
+    "umap-learn>=0.5.8,<0.6",
 ]
 
 [project.optional-dependencies]
@@ -58,7 +60,6 @@ layouts = [
     "pacmap>=0.7",
     "pymde>=0.1",
     "trimap>=1.1",
-    "umap-learn>=0.5",
 ]
 notebooks = [
     "ipykernel",
@@ -98,7 +99,15 @@ path = "src/topo/version.py"
 packages = ["src/topo"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/topo", "tests", "LICENSE", "README.md", "CHANGELOG.md", "CITATION.cff"]
+include = [
+    "src/topo",
+    "tests",
+    "licenses",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "CITATION.cff",
+]
 
 [tool.ruff]
 line-length = 88

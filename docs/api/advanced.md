@@ -2,6 +2,10 @@
 
 These scikit-learn compatible transformers can be used individually to build custom manifold learning pipelines.
 
+The `Kernel(..., fuzzy=True)` path delegates UMAP-specific fuzzy simplicial-set
+construction to `umap-learn`; TopoMetry uses the resulting graph inside its own
+spectral-scaffold and graph-refinement pipeline.
+
 ::: topo.base.ann.kNN
     options:
       heading_level: 3

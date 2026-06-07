@@ -5,7 +5,6 @@ from scipy import sparse
 
 from topo.layouts import graph_utils
 from topo.layouts.isomap import Isomap
-from topo.tpgraph import fuzzy
 
 
 def test_make_epochs_per_sample_handles_zero_weight_edges():
@@ -76,62 +75,3 @@ def test_isomap_accepts_precomputed_graph():
     assert emb.shape[0] == 4
     assert emb.shape[1] <= 2
     assert np.isfinite(emb).all()
-
-
-class TestFuzzyGraphHelpers:
-    def test_smooth_knn_dist_returns_positive_sigmas_and_rhos(self):
-        dists = np.array(
-            [[0.0, 0.5, 1.0], [0.0, 0.25, 0.75], [0.0, 0.3, 0.9]],
-            dtype=np.float32,
-        )
-
-        sigmas, rhos = fuzzy.smooth_knn_dist(dists, k=3, n_iter=8)
-
-        assert sigmas.shape == (3,)
-        assert rhos.shape == (3,)
-        assert np.all(sigmas > 0)
-        np.testing.assert_allclose(rhos, [0.5, 0.25, 0.3])
-
-    def test_compute_membership_strengths_sets_self_edges_to_zero(self):
-        knn_indices = np.array([[0, 1], [1, 0]], dtype=np.int32)
-        knn_dists = np.array([[0.0, 0.5], [0.0, 0.5]], dtype=np.float32)
-        sigmas = np.array([1.0, 1.0], dtype=np.float32)
-        rhos = np.array([0.1, 0.1], dtype=np.float32)
-
-        rows, cols, vals = fuzzy.compute_membership_strengths(
-            knn_indices, knn_dists, sigmas, rhos
-        )
-
-        np.testing.assert_array_equal(rows, [0, 0, 1, 1])
-        np.testing.assert_array_equal(cols, [0, 1, 1, 0])
-        np.testing.assert_allclose(vals[[0, 2]], [0.0, 0.0])
-        assert np.all(vals[[1, 3]] > 0)
-
-    def test_fuzzy_simplicial_set_precomputed_returns_distances(self):
-        graph = sparse.csr_matrix(
-            [
-                [0.0, 0.5, 1.0],
-                [0.5, 0.0, 0.75],
-                [1.0, 0.75, 0.0],
-            ]
-        )
-
-        res = fuzzy.fuzzy_simplicial_set(
-            graph,
-            n_neighbors=2,
-            metric="precomputed",
-            return_dists=True,
-            apply_set_operations=True,
-        )
-        assert isinstance(res, tuple)
-        assert len(res) == 4
-        fss, sigmas, rhos, dists = res
-
-        assert isinstance(fss, sparse.coo_matrix)
-        assert isinstance(sigmas, np.ndarray)
-        assert isinstance(rhos, np.ndarray)
-        assert isinstance(dists, np.ndarray)
-        assert fss.shape == (3, 3)
-        assert sigmas.shape == (3,)
-        assert rhos.shape == (3,)
-        assert dists.shape == (3, 2)

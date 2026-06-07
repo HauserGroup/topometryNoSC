@@ -71,7 +71,7 @@ Optional features are grouped into extras — install only what you need:
 | `pandas`     | pandas (DataFrame I/O)                                      |
 | `ann`        | hnswlib (fast approximate nearest neighbors)               |
 | `amg`        | pyamg (algebraic-multigrid `eigensolver='amg'`)            |
-| `layouts`    | pacmap, pymde, trimap, umap-learn (extra projections)      |
+| `layouts`    | pacmap, pymde, trimap (extra projections)                  |
 | `notebooks`  | jupyterlab / ipywidgets                                    |
 | `all`        | everything above                                           |
 

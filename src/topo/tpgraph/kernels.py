@@ -185,12 +185,12 @@ def _adap_bw(K, n_neighbors):
 
 
 def _density_ranks(adap_sd, high):
-    """Interpolate adaptive bandwidths to density ranks with a constant guard."""
+    """Interpolate adaptive bandwidths to density ranks with a neutral constant guard."""
     adap_sd = np.asarray(adap_sd, dtype=float)
     lo = float(np.nanmin(adap_sd))
     hi = float(np.nanmax(adap_sd))
     if hi <= lo + 1e-7:
-        return np.full_like(adap_sd, fill_value=float(high), dtype=float)
+        return np.full_like(adap_sd, fill_value=(2.0 + float(high)) / 2.0, dtype=float)
     return np.interp(adap_sd, (lo, hi), (2, high))
 
 
@@ -388,7 +388,7 @@ def compute_kernel(
     backend="hnswlib",
     n_jobs=-1,
     verbose=False,
-    use_angular=False,
+    use_angular=True,
     square_distances=True,
     random_state=None,
     **kwargs,

@@ -11,31 +11,13 @@ from typing import TYPE_CHECKING
 __all__ = [
     "graph_laplacian",
     "diffusion_operator",
-    "LE",
-    "degree",
     "EigenDecomposition",
     "eigendecompose",
-    "optimize_layout_euclidean",
-    "optimize_layout_generic",
-    "optimize_layout_inverse",
-    "optimize_layout_aligned_euclidean",
 ]
 
 _EXPORTS = {
     "graph_laplacian": ("._spectral", "graph_laplacian"),
     "diffusion_operator": ("._spectral", "diffusion_operator"),
-    "LE": ("._spectral", "LE"),
-    "degree": ("._spectral", "degree"),
-    "optimize_layout_euclidean": (
-        ".map_optimizer",
-        "optimize_layout_euclidean",
-    ),
-    "optimize_layout_generic": (".map_optimizer", "optimize_layout_generic"),
-    "optimize_layout_inverse": (".map_optimizer", "optimize_layout_inverse"),
-    "optimize_layout_aligned_euclidean": (
-        ".map_optimizer",
-        "optimize_layout_aligned_euclidean",
-    ),
     "EigenDecomposition": (".eigen", "EigenDecomposition"),
     "eigendecompose": (".eigen", "eigendecompose"),
 }
@@ -43,16 +25,8 @@ _EXPORTS = {
 if TYPE_CHECKING:
     from ._spectral import diffusion_operator as diffusion_operator
     from ._spectral import graph_laplacian as graph_laplacian
-    from ._spectral import LE as LE
-    from ._spectral import degree as degree
     from .eigen import EigenDecomposition as EigenDecomposition
     from .eigen import eigendecompose as eigendecompose
-    from .map_optimizer import (
-        optimize_layout_aligned_euclidean as optimize_layout_aligned_euclidean,
-    )
-    from .map_optimizer import optimize_layout_euclidean as optimize_layout_euclidean
-    from .map_optimizer import optimize_layout_generic as optimize_layout_generic
-    from .map_optimizer import optimize_layout_inverse as optimize_layout_inverse
 
 
 def __getattr__(name):

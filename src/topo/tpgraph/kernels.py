@@ -185,12 +185,12 @@ def _adap_bw(K, n_neighbors):
 
 
 def _density_ranks(adap_sd, high):
-    """Interpolate adaptive bandwidths to density ranks with a neutral constant guard."""
+    """Interpolate adaptive bandwidths to density ranks with a constant guard."""
     adap_sd = np.asarray(adap_sd, dtype=float)
     lo = float(np.nanmin(adap_sd))
     hi = float(np.nanmax(adap_sd))
-    if np.isclose(lo, hi):
-        return np.full_like(adap_sd, fill_value=(2.0 + float(high)) / 2.0, dtype=float)
+    if hi <= lo + 1e-7:
+        return np.full_like(adap_sd, fill_value=float(high), dtype=float)
     return np.interp(adap_sd, (lo, hi), (2, high))
 
 
@@ -388,7 +388,7 @@ def compute_kernel(
     backend="hnswlib",
     n_jobs=-1,
     verbose=False,
-    use_angular=True,
+    use_angular=False,
     square_distances=True,
     random_state=None,
     **kwargs,
@@ -462,15 +462,6 @@ def compute_kernel(
 
     verbose : bool, default=False
         Whether to print progress messages.
-
-    use_angular : bool, default=True
-        Whether to convert cosine distances to angles (radians). Used only if `metric` is 'cosine'.
-
-    square_distances : bool, default=True
-        Whether to square the normalized distances before computing the affinities.
-
-    random_state : int, RandomState instance or None, default=None
-        Determines random number generation.
 
     **kwargs : dict, optional
         Additional arguments to be passed to the nearest-neighbors backend.
@@ -569,10 +560,6 @@ def compute_kernel(
 
             # Expand neighborhood search if requested
             if expand_nbr_search:
-                # Conservative expansion: use at least one extra neighbor when the density
-                # proxy (pm) indicates possible under-sampling. Expansion is intentionally
-                # mild (usually k+1) to avoid blurring local geometry. This is an
-                # experimental feature and may not improve results on all datasets.
                 new_k = max(k + 1, int(np.ceil(k + (k - float(pm.max())))))
                 new_k = min(new_k, N - 1)
 
@@ -679,16 +666,6 @@ class Kernel(BaseEstimator, TransformerMixin):
         Whether to build the binary, unweighted continuous k-nearest-neighbors graph.
         If set to `True`, the `pairwise`, `sigma`, `adaptive_bw`, `expand_nbr_search` and `alpha_decaying` parameters are ignored.
 
-    cknn_delta : float, default=1.0
-        Unitless CkNN edge threshold. Ignored if `cknn` is ``False``.
-
-    cknn_candidate_neighbors : int or None, default=None
-        Number of candidate neighbors tested in approximate CkNN mode. Ignored
-        when ``cknn_exact=True``.
-
-    cknn_exact : bool, default=False
-        If True, threshold all pairwise distances for CkNN construction.
-
     pairwise : bool, default=False
         Whether to compute the kernel using dense pairwise distances.
         If set to `True`, the `n_neighbors` and `backend` parameters are ignored.
@@ -715,31 +692,16 @@ class Kernel(BaseEstimator, TransformerMixin):
     symmetrize : bool, default=True
         Whether to symmetrize the kernel matrix after normalizations.
 
-    backend : str, default="hnswlib"
-        Which backend to use for k-nearest-neighbor computations. Defaults to 'hnswlib'.
-        Options are 'nmslib', 'hnswlib', and 'sklearn'.
+    backend : {"hnswlib", "nmslib", "faiss", "annoy", "sklearn"}, default="hnswlib"
+        Which backend to use for k-nearest-neighbor computations. Defaults to 'nmslib'.
+        Options are 'nmslib', 'hnswlib', 'faiss', 'annoy' and 'sklearn'.
 
-    n_jobs : int, default=1
-        The number of jobs to use for parallel computations. If -1, all available CPUs are used.
+    n_jobs : int, default=-1
+        The number of jobs to use for parallel computations. If -1, all CPUs are used.
         Parallellization (multiprocessing) is ***highly*** recommended whenever possible.
 
     laplacian_type : {"normalized", "unnormalized", "random_walk"}, default="normalized"
         The type of laplacian to use.
-
-    n_landmarks : int or None, default=None
-        Number of landmark points to use for sparse computations. (Placeholder for future use).
-
-    cache_input : bool, default=False
-        Whether to cache the input data `X` for operations like imputation.
-
-    verbose : bool, default=False
-        Whether to print progress messages.
-
-    random_state : int, RandomState instance or None, default=None
-        Determines random number generation.
-
-    use_angular : bool, default=True
-        Whether to convert cosine distances to angles (radians). Used only if `metric` is 'cosine'.
 
     Fitted Attributes
     -----------------
@@ -1126,9 +1088,6 @@ class Kernel(BaseEstimator, TransformerMixin):
             The type of laplacian to use. Can be 'unnormalized', 'normalized', or 'random_walk'.
             If not provided, uses the default `laplacian_type` specified in the constructor.
 
-        recompute : bool, default=False
-            Whether to force recomputation of the graph Laplacian even if it is cached.
-
         Returns
         -------
         L : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
@@ -1175,9 +1134,6 @@ class Kernel(BaseEstimator, TransformerMixin):
             when using anisotropy (alpha > 0), as the diffusion operator P would be asymmetric otherwise, which can be problematic
             during matrix decomposition. Eigenvalues are the same as the asymmetric version, and the right eigenvectors of the original asymmetric
             operator can be recovered by left multiplying by `Kernel.D_inv_sqrt_`.
-
-        recompute : bool, default=False
-            Whether to force recomputation of the diffusion operator even if it is cached.
 
         Returns
         -------
@@ -1259,9 +1215,6 @@ class Kernel(BaseEstimator, TransformerMixin):
         indices : list of int, default=None
             If None, the shortest paths are computed between all pairs of nodes. Else,
             the shortest paths are computed between all pairs of nodes and nodes with specified indices.
-
-        recompute : bool, default=False
-            Whether to force recomputation of the shortest paths matrix even if it is cached.
 
         Returns
         -------
@@ -1528,11 +1481,7 @@ class Kernel(BaseEstimator, TransformerMixin):
                 _LB = LabelBinarizer()
                 _sample_indicators = _LB.fit_transform(sample_labels)
 
-                _sample_indicators_dense = (
-                    _sample_indicators.toarray()
-                    if issparse(_sample_indicators)
-                    else np.asarray(_sample_indicators)
-                )
+                _sample_indicators_dense = np.asarray(_sample_indicators)
 
                 sample_indicators = pd.DataFrame(
                     _sample_indicators_dense,

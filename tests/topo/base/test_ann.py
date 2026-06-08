@@ -43,7 +43,7 @@ def test_resolve_n_jobs():
 def test_hnswlib_transformer_raises_or_fits():
     X = np.random.rand(20, 3)
     try:
-        import hnswlib  # noqa: F401
+        import hnswlib  # pyright: ignore[reportMissingModuleSource] # noqa: F401
     except ImportError:
         with pytest.raises(ImportError):
             HNSWlibTransformer(n_neighbors=2).fit(X)
@@ -112,3 +112,23 @@ def test_knn_sklearn_binary_connectivity_mode():
     assert G.data.dtype in [np.float32, np.float64]
     # All values should be non-negative distances
     assert np.all(G.data >= 0)
+
+
+def test_compute_kernel_default_use_angular_is_true():
+    """Verify compute_kernel defaults to use_angular=True for cosine consistency."""
+    import inspect
+
+    from topo.tpgraph.kernels import compute_kernel
+
+    sig = inspect.signature(compute_kernel)
+    assert sig.parameters["use_angular"].default is True
+
+
+def test_density_ranks_constant_case_is_neutral():
+    """Verify _density_ranks returns neutral value when all bandwidths are equal."""
+    from topo.tpgraph.kernels import _density_ranks
+
+    sigma = np.ones(5)
+    omega = _density_ranks(sigma, high=10)
+    expected = np.full(5, 6.0)
+    np.testing.assert_allclose(omega, expected)

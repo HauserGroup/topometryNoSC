@@ -35,7 +35,7 @@ EIGEN_SOLVERS = ["dense", "arpack", "lobpcg", "amg"]
 
 def _load_smoothed_aggregation_solver() -> Any:
     try:
-        import pyamg
+        import pyamg  # type: ignore[import-not-found]
     except ImportError:
         return None
     return pyamg.smoothed_aggregation_solver

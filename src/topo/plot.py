@@ -17,76 +17,50 @@ from sklearn.utils import check_random_state
 
 
 def decay_plot(
-    evals, title=None, figsize=(9, 5), fontsize=14, label_fontsize=14, wspace=0.3
+    evals,
+    title=None,
+    figsize=(9, 5),
+    fontsize=14,
+    label_fontsize=14,
+    wspace=0.3,
 ):
-    """Plot eigenspectrum decay and its first derivatives.
-
-    Parameters
-    ----------
-    evals : np.ndarray of shape (n_eigs,)
-        Eigenvalues to visualize.
-    title : str, optional
-        Plot title.
-    figsize : tuple of (float, float), default=(9, 5)
-        Figure width and height.
-    fontsize : int, default=14
-        Title font size.
-    label_fontsize : int, default=14
-        Axis label font size.
-    wspace : float, default=0.3
-        Width spacing between subplots.
-
-    Returns
-    -------
-    fig : matplotlib.figure.Figure
-        The figure containing the two subplots.
-    ax : np.ndarray of matplotlib.axes.Axes, shape (2,)
-        Left axes (spectrum decay) and right axes (first derivatives).
-    """
+    """Plot eigenspectrum decay and absolute first differences."""
     evals = np.asarray(evals, dtype=float).ravel()
     if evals.size == 0:
         raise ValueError("evals must contain at least one value.")
-    fig, ax = plt.subplots(1, 2, figsize=figsize)
+
+    gaps = np.abs(np.diff(evals))
+    eigengap = int(np.argmax(gaps) + 1) if gaps.size else 0
+    positive_count = int(np.sum(evals > 0))
+    marker_idx = eigengap if positive_count == evals.size else positive_count
+
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
     fig.subplots_adjust(left=0.08, right=0.98, wspace=wspace)
-    max_eigs = int(np.sum(evals > 0, axis=0))
-    first_diff = np.diff(evals)
-    eigengap = int(np.argmax(first_diff) + 1) if first_diff.size > 0 else 0
-    ax1 = ax[0]
-    if title is not None:
-        plt.suptitle(title, fontsize=fontsize)
-    ax1.plot(range(0, len(evals)), evals, "b")
-    ax1.set_ylabel("Eigenvalues", fontsize=label_fontsize)
-    ax1.set_xlabel("Eigenvectors", fontsize=label_fontsize)
-    if max_eigs == len(evals):
-        ax1.vlines(
-            eigengap, plt.ylim()[0], plt.ylim()[1], linestyles="--", label="Eigengap"
-        )
-        plt.suptitle(
-            "Spectrum decay and eigengap (%i)" % int(eigengap), fontsize=fontsize
-        )
-    else:
-        ax1.vlines(
-            max_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label="Eigengap"
-        )
-        plt.suptitle(
-            "Spectrum decay and eigengap (%i)" % int(max_eigs), fontsize=fontsize
-        )
-    ax1.legend(prop={"size": 12}, fontsize=label_fontsize, loc="best")
-    ax2 = ax[1]
+
+    if title is None:
+        title = f"Spectrum decay and eigengap ({marker_idx})"
+    fig.suptitle(title, fontsize=fontsize)
+
+    ax1, ax2 = axes
+
+    x = np.arange(evals.size)
+    ax1.plot(x, evals)
+    ymin, ymax = ax1.get_ylim()
+    ax1.vlines(marker_idx, ymin, ymax, linestyles="--", label="Eigengap")
+    ax1.set_ylabel("Eigenvalue", fontsize=label_fontsize)
+    ax1.set_xlabel("Component index", fontsize=label_fontsize)
+    ax1.legend(prop={"size": 12}, loc="best")
+
+    gap_values = np.maximum(gaps, np.finfo(float).tiny)
+    ax2.scatter(np.arange(gap_values.size), gap_values)
     ax2.set_yscale("log")
-    ax2.scatter(range(0, len(first_diff)), np.abs(first_diff))
-    ax2.set_ylabel("Eigenvalues first derivatives (abs)", fontsize=label_fontsize)
-    ax2.set_xlabel("Eigenvalues", fontsize=label_fontsize)
-    if max_eigs == len(evals):
-        ax2.vlines(
-            eigengap, plt.ylim()[0], plt.ylim()[1], linestyles="--", label="Eigengap"
-        )
-    else:
-        ax2.vlines(
-            max_eigs, plt.ylim()[0], plt.ylim()[1], linestyles="--", label="Eigengap"
-        )
-    plt.tight_layout()
-    return fig, ax
+    ymin, ymax = ax2.get_ylim()
+    ax2.vlines(marker_idx, ymin, ymax, linestyles="--", label="Eigengap")
+    ax2.set_ylabel("|Δ eigenvalue|", fontsize=label_fontsize)
+    ax2.set_xlabel("Component index", fontsize=label_fontsize)
+
+    fig.tight_layout()
+    return fig, axes
 
 
 def eigsorted(cov):
@@ -110,8 +84,44 @@ def _check_n_columns(X, n_cols, name):
         raise ValueError(f"{name} must have at least {n_cols} columns.")
 
 
+def _validate_labels(labels, n_samples: int, name: str = "labels"):
+    """Validate optional per-sample labels."""
+    if labels is None:
+        return None
+    labels_arr = np.asarray(labels)
+    if labels_arr.shape[0] != n_samples:
+        raise ValueError(f"{name} must have length {n_samples}.")
+    return labels_arr
+
+
+def _get_fig_ax(ax=None, *, projection=None, figsize=None):
+    """Return a `(fig, ax)` pair, creating axes when needed."""
+    if ax is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111, projection=projection)
+    else:
+        fig = ax.figure
+    return fig, ax
+
+
+def _set_equal_2d(ax):
+    """Set equal aspect for 2-D axes where supported."""
+    ax.set_aspect("equal", adjustable="datalim")
+    if hasattr(ax, "set_box_aspect"):
+        ax.set_box_aspect(1)
+
+
 def scatter(
-    res, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral", **kwargs
+    res,
+    labels=None,
+    *,
+    ax=None,
+    pt_size=5,
+    marker="o",
+    opacity=1,
+    cmap="Spectral",
+    equal_aspect=True,
+    **kwargs,
 ):
     """Draw a 2-D scatter plot of an embedding.
 
@@ -121,6 +131,72 @@ def scatter(
         Embedding coordinates; the first two columns are plotted.
     labels : array-like of shape (n_samples,), optional
         Per-point values mapped to colors via ``cmap``.
+    ax : matplotlib.axes.Axes, optional
+        Existing axes to draw into. If None, creates a new figure and axes.
+    pt_size : float, default=5
+        Marker size.
+    marker : str, default="o"
+        Marker style.
+    opacity : float, default=1
+        Marker transparency (alpha).
+    cmap : str, default="Spectral"
+        Colormap name.
+    equal_aspect : bool, default=True
+        Whether to set equal aspect ratio.
+    **kwargs
+        Extra arguments forwarded to ``matplotlib.axes.Axes.scatter``.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The created figure.
+    ax : matplotlib.axes.Axes
+        The axes containing the scatter plot.
+    """
+    res = _as_2d_array(res, "res")
+    _check_n_columns(res, 2, "res")
+    labels = _validate_labels(labels, res.shape[0])
+
+    fig, ax = _get_fig_ax(ax)
+
+    ax.scatter(
+        res[:, 0],
+        res[:, 1],
+        cmap=cmap,
+        c=labels,
+        s=pt_size,
+        marker=marker,
+        alpha=opacity,
+        **kwargs,
+    )
+
+    if equal_aspect:
+        _set_equal_2d(ax)
+
+    return fig, ax
+
+
+def scatter3d(
+    res,
+    labels=None,
+    *,
+    ax=None,
+    pt_size=5,
+    marker="o",
+    opacity=1,
+    cmap="Spectral",
+    **kwargs,
+):
+    """Draw a 3-D scatter plot of an embedding (first three columns).
+
+    Parameters
+    ----------
+    res : np.ndarray of shape (n_samples, >=3)
+        Embedding coordinates; the first three columns are plotted.
+    labels : array-like of shape (n_samples,), optional
+        Per-point values mapped to colors via ``cmap``.
+    ax : matplotlib.axes.Axes, optional
+        Existing 3-D axes to draw into. If None, creates a new figure and axes.
     pt_size : float, default=5
         Marker size.
     marker : str, default="o"
@@ -137,56 +213,14 @@ def scatter(
     fig : matplotlib.figure.Figure
         The created figure.
     ax : matplotlib.axes.Axes
-        The axes containing the scatter plot.
-    """
-    res = _as_2d_array(res, "res")
-    _check_n_columns(res, 2, "res")
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.set_aspect("equal", adjustable="datalim")
-    ax.set_box_aspect(1)
-    ax.scatter(
-        res[:, 0],
-        res[:, 1],
-        cmap=cmap,
-        c=labels,
-        s=pt_size,
-        marker=marker,
-        alpha=opacity,
-        **kwargs,
-    )
-    return fig, ax
-
-
-def scatter3d(res, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral"):
-    """Draw a 3-D scatter plot of an embedding (first three columns).
-
-    Parameters
-    ----------
-    res : np.ndarray of shape (n_samples, >=3)
-        Embedding coordinates; the first three columns are plotted.
-    labels : array-like of shape (n_samples,), optional
-        Per-point values mapped to colors via ``cmap``.
-    pt_size : float, default=5
-        Marker size.
-    marker : str, default="o"
-        Marker style.
-    opacity : float, default=1
-        Marker transparency (alpha).
-    cmap : str, default="Spectral"
-        Colormap name.
-
-    Returns
-    -------
-    fig : matplotlib.figure.Figure
-        The created figure.
-    ax : matplotlib.axes.Axes
         The 3-D axes containing the scatter plot.
     """
     res = _as_2d_array(res, "res")
     _check_n_columns(res, 3, "res")
-    fig = plt.figure()
-    ax = cast(Any, fig.add_subplot(111, projection="3d"))
+    labels = _validate_labels(labels, res.shape[0])
+
+    fig, ax = _get_fig_ax(ax, projection="3d")
+    ax = cast(Any, ax)
     ax.scatter(
         res[:, 0],
         res[:, 1],
@@ -196,6 +230,7 @@ def scatter3d(res, labels=None, pt_size=5, marker="o", opacity=1, cmap="Spectral
         s=pt_size,
         marker=marker,
         alpha=opacity,
+        **kwargs,
     )
     return fig, ax
 
@@ -424,7 +459,9 @@ def draw_simple_ellipse(
     """Draw a nested family of ellipses at ``position`` for a Gaussian potential."""
     ax = ax or plt.gca()
     angle = (angle / np.pi) * 180
-    width, height = np.sqrt(width + 10e-4), np.sqrt(height + 10e-4)
+    eps = 1e-4
+    width = np.sqrt(max(float(width), 0.0) + eps)
+    height = np.sqrt(max(float(height), 0.0) + eps)
     # Draw the Ellipse
     for nsig in np.linspace(from_size, to_size, n_ellipses):
         ax.add_patch(
@@ -448,6 +485,8 @@ def gaussian_potential(
     marker="o",
     opacity=1,
     cmap="Spectral",
+    n_ellipses_max: int | None = 2000,
+    random_state=None,
 ):
     """Scatter a 2-D embedding overlaid with per-point Gaussian-potential ellipses.
 
@@ -467,6 +506,10 @@ def gaussian_potential(
         Marker transparency.
     cmap : str, default="Spectral"
         Colormap name.
+    n_ellipses_max : int | None, default=2000
+        Maximum number of ellipses to draw. If exceeded, sample randomly.
+    random_state : int or RandomState, optional
+        RNG seed for subsampling.
 
     Returns
     -------
@@ -499,7 +542,12 @@ def gaussian_potential(
             np.linspace(0, 1, int(label_codes.max()) + 1)
         )
 
-    for i in range(emb.shape[0]):
+    indices = np.arange(emb.shape[0])
+    if n_ellipses_max is not None and emb.shape[0] > n_ellipses_max:
+        rng = check_random_state(random_state)
+        indices = rng.choice(indices, int(n_ellipses_max), replace=False)
+
+    for i in indices:
         pos = emb[i, :2]
         if ellipse_colors is None or label_codes is None:
             color = None
@@ -542,7 +590,7 @@ def eval_gaussian(x, pos=np.array([0, 0]), cov=np.eye(2, dtype=np.float32)):
         diff = x - pos
         m_dist = (
             cov_inv[0, 0] * diff[0] ** 2
-            - (cov_inv[0, 1] + cov_inv[1, 0]) * diff[0] * diff[1]
+            + (cov_inv[0, 1] + cov_inv[1, 0]) * diff[0] * diff[1]
             + cov_inv[1, 1] * diff[1] ** 2
         )
         return (np.exp(-0.5 * m_dist)) / (2 * np.pi * np.sqrt(np.abs(det)))
@@ -592,7 +640,13 @@ def create_density_plot(X, Y, embedding):
 
 
 def plot_bases_scores(bases_scores, return_plot=True, figsize=(20, 8), fontsize=20):
-    """Bar-plot PCA-loss and geodesic Spearman R for each candidate base."""
+    """Bar-plot PCA-loss and geodesic Spearman R for each candidate base.
+
+    Parameters
+    ----------
+    return_plot : bool, deprecated
+        Ignored. The function always returns the figure.
+    """
     keys = list(bases_scores.keys())
     values = list(bases_scores.values())
     cmap = get_cmap(len(keys), name="tab20")
@@ -615,7 +669,13 @@ def plot_bases_scores(bases_scores, return_plot=True, figsize=(20, 8), fontsize=
 
 
 def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20, 8), fontsize=20):
-    """Bar-plot geodesic Spearman R for each candidate graph."""
+    """Bar-plot geodesic Spearman R for each candidate graph.
+
+    Parameters
+    ----------
+    return_plot : bool, deprecated
+        Ignored. The function always returns the figure.
+    """
     keys = list(graphs_scores.keys())
     values = list(graphs_scores.values())
     cmap = get_cmap(len(keys), name="tab20")
@@ -632,7 +692,13 @@ def plot_graphs_scores(graphs_scores, return_plot=True, figsize=(20, 8), fontsiz
 
 
 def plot_layouts_scores(layouts_scores, return_plot=True, figsize=(20, 8), fontsize=20):
-    """Bar-plot PCA-loss and geodesic Spearman R for each candidate layout."""
+    """Bar-plot PCA-loss and geodesic Spearman R for each candidate layout.
+
+    Parameters
+    ----------
+    return_plot : bool, deprecated
+        Ignored. The function always returns the figure.
+    """
     keys = list(layouts_scores.keys())
     values = list(layouts_scores.values())
     cmap = get_cmap(len(keys), name="tab20")
@@ -662,14 +728,27 @@ def plot_point_cov(points, nstd=2, ax=None, **kwargs):
 
 
 def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
-    """Draw the ``nstd``-sigma ellipse of covariance ``cov`` centered at ``pos``."""
+    """Draw the nstd-sigma ellipse of a 2x2 covariance matrix centered at pos."""
     if ax is None:
         ax = plt.gca()
+
+    cov = np.asarray(cov, dtype=float)
+    pos = np.asarray(pos, dtype=float)
+
+    if cov.shape != (2, 2):
+        raise ValueError("cov must have shape (2, 2).")
+    if pos.shape[0] < 2:
+        raise ValueError("pos must contain at least two coordinates.")
+
     vals, vecs = eigsorted(cov)
-    theta = np.degrees(np.arctan2(*vecs[:, 0][::-1]))
-    # Width and height are "full" widths, not radius
-    width, height = 2 * nstd * np.sqrt(np.absolute(vals))
-    ellip = Ellipse(xy=pos, width=width, height=height, angle=theta, **kwargs)
+    vals = np.clip(vals, 0.0, None)
+
+    theta = np.degrees(np.arctan2(vecs[1, 0], vecs[0, 0]))
+    width, height = 2 * nstd * np.sqrt(vals)
+
+    ellip = Ellipse(
+        xy=tuple(pos[:2]), width=width, height=height, angle=theta, **kwargs
+    )
     ax.add_artist(ellip)
     return ellip
 
@@ -790,7 +869,7 @@ def plot_riemann_metric(
         if labels_arr is not None and colors is not None and label_codes is not None:
             plot_cov_ellipse(
                 cov,
-                emb[ii, :],
+                emb[ii, :2],
                 nstd=std,
                 ax=ax,
                 edgecolor="none",
@@ -800,7 +879,7 @@ def plot_riemann_metric(
         else:
             plot_cov_ellipse(
                 cov,
-                emb[ii, :],
+                emb[ii, :2],
                 nstd=std,
                 ax=ax,
                 edgecolor="none",
@@ -809,31 +888,63 @@ def plot_riemann_metric(
     return ax
 
 
-def draw_edges(ax, data, kernel, color="black", **kwargs):
-    """Draw graph edges between points, with alpha proportional to kernel affinity."""
+def draw_edges(ax, data, kernel, color="black", max_edges=None, **kwargs):
+    """Draw graph edges between points, with alpha proportional to affinity.
+
+    Supports both dense arrays and scipy sparse matrices.
+    """
+    from scipy import sparse
+
     data = _as_2d_array(data, "data")
     _check_n_columns(data, 2, "data")
-    kernel = np.asarray(kernel)
-    if kernel.shape[0] != data.shape[0] or kernel.shape[1] != data.shape[0]:
-        raise ValueError("kernel must have shape (n_samples, n_samples).")
-    for i in range(data.shape[0] - 1):
-        for j in range(i + 1, data.shape[0]):
-            affinity = kernel[i, j]
-            if affinity > 0:
-                ax.plot(
-                    data[[i, j], 0],
-                    data[[i, j], 1],
-                    color=color,
-                    alpha=affinity,
-                    zorder=0,
-                    **kwargs,
-                )
+
+    if sparse.issparse(kernel):
+        K = kernel.tocoo()
+        rows, cols, vals = K.row, K.col, K.data
+    else:
+        K = np.asarray(kernel)
+        if K.shape != (data.shape[0], data.shape[0]):
+            raise ValueError("kernel must have shape (n_samples, n_samples).")
+        rows, cols = np.nonzero(np.triu(K, k=1))
+        vals = K[rows, cols]
+
+    if vals.size == 0:
+        return ax
+
+    # Keep only upper-triangular edges to avoid duplicate drawing for symmetric graphs.
+    keep = rows < cols
+    rows, cols, vals = rows[keep], cols[keep], vals[keep]
+
+    if max_edges is not None and vals.size > int(max_edges):
+        order = np.argsort(vals)[-int(max_edges) :]
+        rows, cols, vals = rows[order], cols[order], vals[order]
+
+    vmax = np.nanmax(vals) if vals.size else 1.0
+    vmax = max(float(vmax), np.finfo(float).eps)
+
+    for i, j, affinity in zip(rows, cols, vals, strict=False):
+        ax.plot(
+            data[[i, j], 0],
+            data[[i, j], 1],
+            color=color,
+            alpha=float(np.clip(affinity / vmax, 0.0, 1.0)),
+            zorder=0,
+            **kwargs,
+        )
+
+    return ax
 
 
 def plot_scores(
     scores, return_plot=True, log=True, figsize=(8, 3), fontsize=12, title="Scores"
 ):
-    """Bar-plot a dictionary of named scores, optionally on a log scale."""
+    """Bar-plot a dictionary of named scores, optionally on a log scale.
+
+    Parameters
+    ----------
+    return_plot : bool, deprecated
+        Ignored. The function always returns the figure.
+    """
     keys = list(scores.keys())
     values = list(scores.values())
     cmap = get_cmap(len(keys), name="tab20")
@@ -1061,6 +1172,10 @@ def heatmap(
         All other arguments are forwarded to `imshow`.
     """
     data = _as_2d_array(data, "data")
+    if len(row_labels) != data.shape[0]:
+        raise ValueError("row_labels length must match number of rows.")
+    if len(col_labels) != data.shape[1]:
+        raise ValueError("col_labels length must match number of columns.")
     if ax is None:
         ax = plt.gca()
 
@@ -1134,15 +1249,18 @@ def annotate_heatmap(
         data_arr = np.asarray(data)
 
     # Normalize the threshold to the images color range.
+    finite = np.isfinite(data_arr)
     if threshold is not None:
         threshold = im.norm(threshold)
+    elif finite.any():
+        threshold = im.norm(np.nanmax(data_arr)) / 2.0
     else:
-        threshold = im.norm(data_arr.max()) / 2.0
+        threshold = 0.5
 
     # Set default alignment to center, but allow it to be
     # overwritten by textkw.
-    kw = dict(horizontalalignment="center", verticalalignment="center")
-    kw.update(textkw)
+    base_kw = dict(horizontalalignment="center", verticalalignment="center")
+    base_kw.update(textkw)
 
     # Get the formatter in case a string is supplied
     if isinstance(valfmt, str):
@@ -1155,9 +1273,10 @@ def annotate_heatmap(
     texts = []
     for i in range(data_arr.shape[0]):
         for j in range(data_arr.shape[1]):
-            kw.update(color=textcolors[int(im.norm(data_arr[i, j]) > threshold)])
+            cell_kw = dict(base_kw)
+            cell_kw["color"] = textcolors[int(im.norm(data_arr[i, j]) > threshold)]
             text = im.axes.text(
-                j, i, valfmt(data_arr[i, j], None), fontsize=an_fontsize, **kw
+                j, i, valfmt(data_arr[i, j], None), fontsize=an_fontsize, **cell_kw
             )
             texts.append(text)
 
@@ -1216,6 +1335,16 @@ def visualize_optimization(
         raise RuntimeError("No snapshots provided.")
 
     snapshots = sorted(snapshots, key=lambda s: int(s.get("epoch", 0)))
+
+    for idx, snap in enumerate(snapshots):
+        if "embedding" not in snap:
+            raise ValueError(f"snapshots[{idx}] is missing 'embedding'.")
+        Y = np.asarray(snap["embedding"])
+        if Y.ndim != 2 or Y.shape[1] < 2:
+            raise ValueError(
+                f"snapshots[{idx}]['embedding'] must have shape (n_samples, >=2)."
+            )
+
     n = snapshots[-1]["embedding"].shape[0]
 
     def _to_rgba_array(c, n):

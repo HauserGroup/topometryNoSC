@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 __all__ = [
     "graph_laplacian",
     "diffusion_operator",
-    "LE",
-    "degree",
+    "LE",  # type: ignore[name-defined]
+    "degree",  # type: ignore[name-defined]
     "EigenDecomposition",
     "eigendecompose",
 ]

@@ -276,7 +276,7 @@ def _sklearn_knn_graph(
         metric=metric,
         include_self=include_self,
         n_jobs=n_jobs,
-    ).tocsr()
+    ).tocsr()  # type: ignore[attr-defined]
 
     if not include_self:
         graph.setdiag(0.0)
@@ -1021,7 +1021,7 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
     def fit(self, data):
         """Fit the HNSWlib index."""
         try:
-            import hnswlib
+            import hnswlib  # type: ignore[import-not-found]
         except ImportError as exc:
             raise ImportError(
                 "HNSWlib is required for HNSWlibTransformer. "

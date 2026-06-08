@@ -558,15 +558,15 @@ class UoMMixin:
     # Methods provided by the host class
     def _build_kernel(self, *args: Any, **kwargs: Any) -> Any:
         """Build kernel (provided by host class)."""
-        ...
+        raise NotImplementedError("_build_kernel provided by host class")
 
     def spectral_layout(self, *args: Any, **kwargs: Any) -> Any:
         """Compute spectral layout (provided by host class)."""
-        ...
+        raise NotImplementedError("spectral_layout provided by host class")
 
     def project(self, *args: Any, **kwargs: Any) -> Any:
         """Project data (provided by host class)."""
-        ...
+        raise NotImplementedError("project provided by host class")
 
     def _init_uom_state(self) -> None:
         """Initialize all UoM-specific attributes."""
@@ -1107,9 +1107,7 @@ class UoMMixin:
         self.Z_uom, self._uom_axis_slices = self._aggregate_scaffold_to_original_order(
             uom_Z_list
         )
-        self.msZ_uom, _ms_slices = self._aggregate_scaffold_to_original_order(
-            uom_msZ_list
-        )
+        self.msZ_uom, _ = self._aggregate_scaffold_to_original_order(uom_msZ_list)
 
         self.knn_X_uom = self._block_diag_to_original_order(uom_knn_X_list)
         self.P_of_X_uom = self._block_diag_to_original_order(

@@ -27,6 +27,8 @@ _EXPORTS = {
 }
 
 if TYPE_CHECKING:
+    from ._spectral import LE as LE
+    from ._spectral import degree as degree
     from ._spectral import diffusion_operator as diffusion_operator
     from ._spectral import graph_laplacian as graph_laplacian
     from .eigen import EigenDecomposition as EigenDecomposition

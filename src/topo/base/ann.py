@@ -78,30 +78,41 @@ def _drop_self_and_truncate_neighbors(
     n_neighbors: int,
     n_query_samples: int,
     n_fit_samples: int,
+    is_self_query: bool,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Remove zero-distance self hits and keep exactly ``n_neighbors`` per row."""
+    """Remove self hits when requested and keep exactly ``n_neighbors`` per row."""
     n_neighbors = _validate_n_neighbors(n_neighbors)
     indices = np.asarray(indices)
     distances = np.asarray(distances)
+
     if indices.shape != distances.shape or indices.ndim != 2:
         raise ValueError("indices and distances must be matching 2-D arrays.")
+    if indices.shape[0] != n_query_samples:
+        raise ValueError("indices row count does not match n_query_samples.")
+    if indices.size and (indices.min() < 0 or indices.max() >= n_fit_samples):
+        raise ValueError("indices contain values outside [0, n_fit_samples).")
 
     out_indices = np.empty((n_query_samples, n_neighbors), dtype=indices.dtype)
     out_distances = np.empty((n_query_samples, n_neighbors), dtype=distances.dtype)
+
     for row in range(n_query_samples):
         row_indices = indices[row]
         row_distances = distances[row]
-        if n_query_samples == n_fit_samples:
+
+        if is_self_query:
             is_self = (row_indices == row) & np.isclose(row_distances, 0.0)
             row_indices = row_indices[~is_self]
             row_distances = row_distances[~is_self]
+
         if row_indices.shape[0] < n_neighbors:
             raise ValueError(
-                "Neighbor search returned fewer than n_neighbors non-self results. "
+                "Neighbor search returned fewer than n_neighbors results. "
                 "Use n_neighbors < n_samples for self-query graphs."
             )
+
         out_indices[row] = row_indices[:n_neighbors]
         out_distances[row] = row_distances[:n_neighbors]
+
     return out_indices, out_distances
 
 
@@ -183,6 +194,7 @@ def _build_sparse_knn_graph(
             n_neighbors=n_neighbors,
             n_query_samples=n_query_samples,
             n_fit_samples=n_fit_samples,
+            is_self_query=(n_query_samples == n_fit_samples),
         )
 
     k = indices.shape[1]
@@ -402,9 +414,15 @@ def kNN(
     scipy.sparse.csr_matrix
         kNN distance graph.
     """
-    n_fit_samples, _ = _check_2d_data(X, "X")
+    n_fit_samples, n_features = _check_2d_data(X, "X")
+
+    metric = str(metric)
     n_neighbors = _validate_n_neighbors(n_neighbors)
     n_jobs = _resolve_n_jobs(n_jobs)
+
+    if metric == "precomputed" and n_fit_samples != n_features:
+        raise ValueError("X must be square when metric='precomputed'.")
+
     if Y is None and n_neighbors >= n_fit_samples:
         raise ValueError(
             f"n_neighbors={n_neighbors} must be smaller than n_samples={n_fit_samples} "
@@ -474,7 +492,11 @@ def kNN(
                 **sk_kwargs,
             ).fit(X)
             if Y is None:
-                distances, indices = nbrs.kneighbors(X, return_distance=True)
+                if metric == "precomputed":
+                    distances, indices = nbrs.kneighbors(None, return_distance=True)
+
+                else:
+                    distances, indices = nbrs.kneighbors(X, return_distance=True)
                 knn = _build_sparse_knn_graph(
                     indices=indices,
                     distances=distances,
@@ -760,6 +782,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
             n_neighbors=self.n_neighbors,
             n_query_samples=n_query_samples,
             n_fit_samples=self.n_samples_fit_,
+            is_self_query=(n_query_samples == self.n_samples_fit_),
         )
 
         kneighbors_graph = None
@@ -889,9 +912,14 @@ def grid_search(
         Mapping of backend names to lists of dictionaries containing
         parameter settings, recall and execution time.
     """
-    _check_2d_data(X)
+    n_fit_samples, n_features = _check_2d_data(X, "X")
+
+    metric = str(metric)
     n_neighbors = _validate_n_neighbors(n_neighbors)
     n_jobs = _resolve_n_jobs(n_jobs)
+
+    if metric == "precomputed" and n_fit_samples != n_features:
+        raise ValueError("X must be square when metric='precomputed'.")
 
     exact_metric = "euclidean" if metric == "sqeuclidean" else metric
     gt = NearestNeighbors(
@@ -1161,6 +1189,7 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
             n_neighbors=self.n_neighbors,
             n_query_samples=n_query_samples,
             n_fit_samples=self.n_samples_fit_,
+            is_self_query=(n_query_samples == self.n_samples_fit_),
         )
 
         kneighbors_graph = None

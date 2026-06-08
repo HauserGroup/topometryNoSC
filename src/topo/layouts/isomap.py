@@ -39,6 +39,18 @@ class Isomap(BaseEstimator, TransformerMixin):
         Minkowski metric parameter.
     """
 
+    n_components: int
+    n_neighbors: int
+    metric: str
+    n_jobs: int | None
+    eigen_solver: Literal["auto", "arpack", "dense"]
+    path_method: Literal["auto", "FW", "D"]
+    neighbors_algorithm: Literal["auto", "brute", "kd_tree", "ball_tree"]
+    p: int
+    kwargs: Any
+    estimator_: Any
+    embedding_: Any
+
     def __init__(
         self,
         n_components: int = 2,

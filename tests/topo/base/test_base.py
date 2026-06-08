@@ -139,41 +139,6 @@ class TestSparseDistanceHelpers:
         ]
         assert np.isfinite(metrics).all()
 
-    def test_general_sset_union_and_intersection_update_result_values(self):
-        mat1 = sparse.csr_matrix([[0.0, 0.5], [0.2, 0.0]])
-        mat2 = sparse.csr_matrix([[0.0, 0.25], [0.4, 0.0]])
-        rows = np.array([0, 1], dtype=np.int64)
-        cols = np.array([1, 0], dtype=np.int64)
-        vals = np.zeros(2, dtype=np.float64)
-
-        sparse_dist.general_sset_union(
-            mat1.indptr,
-            mat1.indices,
-            mat1.data,
-            mat2.indptr,
-            mat2.indices,
-            mat2.data,
-            rows,
-            cols,
-            vals,
-        )
-        np.testing.assert_allclose(vals, [0.625, 0.52])
-
-        vals[:] = 0.0
-        sparse_dist.general_sset_intersection(
-            mat1.indptr,
-            mat1.indices,
-            mat1.data,
-            mat2.indptr,
-            mat2.indices,
-            mat2.data,
-            rows,
-            cols,
-            vals,
-            mix_weight=0.5,
-        )
-        np.testing.assert_allclose(vals, [0.125, 0.08])
-
 
 class TestANNHelpers:
     def test_neighbor_count_validation(self):

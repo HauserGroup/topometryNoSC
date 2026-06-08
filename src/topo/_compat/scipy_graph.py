@@ -5,6 +5,8 @@ semantics, zero-degree handling, and return formats remain consistent across the
 package.
 """
 
+from __future__ import annotations
+
 import numpy as np
 from scipy.sparse import csr_matrix, diags, identity, issparse
 from scipy.sparse.csgraph import (

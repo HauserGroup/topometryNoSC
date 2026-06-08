@@ -44,6 +44,7 @@ class LayoutBuildMixin:
     Z_uom: csr_matrix | None
     EigenbasisDict: dict[str, EigenDecomposition]
     n_jobs: int
+    _n_jobs_effective: int
     backend: str
     layout_verbose: bool
     verbosity: int
@@ -234,14 +235,14 @@ class LayoutBuildMixin:
             projection_method=projection_method,
             metric=metric,
             n_neighbors=self.graph_knn,
-            n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
+            n_jobs=self._n_jobs_effective,
             landmarks=landmarks,
             landmark_method=landmark_method,
             num_iters=num_iters,
             init=cast(Any, init_Y),
-            nbrs_backend=getattr(self, "_backend_resolved", self.backend),
+            nbrs_backend=self._backend_resolved,
             keep_estimator=False,
-            random_state=getattr(self, "_random_state_resolved", self.random_state),
+            random_state=self._random_state_resolved,
             verbose=self.layout_verbose,
             save_every=save_every,
             save_limit=save_limit,

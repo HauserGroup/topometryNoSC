@@ -42,7 +42,7 @@ class Isomap(BaseEstimator, TransformerMixin):
     n_components: int
     n_neighbors: int
     metric: str
-    n_jobs: int | None
+    n_jobs: int
     eigen_solver: Literal["auto", "arpack", "dense"]
     path_method: Literal["auto", "FW", "D"]
     neighbors_algorithm: Literal["auto", "brute", "kd_tree", "ball_tree"]
@@ -56,7 +56,7 @@ class Isomap(BaseEstimator, TransformerMixin):
         n_components: int = 2,
         n_neighbors: int = 5,
         metric: str = "minkowski",
-        n_jobs: int | None = None,
+        n_jobs: int = -1,
         eigen_solver: Literal["auto", "arpack", "dense"] = "auto",
         path_method: Literal["auto", "FW", "D"] = "auto",
         neighbors_algorithm: Literal["auto", "brute", "kd_tree", "ball_tree"] = "auto",

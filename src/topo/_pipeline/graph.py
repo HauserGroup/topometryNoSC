@@ -7,6 +7,7 @@ kernel construction steps. Methods operate on ``self`` and call the shared
 
 import logging
 import time
+from typing import cast
 
 import numpy as np
 from scipy.sparse import csr_matrix
@@ -29,7 +30,8 @@ class GraphBuildMixin:
     base_knn: int
     base_metric: str
     n_jobs: int
-    backend: str
+    _n_jobs_effective: int
+    _backend_resolved: str
     bases_graph_verbose: bool
     runtimes: dict[str, float]
     base_kernel_version: str
@@ -42,65 +44,112 @@ class GraphBuildMixin:
     def _build_kernel(self, *args, **kwargs) -> tuple[Kernel, dict[str, Kernel]]:
         raise NotImplementedError
 
-    def _build_base_graph(self, X: np.ndarray | csr_matrix | None, **kwargs):
+    def _build_base_graph(self, X: np.ndarray | csr_matrix | None, **kwargs) -> None:
+        """Build or reuse the base kNN graph in input space.
+
+        If ``X`` is None, a fitted ``base_kernel`` must be available and its fitted
+        kNN graph is reused. If ``base_metric='precomputed'``, ``X`` itself is
+        treated as the square base graph/distance matrix. Otherwise, exact/HNSW
+        kNN construction is delegated to ``topo.base.ann.kNN``.
+        """
+        del kwargs  # avoid leaking unrelated fit kwargs into kNN construction
+
         if X is None:
             if self.base_kernel is None:
-                raise ValueError("X was not passed and no base_kernel provided.")
+                raise ValueError("X was not passed and no base_kernel was provided.")
             if not isinstance(self.base_kernel, Kernel):
                 raise ValueError("base_kernel must be a topo.tpgraph.Kernel instance.")
             if self.base_kernel.knn_ is None:
-                raise ValueError("base_kernel has not been fitted.")
-            self.n = self.base_kernel.knn_.shape[0]
-            self.m = self.base_kernel.knn_.shape[1]
-            self.base_knn_graph = self.base_kernel.knn_
-        else:
-            shape = X.shape
-            if shape is None:
-                raise ValueError("X must have a 2-D shape.")
-            self.n, self.m = int(shape[0]), int(shape[1])
-            if self.base_metric == "precomputed":
-                if self.n != self.m:
-                    raise ValueError(
-                        "When base_metric='precomputed', X must be square."
-                    )
-                self.base_knn_graph = as_csr_matrix(X, "base kNN graph", copy=True)
+                raise ValueError("base_kernel has not been fitted or lacks `knn_`.")
+
+            knn = cast(
+                csr_matrix,
+                as_csr_matrix(self.base_kernel.knn_, "base_kernel.knn_", copy=True),
+            )
+            if knn.shape[0] != knn.shape[1]:  # type: ignore[reportOptionalSubscript]
+                raise ValueError("base_kernel.knn_ must be a square graph.")
+
+            self.n = int(knn.shape[0])  # type: ignore[reportOptionalSubscript]
+            kernel_X = getattr(self.base_kernel, "X", None)
+            if (
+                kernel_X is not None
+                and hasattr(kernel_X, "shape")
+                and len(kernel_X.shape) == 2
+            ):
+                self.m = int(kernel_X.shape[1])
+            else:
+                self.m = int(knn.shape[1])  # type: ignore[reportOptionalSubscript]
+
+            self.base_knn_graph = knn
+            return
+
+        shape = getattr(X, "shape", None)
+        if shape is None or len(shape) != 2:
+            raise ValueError("X must be a 2-D array-like or sparse matrix.")
+
+        self.n, self.m = int(shape[0]), int(shape[1])
+
+        if self.base_metric == "precomputed":
+            if self.n != self.m:
+                raise ValueError("When base_metric='precomputed', X must be square.")
+            self.base_knn_graph = as_csr_matrix(X, "base precomputed graph", copy=True)
+            return
+
+        if self.verbosity >= 1:
+            logger.info("Computing neighborhood graph (X space)...")
+
+        t0 = time.time()
+        self.base_nbrs_class, self.base_knn_graph = kNN(
+            X,
+            n_neighbors=self.base_knn,
+            metric=self.base_metric,
+            n_jobs=self._n_jobs_effective,
+            backend=self._backend_resolved,
+            return_instance=True,
+            verbose=self.bases_graph_verbose,
+        )
+        self.runtimes["kNN_X"] = time.time() - t0
+
+        if self.verbosity >= 1:
+            logger.info("  Base kNN computed in %.3fs", self.runtimes["kNN_X"])
+
+    def _build_base_kernel(self, X, **kwargs) -> None:
+        """Build or reuse the base diffusion/kernel operator on input space."""
+        del kwargs
+
+        if self.base_kernel is not None:
+            if not isinstance(self.base_kernel, Kernel):
+                raise ValueError("base_kernel must be a topo.tpgraph.Kernel instance.")
+            if getattr(self.base_kernel, "P", None) is None:
+                raise ValueError("base_kernel exists but does not expose fitted `P`.")
+            return
 
         if self.base_knn_graph is None:
-            if X is None:
-                raise ValueError("X was not passed and no base graph could be built.")
-            if self.verbosity >= 1:
-                logger.info("Computing neighborhood graph (X space)...")
-            t0 = time.time()
-            self.base_nbrs_class, self.base_knn_graph = kNN(
-                X,
-                n_neighbors=self.base_knn,
-                metric=self.base_metric,
-                n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
-                backend=getattr(self, "_backend_resolved", self.backend),
-                return_instance=True,
-                verbose=self.bases_graph_verbose,
-                **kwargs,
-            )
-            self.runtimes["kNN_X"] = time.time() - t0
-            if self.verbosity >= 1:
-                logger.info(f"  Base kNN computed in {self.runtimes['kNN_X']:.3f}s")
+            raise RuntimeError("Cannot build base kernel before base kNN graph exists.")
 
-    def _build_base_kernel(self, X, **kwargs):
         if self.base_kernel_version in self.BaseKernelDict:
             self.base_kernel = self.BaseKernelDict[self.base_kernel_version]
-        else:
-            t0 = time.time()
-            self.base_kernel, self.BaseKernelDict = self._build_kernel(
-                self.base_knn_graph,
-                self.base_knn,
-                self.base_kernel_version,
-                self.BaseKernelDict,
-                low_memory=self.low_memory,
-                data_for_expansion=X,
-                base=True,
-            )
-            self.runtimes["Kernel_X"] = time.time() - t0
-            if self.verbosity >= 1:
-                logger.info(
-                    f"  Base kernel ({self.base_kernel_version}) in {self.runtimes['Kernel_X']:.3f}s"
+            if getattr(self.base_kernel, "P", None) is None:
+                raise RuntimeError(
+                    f"Cached base kernel {self.base_kernel_version!r} is not fitted."
                 )
+            return
+
+        t0 = time.time()
+        self.base_kernel, self.BaseKernelDict = self._build_kernel(
+            self.base_knn_graph,
+            self.base_knn,
+            self.base_kernel_version,
+            self.BaseKernelDict,
+            low_memory=self.low_memory,
+            data_for_expansion=X,
+            base=True,
+        )
+        self.runtimes["Kernel_X"] = time.time() - t0
+
+        if self.verbosity >= 1:
+            logger.info(
+                "  Base kernel (%s) in %.3fs",
+                self.base_kernel_version,
+                self.runtimes["Kernel_X"],
+            )

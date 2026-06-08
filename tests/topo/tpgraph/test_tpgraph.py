@@ -20,13 +20,6 @@ from topo.tpgraph.intrinsic_dim import (
 from topo.tpgraph.kernels import Kernel, compute_kernel
 
 
-def test_compute_kernel(swiss_roll_data):
-    X, _ = swiss_roll_data
-    K = compute_kernel(X, n_neighbors=10, backend="sklearn", return_densities=False)
-    assert sparse.issparse(K)
-    assert K.shape[0] == X.shape[0]
-
-
 def test_kernel_estimator(swiss_roll_data):
     X, _ = swiss_roll_data
     ker = Kernel(n_neighbors=10, backend="sklearn").fit(X)

@@ -62,8 +62,10 @@ def test_plot_riemann_metric_accepts_more_than_two_embedding_columns():
 
     ax = plot.plot_riemann_metric(emb, L, H_emb=H, n_plot=5, random_state=0)
     assert ax is not None
+    from matplotlib.figure import Figure
+
     fig = ax.get_figure()
-    if fig is not None:
+    if isinstance(fig, Figure):
         plt.close(fig)
 
 

@@ -552,6 +552,7 @@ class UoMMixin:
     # Computed state
     current_eigenbasis: str | None
     n_jobs: int
+    _n_jobs_effective: int
     _knn_Z: Any
     _knn_msZ: Any
 
@@ -701,7 +702,7 @@ class UoMMixin:
                 Xi,
                 n_neighbors=k_neighbors_i,
                 metric=self.base_metric,
-                n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
+                n_jobs=self._n_jobs_effective,
                 backend=getattr(self, "_backend_resolved", self.backend),
                 return_instance=False,
                 verbose=False,
@@ -790,7 +791,7 @@ class UoMMixin:
                     Zi,
                     n_neighbors=k_graph_i,
                     metric=self.graph_metric,
-                    n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
+                    n_jobs=self._n_jobs_effective,
                     backend=getattr(self, "_backend_resolved", self.backend),
                     return_instance=False,
                     verbose=False,
@@ -802,7 +803,7 @@ class UoMMixin:
                     msZi,
                     n_neighbors=k_graph_i,
                     metric=self.graph_metric,
-                    n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
+                    n_jobs=self._n_jobs_effective,
                     backend=getattr(self, "_backend_resolved", self.backend),
                     return_instance=False,
                     verbose=False,
@@ -890,9 +891,7 @@ class UoMMixin:
             ks=self.id_ks,
             backend=getattr(self, "_backend_resolved", self.backend),
             metric=self.id_metric,
-            n_jobs=int(getattr(self, "_n_jobs_effective", self.n_jobs))
-            if self.n_jobs is not None
-            else -1,
+            n_jobs=self._n_jobs_effective,
             quantile=self.id_quantile,
             min_components=max(1, min_components),
             max_components=max(1, max_components),

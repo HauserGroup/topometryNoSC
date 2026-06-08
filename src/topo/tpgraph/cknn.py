@@ -222,7 +222,7 @@ def _candidate_knn_arrays_sklearn(
     *,
     candidate_k: int,
     metric: str,
-    n_jobs: int | None,
+    n_jobs: int = -1,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Get candidate neighbors using scikit-learn NearestNeighbors."""
     n_samples = int(X.shape[0])
@@ -251,7 +251,7 @@ def _candidate_knn_arrays(
     candidate_k: int | None,
     metric: str,
     backend: str,
-    n_jobs: int | None,
+    n_jobs: int = -1,
     verbose: bool,
     **kwargs,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -305,7 +305,7 @@ def cknn_ratio_matrix(
     exact: bool = False,
     symmetrize: SymmetrizeMode = "or",
     backend: str = "sklearn",
-    n_jobs: int | None = None,
+    n_jobs: int = -1,
     verbose: bool = False,
     **kwargs,
 ) -> csr_matrix:
@@ -354,7 +354,7 @@ def cknn_graph(
     include_self: bool = False,
     symmetrize: SymmetrizeMode = "or",
     backend: str = "sklearn",
-    n_jobs: int | None = None,
+    n_jobs: int = -1,
     verbose: bool = False,
     **kwargs,
 ) -> csr_matrix:

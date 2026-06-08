@@ -40,9 +40,9 @@ class IntrinsicDim(BaseEstimator, TransformerMixin):
     metric : str (default 'euclidean')
         The metric to use when calculating distance between instances in a feature array.
 
-    backend : str, default='nmslib'
-        Which backend to use for k-nearest-neighbor computations. Defaults to 'nmslib'.
-        Options are 'nmslib', 'hnswlib', 'faiss', 'annoy' and 'sklearn'.
+    backend : str, default='hnswlib'
+        Which backend to use for k-nearest-neighbor computations. Defaults to 'hnswlib'.
+        Options are 'hnswlib' and 'sklearn'.
 
     n_jobs : int, default=1
         The number of jobs to use for parallel computations. If -1, all CPUs are used.

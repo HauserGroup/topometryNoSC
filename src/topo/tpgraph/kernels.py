@@ -130,11 +130,6 @@ def _maybe_l2_normalize_rows(X: np.ndarray | csr_matrix) -> np.ndarray | csr_mat
     return np.asarray(normalized)
 
 
-def _cosine_knn_requires_unit_vectors(backend: str) -> bool:
-    """Backends that expect unit-norm vectors for 'cosine' space."""
-    return backend in ("hnswlib", "faiss")
-
-
 def _cosine_distance_to_angle_from_sparse_triplets(x_idx, y_idx, dists):
     """Convert sparse cosine-distance triplets to angles (radians).
 
@@ -231,9 +226,8 @@ def _compute_cknn_kernel(
 def _prepare_knn_input(X, metric: str, backend: str, pairwise: bool):
     """Prepare input data for KNN computation (normalize if needed)."""
     X_for_knn = X
-    if (metric == "cosine") and (not pairwise):
-        if _cosine_knn_requires_unit_vectors(backend):
-            X_for_knn = _maybe_l2_normalize_rows(X)
+    if (metric == "cosine") and (not pairwise) and backend == "hnswlib":
+        X_for_knn = _maybe_l2_normalize_rows(X)
     if issparse(X_for_knn):
         X_for_knn = csr_matrix(X_for_knn)
     else:
@@ -692,9 +686,9 @@ class Kernel(BaseEstimator, TransformerMixin):
     symmetrize : bool, default=True
         Whether to symmetrize the kernel matrix after normalizations.
 
-    backend : {"hnswlib", "nmslib", "faiss", "annoy", "sklearn"}, default="hnswlib"
-        Which backend to use for k-nearest-neighbor computations. Defaults to 'nmslib'.
-        Options are 'nmslib', 'hnswlib', 'faiss', 'annoy' and 'sklearn'.
+    backend : {"hnswlib", "sklearn"}, default="hnswlib"
+        Which backend to use for k-nearest-neighbor computations. Defaults to 'hnswlib'.
+        Options are 'hnswlib' and 'sklearn'.
 
     n_jobs : int, default=-1
         The number of jobs to use for parallel computations. If -1, all CPUs are used.
@@ -874,17 +868,20 @@ class Kernel(BaseEstimator, TransformerMixin):
         self._sample_densities = None
 
     def _parse_backend(self):
-        from topo._optional import best_ann_backend
+        from topo._optional import has
 
-        resolved = best_ann_backend(self.backend)
-        if resolved == "sklearn" and self.backend != "sklearn":
+        if self.backend not in {"hnswlib", "sklearn"}:
+            raise ValueError(
+                f"Invalid backend: {self.backend!r}. Must be 'hnswlib' or 'sklearn'."
+            )
+
+        if self.backend == "hnswlib" and not has("hnswlib"):
             warnings.warn(
-                "No approximate nearest neighbor backend found; falling back to "
-                "scikit-learn. Install one with `pip install topometry-nosc[ann]` for "
-                "faster neighbor search.",
+                "HNSWlib not installed; falling back to scikit-learn. "
+                "Install it with: pip install topometry-nosc[ann]",
                 stacklevel=2,
             )
-        self.backend = resolved
+            self.backend = "sklearn"
 
     def fit(self, X, recompute=False, **kwargs):
         """Fit the kernel matrix to the data.

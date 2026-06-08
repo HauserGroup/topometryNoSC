@@ -289,6 +289,18 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.random_state = random_state
         self.laplacian_type = laplacian_type
 
+        # Validate backend and resolve fallback
+        from topo._optional import has
+
+        if backend not in {"hnswlib", "sklearn"}:
+            raise ValueError(
+                f"Invalid backend: {backend!r}. Must be 'hnswlib' or 'sklearn'."
+            )
+        if backend == "hnswlib" and not has("hnswlib"):
+            self._backend_resolved = "sklearn"
+        else:
+            self._backend_resolved = backend
+
         self.id_method = id_method
         self.id_ks = id_ks
         self.id_metric = id_metric
@@ -321,7 +333,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.m: int | None = None
         self.n_eigs_: int | None = None
         self.selected_scaffold_components_: int | None = None
-        self._backend_resolved = backend
         self._n_jobs_effective = n_jobs
         self._random_state_resolved = None
         self.base_nbrs_class: BaseEstimator | None = None
@@ -393,11 +404,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     # ------------------------------------------------------------------
     # Backend / random-state helpers
     # ------------------------------------------------------------------
-
-    def _parse_backend(self) -> None:
-        from topo._optional import best_ann_backend
-
-        self._backend_resolved = best_ann_backend(self.backend)
 
     def _parse_random_state(self) -> None:
         if self.random_state is None:
@@ -682,7 +688,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         from topo._logging import configure
 
         configure(self.verbosity)
-        self._parse_backend()
         self._parse_random_state()
         self._n_jobs_effective = self.n_jobs
 

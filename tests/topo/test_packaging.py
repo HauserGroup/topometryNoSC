@@ -61,25 +61,6 @@ class TestOptionalHelpers:
         assert "topometry-nosc[amg]" in str(exc.value)
 
 
-class TestBackendSelection:
-    def test_best_ann_backend_falls_back_to_sklearn(self, monkeypatch):
-        monkeypatch.setattr(_optional, "has", lambda name: False)
-        assert _optional.best_ann_backend("hnswlib") == "sklearn"
-
-    def test_best_ann_backend_honours_preferred_when_present(self, monkeypatch):
-        monkeypatch.setattr(_optional, "has", lambda name: name == "hnswlib")
-        assert _optional.best_ann_backend("hnswlib") == "hnswlib"
-
-    def test_best_ann_backend_picks_first_available(self, monkeypatch):
-        monkeypatch.setattr(_optional, "has", lambda name: name == "hnswlib")
-        # preferred missing -> first available in preference order (only hnswlib available)
-        assert _optional.best_ann_backend("hnswlib") == "hnswlib"
-
-    def test_available_ann_backends_is_subset_in_order(self, monkeypatch):
-        monkeypatch.setattr(_optional, "has", lambda name: name == "hnswlib")
-        assert _optional.available_ann_backends() == ["hnswlib"]
-
-
 class TestLoggingConfig:
     def test_configure_sets_info_when_verbose(self):
         _logging.configure(verbose=True)

@@ -180,17 +180,20 @@ class Projector(BaseEstimator, TransformerMixin):
         return msg
 
     def _parse_backend(self):
-        from topo._optional import best_ann_backend
+        from topo._optional import has
 
-        resolved = best_ann_backend(self.nbrs_backend)
-        if resolved == "sklearn" and self.nbrs_backend != "sklearn":
+        if self.nbrs_backend not in {"hnswlib", "sklearn"}:
+            raise ValueError(
+                f"Invalid backend: {self.nbrs_backend!r}. Must be 'hnswlib' or 'sklearn'."
+            )
+
+        if self.nbrs_backend == "hnswlib" and not has("hnswlib"):
             warnings.warn(
-                "No approximate nearest-neighbor backend found; falling back to "
-                "scikit-learn. Install one with `pip install topometry-nosc[ann]` for "
-                "faster neighbor search.",
+                "HNSWlib not installed; falling back to scikit-learn. "
+                "Install it with: pip install topometry-nosc[ann]",
                 stacklevel=2,
             )
-        self.nbrs_backend = resolved
+            self.nbrs_backend = "sklearn"
 
     def fit(self, X: np.ndarray | csr_matrix | Kernel, **kwargs: Any) -> "Projector":
         """Run the desired projection method on the specified data.

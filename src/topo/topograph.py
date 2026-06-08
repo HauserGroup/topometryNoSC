@@ -172,7 +172,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         Kernel choice for the base graph.
     graph_kernel_version : str, default="bw_adaptive"
         Kernel choice for scaffold graphs.
-    backend : {"hnswlib", "nmslib", "faiss", "annoy", "sklearn"}, default="hnswlib"
+    backend : {"hnswlib", "sklearn"}, default="hnswlib"
         Approximate nearest-neighbor backend.
     base_metric : str, default="cosine"
         Distance metric for the base kNN graph.

@@ -149,7 +149,7 @@ def get_P(Y, **kwargs_for_kernel):
           metric='cosine' | 'euclidean' | 'precomputed'
           n_neighbors=30
           adaptive_bw=True
-          backend='nmslib' | 'hnswlib'
+          backend= 'hnswlib'
           n_jobs=-1
           symmetrize=True
           anisotropy=1.0

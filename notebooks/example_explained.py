@@ -157,7 +157,6 @@ config = DemoConfig(
     # Distance used by neighbor search. Must be supported by the chosen backend.
     metric="euclidean",
     # "hnswlib" is fast and approximate; "sklearn" is exact and dependency-light;
-    # "nmslib" can be useful on large data if installed.
     backend="hnswlib",
     # -- Kernel --------------------------------------------------------------
     # Converts neighbor distances into a graph/affinities. Try "cknn" and "fuzzy" first.

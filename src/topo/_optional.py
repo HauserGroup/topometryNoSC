@@ -2,8 +2,8 @@
 
 The core package depends on the numerical stack, plotting (matplotlib),
 dataframe I/O (pandas), Jupyter, and ``umap-learn``. Everything else—the AMG
-eigensolver, approximate-nearest-neighbour backends, and third-party layout
-libraries—is optional and gated through the helpers in this module so that:
+eigensolver, the HNSWlib approximate-nearest-neighbour backend, and third-party
+layout libraries—is optional and gated through the helpers in this module so that:
 
 * a missing optional dependency raises a single, actionable error message that
   names the ``pip install topometry-nosc[...]`` extra to install, and
@@ -26,9 +26,6 @@ __all__ = [
 _EXTRA_FOR: dict[str, str] = {
     "pyamg": "amg",
     "hnswlib": "ann",
-    "nmslib": "ann",
-    "annoy": "ann",
-    "faiss": "ann",
     "pacmap": "layouts",
     "pymde": "layouts",
     "trimap": "layouts",
@@ -36,7 +33,7 @@ _EXTRA_FOR: dict[str, str] = {
     "MulticoreTSNE": "layouts",
 }
 
-_ANN_BACKENDS: tuple[str, ...] = ("hnswlib", "nmslib", "annoy", "faiss")
+_ANN_BACKENDS: tuple[str, ...] = ("hnswlib",)
 _ALLOWED_ANN_BACKENDS: frozenset[str] = frozenset((*_ANN_BACKENDS, "sklearn"))
 
 

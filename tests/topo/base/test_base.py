@@ -87,13 +87,7 @@ class TestANNHelpers:
             ann._build_sparse_knn_graph(np.array([[0]]), np.array([[0, 1]]), 1, 2)
 
     def test_backend_metric_mapping(self):
-        assert ann._nmslib_sparse_space("euclidean") == "l2_sparse"
-        assert ann._nmslib_dense_space("inner_product") == "negdotprod"
         assert ann._hnswlib_space("cosine") == "cosine"
-        with pytest.raises(ValueError, match="Unsupported NMSlib sparse"):
-            ann._nmslib_sparse_space("bad")
-        with pytest.raises(ValueError, match="Unsupported NMSlib dense"):
-            ann._nmslib_dense_space("bad")
         with pytest.raises(ValueError, match="Unsupported HNSWlib"):
             ann._hnswlib_space("bad")
 

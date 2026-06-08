@@ -9,10 +9,10 @@
 
 Backend hierarchy and strategy:
 - sklearn.neighbors: Exact kNN (reference behavior, correctness standard)
-- HNSWlib: Fast approximate ANN for large-scale problems (default advanced backend)
+- HNSWlib: Fast approximate ANN for large-scale problems (optional)
 - Fallback: All backends gracefully degrade to sklearn if initialization fails
 
-This module provides small sklearn-style wrappers around HNSWlib,
+This module provides a sklearn-style wrapper around HNSWlib,
 plus a convenience `kNN` function that can fall back to sklearn. Metric name
 translation is centralized via _hnswlib_space.
 
@@ -500,7 +500,7 @@ def grid_search(
     n_jobs=-1,
     verbose=False,
 ):
-    """Evaluate approximate kNN graph quality for NMSlib and HNSWlib.
+    """Evaluate approximate kNN graph quality for HNSWlib.
 
     Parameters
     ----------

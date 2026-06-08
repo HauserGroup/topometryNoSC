@@ -416,7 +416,8 @@ def compute_kernel(
     square_distances: bool = ...,
     random_state: int | np.random.RandomState | None = ...,
     **kwargs,
-) -> tuple[csr_matrix, dict[str, csr_matrix | np.ndarray | int]]: ...
+) -> tuple[csr_matrix, dict[str, csr_matrix | np.ndarray | int]]:
+    pass
 
 
 def compute_kernel(

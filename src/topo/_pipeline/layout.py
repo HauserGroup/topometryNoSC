@@ -150,7 +150,7 @@ class LayoutBuildMixin:
             scale = float(np.abs(spt).max())
             expansion = 10.0 / scale if np.isfinite(scale) and scale > 0 else 1.0
             spt = (spt * expansion).astype(np.float32) + rng.normal(
-                scale=0.0001, size=(graph.shape[0], n_components)
+                scale=0.0001, size=(cast(Any, graph).shape[0], n_components)
             ).astype(np.float32)
         except Exception:
             spt = np.asarray(

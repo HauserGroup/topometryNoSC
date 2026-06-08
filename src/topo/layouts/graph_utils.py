@@ -408,6 +408,7 @@ def simplicial_set_embedding(
         fss_result = fuzzy_graph_from_data(
             embedding,
             n_neighbors=int(densmap_kwds["n_neighbors"]),
+            random_state=random_state,
             metric=metric,
             verbose=verbose,
             return_dists=True,

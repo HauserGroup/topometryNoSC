@@ -16,6 +16,23 @@ def test_kNN_sklearn():
     assert res.shape == (3, 3)
 
 
+def test_kNN_sklearn_direct_kneighbors_graph_path():
+    X = np.random.default_rng(0).normal(size=(30, 3))
+    graph = kNN(X, n_neighbors=5, backend="sklearn", return_instance=False)
+    assert isinstance(graph, csr_matrix)
+    assert graph.shape == (30, 30)
+    assert graph.nnz == 30 * 5
+    assert graph.format == "csr"
+
+
+def test_kNN_sklearn_return_instance_with_precomputed():
+    X = np.random.default_rng(1).normal(size=(20, 3))
+    nbrs, graph = kNN(X, n_neighbors=5, backend="sklearn", return_instance=True)
+    assert hasattr(nbrs, "kneighbors")
+    assert isinstance(graph, csr_matrix)
+    assert graph.shape == (20, 20)
+
+
 def test_resolve_n_jobs():
     assert _resolve_n_jobs(None) == 1
     assert _resolve_n_jobs("2") == 2

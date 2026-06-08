@@ -29,7 +29,7 @@ from joblib import cpu_count
 from scipy.sparse import csr_matrix, issparse
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.model_selection import ParameterGrid, train_test_split
-from sklearn.neighbors import NearestNeighbors
+from sklearn.neighbors import NearestNeighbors, kneighbors_graph
 
 logger = logging.getLogger(__name__)
 
@@ -248,6 +248,31 @@ def _hnswlib_space(metric: str) -> str:
         ) from exc
 
 
+def _sklearn_knn_graph(
+    X,
+    *,
+    n_neighbors: int,
+    metric: str,
+    n_jobs: int | None,
+    include_self: bool = False,
+) -> csr_matrix:
+    """Build kNN distance graph using sklearn kneighbors_graph."""
+    graph = kneighbors_graph(
+        X,
+        n_neighbors=n_neighbors,
+        mode="distance",
+        metric=metric,
+        include_self=include_self,
+        n_jobs=n_jobs,
+    ).tocsr()
+
+    if not include_self:
+        graph.setdiag(0.0)
+        graph.eliminate_zeros()
+
+    return graph
+
+
 @overload
 def kNN(
     X: np.ndarray | csr_matrix,
@@ -415,27 +440,44 @@ def kNN(
         # sklearn estimator does not accept.
         _valid = set(NearestNeighbors().get_params())
         sk_kwargs = {k: v for k, v in kwargs.items() if k in _valid}
-        query_k = _query_k(n_neighbors, int(X.shape[0])) if Y is None else n_neighbors
-        nbrs = NearestNeighbors(
-            n_neighbors=query_k,
-            metric=metric,
-            n_jobs=n_jobs,
-            **sk_kwargs,
-        ).fit(X)
-        if Y is None:
-            distances, indices = nbrs.kneighbors(X, return_distance=True)
-            knn = _build_sparse_knn_graph(
-                indices=indices,
-                distances=distances,
-                n_query_samples=int(X.shape[0]),
-                n_fit_samples=int(X.shape[0]),
+
+        if Y is None and metric != "precomputed" and not return_instance:
+            knn = _sklearn_knn_graph(
+                X,
                 n_neighbors=n_neighbors,
+                metric=metric,
+                n_jobs=n_jobs,
             )
+            nbrs = None
         else:
-            knn = nbrs.kneighbors_graph(Y, mode="distance")
+            query_k = (
+                _query_k(n_neighbors, int(X.shape[0])) if Y is None else n_neighbors
+            )
+            nbrs = NearestNeighbors(
+                n_neighbors=query_k,
+                metric=metric,
+                n_jobs=n_jobs,
+                **sk_kwargs,
+            ).fit(X)
+            if Y is None:
+                distances, indices = nbrs.kneighbors(X, return_distance=True)
+                knn = _build_sparse_knn_graph(
+                    indices=indices,
+                    distances=distances,
+                    n_query_samples=int(X.shape[0]),
+                    n_fit_samples=int(X.shape[0]),
+                    n_neighbors=n_neighbors,
+                )
+            else:
+                knn = nbrs.kneighbors_graph(Y, mode="distance")
 
     knn_csr = cast(csr_matrix, knn)
     if return_instance:
+        if nbrs is None:
+            raise ValueError(
+                "Cannot return estimator instance when using _sklearn_knn_graph. "
+                "Pass return_instance=False or use a different backend."
+            )
         return nbrs, knn_csr
     return knn_csr
 

@@ -303,15 +303,11 @@ class Projector(BaseEstimator, TransformerMixin):
         # Fit the desired method
         if self.projection_method == "Isomap":
             self.Y_ = Isomap(
-                K,
                 n_components=self.n_components,
                 n_neighbors=self.n_neighbors,
                 metric="precomputed",
-                landmarks=self.landmarks_,
-                landmark_method=self.landmark_method,
-                eig_tol=0,
                 n_jobs=self.n_jobs,
-            )
+            ).fit_transform(K)
 
         elif self.projection_method == "t-SNE":
             if importlib.util.find_spec("MulticoreTSNE") is not None:

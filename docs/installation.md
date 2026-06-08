@@ -55,12 +55,6 @@ The kNN-graph builder (`topo.base.ann.kNN`) wraps several ANN backends. If none
 of the optional libraries is installed, it falls back to `scikit-learn`
 neighborhood search (slower on large datasets). Supported backends include
 [HNSWlib](https://github.com/nmslib/hnswlib) (default, via the `ann` extra) and
-[NMSlib](https://github.com/nmslib/nmslib). If your CPU supports advanced
-instructions, NMSlib built from source can be faster:
-
-```bash
-pip install --no-binary :all: nmslib
-```
 
 ### Additional layout methods
 

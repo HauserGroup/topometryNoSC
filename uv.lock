@@ -4281,7 +4281,6 @@ docs = [
     { name = "mkdocs-material", extras = ["imaging"], specifier = ">=9" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=0.25" },
 ]
-nmslib = []
 
 [[package]]
 name = "torch"

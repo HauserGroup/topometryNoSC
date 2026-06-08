@@ -152,7 +152,6 @@ Projection methods
 
 Backends
   hnswlib
-  nmslib
   sklearn
 """
     )

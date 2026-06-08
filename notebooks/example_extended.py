@@ -64,7 +64,7 @@ config = DemoConfig(
     # Graph/kernel
     n_neighbors=15,
     metric="euclidean",  # any metric accepted by the chosen backend
-    backend="hnswlib",  # "hnswlib" | "nmslib" | "sklearn"
+    backend="hnswlib",  # "hnswlib"  | "sklearn"
     kernel_version="cknn",  # "bw_adaptive" | "fuzzy" | "cknn" | "gaussian"
     sigma=1.0,  # bandwidth for "gaussian" only
     anisotropy=1.0,  # alpha for the diffusion operator (0-1)

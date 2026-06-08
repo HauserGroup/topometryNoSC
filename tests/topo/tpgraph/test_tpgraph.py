@@ -287,12 +287,10 @@ def test_cosine_use_angular_converts_adaptive_bandwidth_units():
     np.testing.assert_allclose(densities["adaptive_bw"], expected)
 
 
-@pytest.mark.parametrize("backend", ["sklearn", "hnswlib", "nmslib"])
+@pytest.mark.parametrize("backend", ["sklearn", "hnswlib"])
 def test_knn_self_query_returns_requested_nonself_neighbors(backend):
     if backend == "hnswlib":
         pytest.importorskip("hnswlib")
-    if backend == "nmslib":
-        pytest.importorskip("nmslib")
     X = np.random.RandomState(0).randn(12, 4)
 
     graph = kNN(X, n_neighbors=3, backend=backend, metric="euclidean")

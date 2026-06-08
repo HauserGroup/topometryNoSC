@@ -455,7 +455,7 @@ def compute_kernel(
 
     backend : str, default='hnswlib'
         Which backend to use for neighborhood computations. Defaults to 'hnswlib'.
-        Options are 'nmslib', 'hnswlib' and 'sklearn'.
+        Options are 'hnswlib' and 'sklearn'.
 
     n_jobs : int, default=1
         The number of jobs to use for parallel computations. If set to -1, all available cores are used.

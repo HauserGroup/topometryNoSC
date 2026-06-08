@@ -15,11 +15,26 @@ import numpy as np
 from scipy.sparse import csr_matrix, issparse
 from sklearn.utils import check_random_state
 
+from topo.base.graph_matrix import as_csr_matrix
 from topo.layouts.projector import Projector
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
 from topo.tpgraph.kernels import Kernel
 
 logger = logging.getLogger(__name__)
+
+
+def _as_2d_array(value: Any, name: str) -> np.ndarray:
+    """Return value as a 2-D dense array, rejecting tuples and None."""
+    if value is None:
+        raise ValueError(f"{name} must not be None.")
+    if isinstance(value, tuple):
+        raise TypeError(f"{name} must be a 2-D array, not a tuple.")
+
+    arr = np.asarray(value)
+    if arr.ndim != 2:
+        raise ValueError(f"{name} must be a 2-D array.")
+
+    return arr
 
 
 class LayoutBuildMixin:
@@ -46,6 +61,7 @@ class LayoutBuildMixin:
     n_jobs: int
     _n_jobs_effective: int
     backend: str
+    _backend_resolved: str
     layout_verbose: bool
     verbosity: int
     msTopoMAP_snapshots: list[dict[str, Any]]
@@ -56,74 +72,69 @@ class LayoutBuildMixin:
     uom_components_: list[np.ndarray] | None
     eigenbasis: EigenDecomposition | None
     base_kernel: Kernel | None
+    _random_state_resolved: np.random.RandomState
+    P_of_msZ_uom: csr_matrix | None
+    P_of_Z_uom: csr_matrix | None
 
-    @property
-    def P_of_msZ(self) -> csr_matrix:
-        P = getattr(self, "_P_of_msZ_mixin", None)
-        if P is None:
-            raise AttributeError("P_of_msZ unavailable. Call .fit() first.")
-        return P if isinstance(P, csr_matrix) else csr_matrix(P)
-
-    @P_of_msZ.setter
-    def P_of_msZ(self, value) -> None:
-        self._P_of_msZ_mixin = value
-
-    @property
-    def P_of_Z(self) -> csr_matrix:
-        P = getattr(self, "_P_of_Z_mixin", None)
-        if P is None:
-            raise AttributeError("P_of_Z unavailable. Call .fit() first.")
-        return P if isinstance(P, csr_matrix) else csr_matrix(P)
-
-    @P_of_Z.setter
-    def P_of_Z(self, value) -> None:
-        self._P_of_Z_mixin = value
-
-    def _run_projections(self):
-        """Compute requested 2-D projections on both scaffolds."""
-        if self.projection_methods is None:
+    def _run_projections(self) -> None:
+        """Compute requested projections on both DM and msDM scaffold graphs."""
+        if not self.projection_methods:
             return
-        failures = []
+
+        failures: list[tuple[str, str, Exception]] = []
         successes = 0
+
         for proj in self.projection_methods:
-            for ms in (True, False):
+            for multiscale in (True, False):
+                tag = "msZ" if multiscale else "Z/DM"
                 try:
-                    self.project(projection_method=proj, multiscale=ms)
+                    self.project(projection_method=proj, multiscale=multiscale)
                     successes += 1
-                except Exception as e:
-                    tag = "msZ" if ms else "Z/DM"
-                    failures.append((proj, tag, e))
+                except Exception as exc:
+                    failures.append((str(proj), tag, exc))
                     warnings.warn(
-                        f"Projection '{proj}' on {tag} failed: {e}", RuntimeWarning
+                        f"Projection {proj!r} on {tag} failed: {exc}",
+                        RuntimeWarning,
+                        stacklevel=2,
                     )
+
         if successes == 0 and failures:
             msg = "; ".join(f"{proj} on {tag}: {err}" for proj, tag, err in failures)
             raise RuntimeError(f"All requested projections failed: {msg}")
 
-    def _get_projection(self, method, multiscale):
-        """Look up a projection from ProjectionDict."""
+    def _get_projection(self, method: str, multiscale: bool):
+        """Look up a stored projection from ProjectionDict."""
+        method = str(method)
         tag = "msDM" if multiscale else "DM"
-        # Standard key
+
         if method in ("MAP", "Isomap", "IsomorphicMDE", "IsometricMDE"):
-            key = f"{method} of {self.graph_kernel_version} from {tag} with {self.base_kernel_version}"
+            key = (
+                f"{method} of {self.graph_kernel_version} from {tag} "
+                f"with {self.base_kernel_version}"
+            )
         else:
             key = f"{method} of {tag} with {self.base_kernel_version}"
+
         if key in self.ProjectionDict:
             return self.ProjectionDict[key]
-        # UoM fallback key
+
         uom_key = f"{method} of UoM {tag} with {self.base_kernel_version}"
         if uom_key in self.ProjectionDict:
             return self.ProjectionDict[uom_key]
+
         raise AttributeError(
-            f"{method} ({tag}) embedding unavailable. Call .fit() first."
+            f"{method} ({tag}) embedding unavailable. Call .fit() or .project() first."
         )
 
     # ------------------------------------------------------------------
     # Spectral layout
     # ------------------------------------------------------------------
 
-    def spectral_layout(self, graph=None, n_components=2):
+    def spectral_layout(self, graph=None, n_components: int = 2):
         """Compute a spectral initialization for layout optimization."""
+        if int(n_components) < 1:
+            raise ValueError("n_components must be >= 1.")
+
         if graph is None:
             if self._kernel_msZ is not None:
                 graph = self._kernel_msZ.K
@@ -131,34 +142,51 @@ class LayoutBuildMixin:
                 graph = self._kernel_Z.K
             else:
                 raise ValueError("No graph kernel available. Call .fit() first.")
+
+        shape = getattr(graph, "shape", None)
+        if shape is None or len(shape) != 2:
+            raise ValueError("graph must be a 2-D square matrix.")
+        if int(shape[0]) != int(shape[1]):
+            raise ValueError("graph must be square.")
+
         t0 = time.time()
         rng = check_random_state(
             getattr(self, "_random_state_resolved", self.random_state)
         )
+
         try:
             spt_result = cast(
                 Any,
                 spectral_layout(
                     graph,
-                    n_components,
+                    int(n_components),
                     rng,
                     laplacian_type=self.laplacian_type,
                     eigen_tol=self.eigen_tol,
                     return_evals=False,
                 ),
             )
-            spt = np.asarray(spt_result)
-            scale = float(np.abs(spt).max())
+            spt = np.asarray(spt_result, dtype=np.float32)
+
+            if spt.ndim != 2 or spt.shape[1] != int(n_components):
+                raise RuntimeError("spectral_layout returned an invalid shape.")
+
+            scale = float(np.abs(spt).max()) if spt.size else 0.0
             expansion = 10.0 / scale if np.isfinite(scale) and scale > 0 else 1.0
-            spt = (spt * expansion).astype(np.float32) + rng.normal(
-                scale=0.0001, size=(cast(Any, graph).shape[0], n_components)
+            noise = rng.normal(
+                scale=0.0001,
+                size=(int(shape[0]), int(n_components)),
             ).astype(np.float32)
+            spt = (spt * expansion).astype(np.float32) + noise
+
         except Exception:
             spt = np.asarray(
-                EigenDecomposition(n_components=n_components).fit_transform(
+                EigenDecomposition(n_components=int(n_components)).fit_transform(
                     cast(csr_matrix, graph)
-                )
+                ),
+                dtype=np.float32,
             )
+
         self.runtimes["Spectral"] = time.time() - t0
         self.SpecLayout = spt
         gc.collect()
@@ -184,31 +212,60 @@ class LayoutBuildMixin:
         include_init_snapshot: bool = True,
         **kwargs,
     ):
-        """Compute a 2-D projection and store it in ``ProjectionDict``."""
+        """Compute a projection and store it in ``ProjectionDict``."""
+        if int(n_components) < 1:
+            raise ValueError("n_components must be >= 1.")
+
         if n_neighbors is None:
             n_neighbors = self.graph_knn
+        n_neighbors = int(n_neighbors)
+        if n_neighbors < 1:
+            raise ValueError("n_neighbors must be >= 1.")
+
         if projection_method is None:
             if not self.projection_methods:
                 raise ValueError("No projection methods configured.")
             projection_method = self.projection_methods[0]
         projection_method = str(projection_method)
 
-        # Choose refined graph / scaffold
         tag = "msDM" if multiscale else "DM"
+
+        input_mat: np.ndarray | csr_matrix
+
         if projection_method in ("MAP", "IsomorphicMDE", "IsometricMDE", "Isomap"):
             metric = "precomputed"
-            input_mat = self.P_of_msZ if multiscale else self.P_of_Z
-            key = f"{self.graph_kernel_version} from {tag} with {self.base_kernel_version}"
+            input_mat = self._resolve_projection_operator(multiscale)
+            key = (
+                f"{self.graph_kernel_version} from {tag} "
+                f"with {self.base_kernel_version}"
+            )
         else:
             metric = self.graph_metric
             if self.uom_enabled:
-                input_mat = self.msZ_uom if multiscale else self.Z_uom
+                uom_input = self.msZ_uom if multiscale else self.Z_uom
+                if uom_input is None:
+                    raise AttributeError(
+                        f"UoM {tag} scaffold unavailable. Call .fit(X, uom=True)."
+                    )
+                input_mat = uom_input
+                if input_mat is None:
+                    raise AttributeError(
+                        f"UoM {tag} scaffold unavailable. Call .fit(X, uom=True)."
+                    )
             else:
                 eig_key = f"{tag} with {self.base_kernel_version}"
-                input_mat = self.EigenbasisDict[eig_key].transform(X=None)
+                if eig_key not in self.EigenbasisDict:
+                    raise AttributeError(f"Eigenbasis {eig_key!r} unavailable.")
+                input_mat = _as_2d_array(
+                    self.EigenbasisDict[eig_key].transform(X=None),
+                    eig_key,
+                )
             key = f"{tag} with {self.base_kernel_version}"
 
-        # Initialization
+        input_shape = getattr(input_mat, "shape", None)
+        if input_shape is None or len(input_shape) != 2:
+            raise ValueError("Projection input must be a 2-D matrix.")
+
         if init is not None:
             if isinstance(init, np.ndarray):
                 init_Y = init
@@ -217,32 +274,39 @@ class LayoutBuildMixin:
             else:
                 raise ValueError(f"Invalid init: {init}")
         else:
-            g = (
+            graph = (
                 self._kernel_msZ.K
                 if (multiscale and self._kernel_msZ is not None)
                 else (self._kernel_Z.K if self._kernel_Z is not None else None)
             )
-            if g is None:
+            if graph is None:
                 raise ValueError("No refined kernel for spectral initialization.")
-            self.SpecLayout = self.spectral_layout(graph=g, n_components=n_components)
-            init_Y = self.SpecLayout
+            init_Y = self.spectral_layout(graph=graph, n_components=int(n_components))
+
+        init_Y = np.asarray(init_Y)
+        if init_Y.ndim != 2 or init_Y.shape[1] != int(n_components):
+            raise ValueError(
+                f"init must be a 2-D array with shape (n_samples, {int(n_components)})."
+            )
+        if init_Y.shape[0] != int(input_shape[0]):
+            raise ValueError("init and projection input must have the same row count.")
 
         projection_key = f"{projection_method} of {key}"
         t0 = time.time()
 
         proj = Projector(
-            n_components=n_components,
+            n_components=int(n_components),
             projection_method=projection_method,
             metric=metric,
-            n_neighbors=self.graph_knn,
-            n_jobs=self._n_jobs_effective,
+            n_neighbors=n_neighbors,
+            n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
             landmarks=landmarks,
             landmark_method=landmark_method,
-            num_iters=num_iters,
+            num_iters=int(num_iters),
             init=cast(Any, init_Y),
             nbrs_backend=self._backend_resolved,
             keep_estimator=False,
-            random_state=self._random_state_resolved,
+            random_state=getattr(self, "_random_state_resolved", self.random_state),
             verbose=self.layout_verbose,
             save_every=save_every,
             save_limit=save_limit,
@@ -251,13 +315,24 @@ class LayoutBuildMixin:
         )
 
         Y = proj.fit_transform(input_mat, **kwargs)
+        Y = np.asarray(Y)
+
+        if Y.ndim != 2 or Y.shape[1] != int(n_components):
+            raise RuntimeError(
+                f"{projection_method} returned invalid projection shape {Y.shape}."
+            )
+
         Y_aux = getattr(proj, "aux_", None)
 
         self.runtimes[projection_key] = time.time() - t0
         if self.verbosity >= 1:
             uom_tag = " [UoM]" if self.uom_enabled else ""
             logger.info(
-                f"  {projection_method} ({'msZ' if multiscale else 'Z/DM'}{uom_tag}) in {self.runtimes[projection_key]:.3f}s"
+                "  %s (%s%s) in %.3fs",
+                projection_method,
+                "msZ" if multiscale else "Z/DM",
+                uom_tag,
+                self.runtimes[projection_key],
             )
 
         self.ProjectionDict[projection_key] = Y
@@ -270,6 +345,26 @@ class LayoutBuildMixin:
                 else:
                     self.TopoMAP_snapshots = checkpoints
         return Y
+
+    def _resolve_projection_operator(self, multiscale: bool) -> csr_matrix:
+        """Resolve the fitted diffusion operator used as precomputed projection input."""
+        if self.uom_enabled:
+            P = self.P_of_msZ_uom if multiscale else self.P_of_Z_uom
+            if P is None:
+                tag = "msDM" if multiscale else "DM"
+                raise AttributeError(
+                    f"UoM {tag} diffusion operator unavailable. Call .fit(X, uom=True)."
+                )
+            return as_csr_matrix(P, "UoM projection operator")
+
+        if multiscale:
+            if self._kernel_msZ is None:
+                raise AttributeError("P_of_msZ unavailable. Call .fit() first.")
+            return as_csr_matrix(self._kernel_msZ.P, "P_of_msZ")
+
+        if self._kernel_Z is None:
+            raise AttributeError("P_of_Z unavailable. Call .fit() first.")
+        return as_csr_matrix(self._kernel_Z.P, "P_of_Z")
 
     # ------------------------------------------------------------------
     # Eigenspectrum plot
@@ -325,15 +420,15 @@ class LayoutBuildMixin:
         save_every: int = 10,
         metric: str = "euclidean",
         n_neighbors: int = 30,
-        backend: str = "hnswlib",
-        n_jobs: int = -1,
+        backend: str | None = None,
+        n_jobs: int | None = None,
         times=(1, 2, 4),
         r: int = 32,
         k_for_pf1=None,
         symmetric_hint: bool = True,
         verbosity: int = 1,
     ):
-        """Grid-search MAP hyperparameters and select the best 2-D projection."""
+        """Grid-search MAP hyperparameters and select the best projection."""
         from topo.eval.topo_metrics import get_P, topo_preserve_score
 
         if min_dist_grid is None:
@@ -343,8 +438,17 @@ class LayoutBuildMixin:
         if initial_alpha_grid is None:
             initial_alpha_grid = [0.4, 1.0, 1.6]
 
+        if backend is None:
+            backend = self._backend_resolved
+        if backend not in {"sklearn", "hnswlib"}:
+            raise ValueError("backend must be one of {'sklearn', 'hnswlib'}.")
+
+        if n_jobs is None:
+            n_jobs = getattr(self, "_n_jobs_effective", self.n_jobs)
+
         if self.base_kernel is None:
             raise ValueError("No base kernel available. Call fit() first.")
+
         PX_ref = self.base_kernel.P
         if not issparse(PX_ref):
             PX_ref = csr_matrix(PX_ref)
@@ -365,7 +469,10 @@ class LayoutBuildMixin:
         for md, sp_, ia in combos:
             if verbosity >= 1:
                 logger.info(
-                    f"[Grid] MAP: min_dist={md}, spread={sp_}, initial_alpha={ia}"
+                    "[Grid] MAP: min_dist=%s, spread=%s, initial_alpha=%s",
+                    md,
+                    sp_,
+                    ia,
                 )
 
             self.project(
@@ -381,17 +488,19 @@ class LayoutBuildMixin:
 
             snapshots = getattr(self, snap_attr, None) or []
             scores_this = []
+
             for snap in snapshots:
                 Ysnap = snap["embedding"]
                 PY = get_P(
                     Ysnap,
                     metric=metric,
-                    n_neighbors=n_neighbors,
+                    n_neighbors=int(n_neighbors),
                     backend=backend,
                     n_jobs=n_jobs,
                 )
                 if not issparse(PY):
                     PY = csr_matrix(PY)
+
                 score, parts = topo_preserve_score(
                     PX_ref,
                     PY,
@@ -400,28 +509,26 @@ class LayoutBuildMixin:
                     symmetric_hint=symmetric_hint,
                     k_for_pf1=k_for_pf1,  # type: ignore
                 )
+
                 snap["metrics"] = {
-                    k: float(v)
-                    for k, v in [
-                        ("TP", score),
-                        ("PF1", parts.get("PF1", np.nan)),
-                        ("PJS", parts.get("PJS", np.nan)),
-                        ("SP", parts.get("SP", np.nan)),
-                    ]
+                    "TP": float(score),
+                    "PF1": float(parts.get("PF1", np.nan)),
+                    "PJS": float(parts.get("PJS", np.nan)),
+                    "SP": float(parts.get("SP", np.nan)),
                 }
                 snap["hyperparams"] = {
-                    "min_dist": md,
-                    "spread": sp_,
-                    "initial_alpha": ia,
+                    "min_dist": float(md),
+                    "spread": float(sp_),
+                    "initial_alpha": float(ia),
                 }
                 scores_this.append(float(score))
 
             final_score = scores_this[-1] if scores_this else float("-inf")
             all_scores.append(
                 {
-                    "min_dist": md,
-                    "spread": sp_,
-                    "initial_alpha": ia,
+                    "min_dist": float(md),
+                    "spread": float(sp_),
+                    "initial_alpha": float(ia),
                     "final_score": final_score,
                 }
             )
@@ -435,9 +542,6 @@ class LayoutBuildMixin:
                 }
                 best_snapshots = [dict(s) for s in snapshots]
 
-        if best_snapshots is not None:
-            setattr(self, snap_attr, best_snapshots)
-
         if best_params is not None:
             self.project(
                 projection_method="MAP",
@@ -449,6 +553,8 @@ class LayoutBuildMixin:
                 spread=best_params["spread"],
                 initial_alpha=best_params["initial_alpha"],
             )
+
+        if best_snapshots is not None:
             setattr(self, snap_attr, best_snapshots)
 
         return {
@@ -479,11 +585,6 @@ class LayoutBuildMixin:
         """Produce an animated GIF of MAP training snapshots."""
         from topo.plot import visualize_optimization as _viz
 
-        if multiscale is None:
-            multiscale = bool(self.msTopoMAP_snapshots) or not bool(
-                self.TopoMAP_snapshots
-            )
-
         snap_attr = "msTopoMAP_snapshots" if multiscale else "TopoMAP_snapshots"
         snapshots = getattr(self, snap_attr, None)
 
@@ -511,6 +612,8 @@ class LayoutBuildMixin:
             tag=tag,
             overlay_metrics=overlay_metrics,
         )
+
         if self.verbosity >= 1:
-            logger.info(f"Wrote {path} with {len(snapshots)} frames.")
+            logger.info("Wrote %s with %d frames.", path, len(snapshots))
+
         return path

@@ -2,7 +2,7 @@
 
 First off, thanks for taking the time to contribute! 🎉
 
-I appreaciate your help and this document provides a guide to help you get started quickly, hopefully.
+I appreciate your help and this document provides a guide to help you get started quickly, hopefully.
 
 ## 🛠️ Quick Start
 

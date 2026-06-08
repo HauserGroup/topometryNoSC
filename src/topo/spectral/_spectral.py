@@ -229,6 +229,53 @@ def LE(
         return evecs
 
 
+def plain_spectral_embedding(
+    affinity_matrix,
+    n_components=10,
+    eigen_solver="auto",
+    random_state=None,
+    drop_first=True,
+):
+    """Compute plain Laplacian Eigenmaps via sklearn for efficiency.
+
+    Delegates to sklearn.manifold.SpectralEmbedding for standard
+    normalized Laplacian Eigenmaps case. Drops first (zero) eigenvector
+    and returns eigenvectors corresponding to smallest eigenvalues.
+
+    Parameters
+    ----------
+    affinity_matrix : scipy.sparse.csr_matrix or np.ndarray
+        Precomputed affinity or similarity matrix.
+    n_components : int, default=10
+        Number of eigenvectors to return.
+    eigen_solver : str, default='auto'
+        Eigendecomposition solver ('auto', 'arpack', 'dense').
+    random_state : int or RandomState, default=None
+        Random state for reproducibility.
+    drop_first : bool, default=True
+        Whether to drop the first (zero) eigenvector.
+
+    Returns
+    -------
+    embedding : np.ndarray of shape (n_samples, n_components)
+        Spectral embedding coordinates.
+    """
+    from sklearn.manifold import SpectralEmbedding
+
+    n_comps_req = n_components + 1 if drop_first else n_components
+    embedding = SpectralEmbedding(
+        n_components=n_comps_req,
+        affinity="precomputed",
+        eigen_solver=eigen_solver,
+        random_state=random_state,
+    ).fit_transform(affinity_matrix)
+
+    if drop_first:
+        embedding = embedding[:, 1:]
+
+    return embedding
+
+
 def diffusion_operator(
     W, alpha=1.0, symmetric=False, semi_aniso=False, return_D_inv_sqrt=False
 ):

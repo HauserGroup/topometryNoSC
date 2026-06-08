@@ -17,13 +17,7 @@ rows are cells, images, documents or anything else.
 
 ## Setup
 
-Install the package with plotting support:
-
-```bash
-pip install "topometry-nosc[plot]"
-```
-
-Then import what we need:
+Import what we need:
 
 ```python
 import topo as tp

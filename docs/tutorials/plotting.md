@@ -5,12 +5,7 @@ colour, compare and save figures. Every image below was produced by the code
 shown next to it, on the same example data as the
 [step-by-step tutorial](step-by-step.md).
 
-Plotting is built on [matplotlib](https://matplotlib.org/), so install the plot
-extra:
-
-```bash
-pip install "topometry-nosc[plot]"
-```
+Plotting is built on [matplotlib](https://matplotlib.org/), which is installed by default.
 
 ## Setup
 

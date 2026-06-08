@@ -5,12 +5,11 @@
 `TransformerMixin`. This makes the building-block classes compatible with
 scikit-learn pipelines and easy to combine with other workflows.
 
-The **core** install includes numpy, scipy, scikit-learn, numba, joblib and
-`umap-learn`:
+The **core** install includes numpy, scipy, scikit-learn, numba, joblib, matplotlib, pandas, jupyterlab, and `umap-learn`:
 
 ```bash
 pip install topometry-nosc            # core
-pip install "topometry-nosc[all]"     # core + plotting, dataframes, ANN backends, extra layouts
+pip install "topometry-nosc[all]"     # core + ANN backends, extra layouts
 ```
 
 !!! danger "Do not install alongside upstream `topometry`"
@@ -37,21 +36,18 @@ Optional features are grouped into extras — install only what you need:
 
 | Extra        | Adds                                                    |
 |--------------|---------------------------------------------------------|
-| `plot`       | matplotlib (plotting)                                   |
-| `pandas`     | pandas (DataFrame I/O)                                  |
 | `ann`        | hnswlib (fast approximate nearest neighbors)           |
 | `amg`        | pyamg (algebraic-multigrid `eigensolver='amg'`)        |
 | `layouts`    | pacmap, pymde, trimap (extra projections)             |
-| `notebooks`  | jupyterlab / ipywidgets                                |
 | `all`        | everything above                                       |
 
 ```bash
-pip install "topometry-nosc[plot]"        # one extra
+pip install "topometry-nosc[layouts]"     # one extra
 pip install "topometry-nosc[ann,layouts]" # several
 ```
 
 Missing an optional dependency raises a clear message telling you which extra to
-install (e.g. `pip install topometry-nosc[plot]`).
+install (e.g. `pip install topometry-nosc[layouts]`).
 
 ### Approximate Nearest Neighbors
 

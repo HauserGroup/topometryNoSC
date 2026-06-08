@@ -13,7 +13,6 @@ from typing import Any, cast
 
 import numpy as np
 from scipy.sparse import csr_matrix, issparse
-from sklearn.utils import check_random_state
 
 from topo.base.graph_matrix import as_csr_matrix
 from topo.layouts.projector import Projector
@@ -150,9 +149,7 @@ class LayoutBuildMixin:
             raise ValueError("graph must be square.")
 
         t0 = time.time()
-        rng = check_random_state(
-            getattr(self, "_random_state_resolved", self.random_state)
-        )
+        rng = self._random_state_resolved
 
         try:
             spt_result = cast(
@@ -180,9 +177,10 @@ class LayoutBuildMixin:
             spt = (spt * expansion).astype(np.float32) + noise
 
         except Exception:
+            graph_csr = as_csr_matrix(graph, "spectral layout fallback graph")
             spt = np.asarray(
                 EigenDecomposition(n_components=int(n_components)).fit_transform(
-                    cast(csr_matrix, graph)
+                    graph_csr
                 ),
                 dtype=np.float32,
             )
@@ -248,10 +246,6 @@ class LayoutBuildMixin:
                         f"UoM {tag} scaffold unavailable. Call .fit(X, uom=True)."
                     )
                 input_mat = uom_input
-                if input_mat is None:
-                    raise AttributeError(
-                        f"UoM {tag} scaffold unavailable. Call .fit(X, uom=True)."
-                    )
             else:
                 eig_key = f"{tag} with {self.base_kernel_version}"
                 if eig_key not in self.EigenbasisDict:
@@ -299,14 +293,14 @@ class LayoutBuildMixin:
             projection_method=projection_method,
             metric=metric,
             n_neighbors=n_neighbors,
-            n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
+            n_jobs=self._n_jobs_effective,
             landmarks=landmarks,
             landmark_method=landmark_method,
             num_iters=int(num_iters),
             init=cast(Any, init_Y),
             nbrs_backend=self._backend_resolved,
             keep_estimator=False,
-            random_state=getattr(self, "_random_state_resolved", self.random_state),
+            random_state=self._random_state_resolved,
             verbose=self.layout_verbose,
             save_every=save_every,
             save_limit=save_limit,
@@ -438,13 +432,16 @@ class LayoutBuildMixin:
         if initial_alpha_grid is None:
             initial_alpha_grid = [0.4, 1.0, 1.6]
 
-        if backend is None:
-            backend = self._backend_resolved
-        if backend not in {"sklearn", "hnswlib"}:
+        effective_backend = self._backend_resolved if backend is None else str(backend)
+        if effective_backend not in {"sklearn", "hnswlib"}:
             raise ValueError("backend must be one of {'sklearn', 'hnswlib'}.")
 
-        if n_jobs is None:
-            n_jobs = getattr(self, "_n_jobs_effective", self.n_jobs)
+        effective_n_jobs = self._n_jobs_effective if n_jobs is None else int(n_jobs)
+        if effective_n_jobs < -1 or effective_n_jobs == 0:
+            raise ValueError("n_jobs must be -1 or a positive integer.")
+
+        if int(n_neighbors) < 1:
+            raise ValueError("n_neighbors must be >= 1.")
 
         if self.base_kernel is None:
             raise ValueError("No base kernel available. Call fit() first.")
@@ -495,8 +492,8 @@ class LayoutBuildMixin:
                     Ysnap,
                     metric=metric,
                     n_neighbors=int(n_neighbors),
-                    backend=backend,
-                    n_jobs=n_jobs,
+                    backend=effective_backend,
+                    n_jobs=effective_n_jobs,
                 )
                 if not issparse(PY):
                     PY = csr_matrix(PY)
@@ -507,7 +504,7 @@ class LayoutBuildMixin:
                     times=times,
                     r=r,
                     symmetric_hint=symmetric_hint,
-                    k_for_pf1=k_for_pf1,  # type: ignore
+                    k_for_pf1=k_for_pf1,
                 )
 
                 snap["metrics"] = {

@@ -8,9 +8,9 @@ available.
 
 import importlib.util
 
-from .ann import grid_search, kNN
+from .ann import kNN
 
-__all__ = ["kNN", "grid_search"]
+__all__ = ["kNN"]
 
 _have_numba = importlib.util.find_spec("numba") is not None
 

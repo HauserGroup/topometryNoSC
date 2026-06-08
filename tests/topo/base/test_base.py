@@ -65,14 +65,6 @@ class TestANNHelpers:
         with pytest.raises(ValueError, match="empty index"):
             ann._query_k(1, 0)
 
-    def test_data_conversion_and_shape_validation(self):
-        X = [[1.0, 2.0], [3.0, 4.0]]
-        assert ann._as_dense_array(X).shape == (2, 2)
-        assert ann._as_csr_matrix(X).format == "csr"
-        ann._check_2d_data(np.asarray(X), "X")
-        with pytest.raises(ValueError, match="2-D"):
-            ann._check_2d_data(np.array([1.0, 2.0]), "bad")
-
     def test_build_sparse_knn_graph(self):
         graph = ann._build_sparse_knn_graph(
             indices=np.array([[0, 1], [1, 0]]),

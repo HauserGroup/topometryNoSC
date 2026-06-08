@@ -5,6 +5,7 @@ Geodesic-distance computation and neighborhood-based correlation scores
 """
 
 import logging
+from typing import Any, cast
 
 import numpy as np
 from scipy.sparse import csr_matrix
@@ -132,7 +133,7 @@ def geodesic_distance(
         else:
             try:
                 with mp.Pool(n_jobs) as pool:
-                    G = np.array(pool.map(local_function, indices))
+                    G = np.array(pool.map(cast(Any, local_function), indices))
             except csgraph.NegativeCycleError as err:
                 raise ValueError(
                     "The shortest path computation could not be completed because a negative cycle is present."

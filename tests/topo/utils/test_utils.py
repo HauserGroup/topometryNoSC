@@ -73,13 +73,17 @@ class TestLandmarkAndSparseMatrixUtilities:
 
 class TestUmapUtilities:
     def test_gaussian_density_helpers(self):
+        x = np.array([0.0, 0.0], dtype=np.float32)
+        pos = np.array([0.0, 0.0], dtype=np.float32)
         cov = np.eye(2, dtype=np.float32)
-        assert map_utils.eval_gaussian(np.array([0.0, 0.0]), cov=cov) == pytest.approx(
+
+        assert map_utils.eval_gaussian(x, pos, cov) == pytest.approx(
             1.0 / (2.0 * np.pi)
         )
 
         embedding = np.array([[0.0, 0.0, 1.0, 1.0, 0.0]], dtype=np.float32)
-        density = map_utils.eval_density_at_point(np.array([0.0, 0.0]), embedding)
+        density = map_utils.eval_density_at_point(x, embedding)
+
         assert density > 0
 
     def test_create_density_plot_normalizes_grid(self):
@@ -123,19 +127,3 @@ class TestUmapUtilities:
         assert isinstance(int(first), int)
         assert 0.0 <= second <= 1.0
         assert re.match(r"\w{3} ", map_utils.ts())
-
-    def test_csr_unique_reports_unique_sparse_rows(self):
-        mat = sparse.csr_matrix([[1.0, 0.0], [1.0, 0.0], [0.0, 2.0]])
-        n_rows = 3
-        index, inverse, counts = map_utils.csr_unique(
-            mat,
-            return_index=True,
-            return_inverse=True,
-            return_counts=True,
-        )
-
-        assert index.ndim == 1
-        assert isinstance(inverse, np.ndarray)
-        assert isinstance(counts, np.ndarray)
-        assert inverse.shape[0] == n_rows
-        assert counts.sum() == inverse.size

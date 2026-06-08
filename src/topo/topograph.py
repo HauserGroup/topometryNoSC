@@ -704,28 +704,20 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     def _setup_environment(self) -> None:
         from topo._logging import configure
+        from topo.base.ann import _resolve_n_jobs
 
         configure(self.verbosity)
         self._parse_random_state()
-        self._n_jobs_effective = self.n_jobs
 
-        self._n_jobs_effective = int(self.n_jobs)
-
-        if self.n_jobs == -1:
-            try:
-                from joblib import cpu_count
-
-                self._n_jobs_effective = int(cpu_count())
-            except Exception:
-                logger.debug("Could not resolve cpu_count(); using n_jobs=1.")
-                self._n_jobs_effective = 1
+        self._n_jobs_effective = _resolve_n_jobs(int(self.n_jobs))
+        self._backend_resolved = self.backend
+        self.uom_enabled = bool(self.uom)
 
         if self.n_eigs_ is None:
             self.n_eigs_ = int(self.n_eigs)
 
         self.layout_verbose = self.verbosity >= 2
         self.bases_graph_verbose = self.verbosity >= 3
-        self.uom_enabled = bool(self.uom)
 
     def _check_fitted_pipeline_state(self) -> None:
         """Validate that core fitted pipeline state is internally consistent."""

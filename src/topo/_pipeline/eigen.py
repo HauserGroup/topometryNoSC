@@ -28,9 +28,10 @@ class EigenBuildMixin:
     id_max_components: int
     id_method: str
     id_ks: int | Sequence[int]
-    backend: str
+    _backend_resolved: str
     id_metric: str
     n_jobs: int
+    _n_jobs_effective: int
     id_quantile: float
     id_min_components: int
     id_headroom: float
@@ -75,41 +76,53 @@ class EigenBuildMixin:
     def _run_projections(self, *args, **kwargs) -> None:
         return cast(Any, super())._run_projections(*args, **kwargs)
 
-    def _automated_sizing(self, X: np.ndarray | csr_matrix):
-        shape = X.shape
-        if shape is None:
-            raise ValueError("X must have a 2-D shape.")
+    def _automated_sizing(self, X: np.ndarray | csr_matrix) -> None:
+        """Estimate scaffold size from intrinsic-dimensionality diagnostics."""
+        shape = getattr(X, "shape", None)
+        if shape is None or len(shape) != 2:
+            raise ValueError("X must be a 2-D array-like or sparse matrix.")
+
         n = int(shape[0])
+        if n < 3:
+            raise ValueError("Automated scaffold sizing requires at least 3 samples.")
+
         max_cap = min(int(self.id_max_components), max(2, n - 2))
+        min_components = min(int(self.id_min_components), max_cap)
 
         res = cast(Any, automated_scaffold_sizing)(
             X,
             method=self.id_method,
             ks=cast(Any, self.id_ks),
-            backend=getattr(self, "_backend_resolved", self.backend),
+            backend=self._backend_resolved,
             metric=self.id_metric,
-            n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
-            quantile=self.id_quantile,
-            min_components=int(self.id_min_components),
+            n_jobs=self._n_jobs_effective,
+            quantile=float(self.id_quantile),
+            min_components=min_components,
             max_components=int(max_cap),
             headroom=float(self.id_headroom),
             random_state=getattr(self, "_random_state_resolved", self.random_state),
             return_details=True,
         )
+
         n_eigs_automated, id_details = cast(tuple[int, dict[str, Any]], res)
+
         self._id_details[self.id_method] = id_details
-        k_sel = int(max(2, min(n_eigs_automated, max_cap)))
+
+        k_sel = int(max(2, min(int(n_eigs_automated), max_cap)))
         self._scaffold_components_ms = k_sel
         self._scaffold_components_dm = k_sel
         self.selected_scaffold_components_ = k_sel
+
         base_n_eigs = self.n_eigs if self.n_eigs_ is None else self.n_eigs_
-        self.n_eigs_ = int(max(base_n_eigs, k_sel))
+        self.n_eigs_ = int(max(int(base_n_eigs), k_sel))
+
         if "global_id" in id_details:
             self.global_dimensionality = id_details["global_id"]
         elif "quantile_value" in id_details:
             self.global_dimensionality = id_details["quantile_value"]
         else:
             self.global_dimensionality = None
+
         self.local_dimensionality = id_details.get("local_id", None)
 
     # ------------------------------------------------------------------
@@ -117,18 +130,24 @@ class EigenBuildMixin:
     # ------------------------------------------------------------------
 
     def _fit_global(self, X: Any, **kwargs: Any):
-        """Global (non-UoM) scaffold construction."""
+        """Global non-UoM scaffold construction."""
+        if self.base_kernel is None:
+            raise RuntimeError("Cannot build eigenbasis before base_kernel is fitted.")
+
         if self.verbosity >= 1:
-            logger.info("Computing eigenbasis → DM/msDM scaffolds...")
+            logger.info("Computing eigenbasis -> DM/msDM scaffolds...")
+
+        n_components = int(self.n_eigs_ if self.n_eigs_ is not None else self.n_eigs)
+        if n_components < 1:
+            raise ValueError("n_eigs_ must be >= 1 before eigendecomposition.")
 
         dm_key = f"DM with {self.base_kernel_version}"
         ms_key = f"msDM with {self.base_kernel_version}"
 
-        # Eigendecomposition (shared spectrum, different transforms)
         if dm_key not in self.EigenbasisDict:
             t0 = time.time()
             dm_eig = EigenDecomposition(
-                n_components=self.n_eigs_ if self.n_eigs_ is not None else self.n_eigs,
+                n_components=n_components,
                 method="DM",
                 eigensolver=self.eigensolver,
                 eigen_tol=self.eigen_tol,
@@ -140,8 +159,9 @@ class EigenBuildMixin:
             ).fit(self.base_kernel)
             self.EigenbasisDict[dm_key] = dm_eig
             self.runtimes[dm_key] = time.time() - t0
+
             if self.verbosity >= 1:
-                logger.info(f"  DM/msDM eigenpairs in {self.runtimes[dm_key]:.3f}s")
+                logger.info("  DM eigenpairs in %.3fs", self.runtimes[dm_key])
         else:
             dm_eig = self.EigenbasisDict[dm_key]
 
@@ -155,69 +175,100 @@ class EigenBuildMixin:
         self.current_eigenbasis = ms_key
         self.eigenbasis = self.EigenbasisDict[ms_key]
 
-        # Scaffold-space kNN + refined kernels
         self._build_scaffold_graphs(X, dm_eig, ms_eig, dm_key, ms_key, **kwargs)
+
+        if self._kernel_msZ is None:
+            raise RuntimeError("msDM scaffold kernel was not built.")
 
         self.graph_kernel = self._kernel_msZ
         self.current_graphkernel = f"{self.graph_kernel_version} from {ms_key}"
 
-        # Spectral layout + projections
-        if self._kernel_msZ is None:
-            raise RuntimeError("msDM scaffold kernel was not built.")
         _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
         self._run_projections()
+
         return self
 
     def _build_scaffold_graphs(
-        self, X: Any, dm_eig: Any, ms_eig: Any, dm_key: str, ms_key: str, **kwargs: Any
-    ):
-        """Build kNN and refined kernels in both scaffold spaces."""
+        self,
+        X: Any,
+        dm_eig: Any,
+        ms_eig: Any,
+        dm_key: str,
+        ms_key: str,
+        **kwargs: Any,
+    ) -> None:
+        """Build kNN graphs and refined kernels in both scaffold spaces."""
+        del X  # training scaffold coordinates are read from fitted eigenbases
+        del kwargs  # avoid leaking unrelated fit kwargs into kNN
+
         ms_components = self._scaffold_components_ms
         if ms_components is None:
             ms_components = int(
                 self.n_eigs_ if self.n_eigs_ is not None else self.n_eigs
             )
+
         dm_components = self._scaffold_components_dm
         if dm_components is None:
             dm_components = int(
                 self.n_eigs_ if self.n_eigs_ is not None else self.n_eigs
             )
 
-        # msZ
+        ms_coords = np.asarray(ms_eig.transform(X=None))
+        if ms_coords.ndim != 2:
+            raise RuntimeError("msDM transform did not return a 2-D scaffold matrix.")
+        ms_components = min(int(ms_components), int(ms_coords.shape[1]))
+        if ms_components < 1:
+            raise RuntimeError("msDM scaffold has no usable components.")
+        ms_target = ms_coords[:, :ms_components]
+
+        dm_coords = np.asarray(dm_eig.transform(X=None))
+        if dm_coords.ndim != 2:
+            raise RuntimeError("DM transform did not return a 2-D scaffold matrix.")
+        dm_components = min(int(dm_components), int(dm_coords.shape[1]))
+        if dm_components < 1:
+            raise RuntimeError("DM scaffold has no usable components.")
+        dm_target = dm_coords[:, :dm_components]
+
+        if ms_target.shape[0] != dm_target.shape[0]:
+            raise RuntimeError("DM and msDM scaffolds have different row counts.")
+
+        n_samples = int(ms_target.shape[0])
+        if int(self.graph_knn) >= n_samples:
+            raise ValueError(
+                f"graph_knn={self.graph_knn} must be smaller than scaffold "
+                f"sample count={n_samples}."
+            )
+
         if self.verbosity >= 1:
             logger.info("Computing kNN (msZ space)...")
+
         t0 = time.time()
-        ms_target = ms_eig.transform(X)[:, :ms_components]
         self._knn_msZ = kNN(
             ms_target,
             n_neighbors=self.graph_knn,
             metric=self.graph_metric,
-            n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
-            backend=getattr(self, "_backend_resolved", self.backend),
+            n_jobs=self._n_jobs_effective,
+            backend=self._backend_resolved,
             return_instance=False,
             verbose=self.bases_graph_verbose,
-            **kwargs,
         )
         self.runtimes["kNN_msZ"] = time.time() - t0
 
-        # Z (DM)
         if self.verbosity >= 1:
             logger.info("Computing kNN (Z/DM space)...")
+
         t0 = time.time()
-        dm_target = dm_eig.transform(X)[:, :dm_components]
         self._knn_Z = kNN(
             dm_target,
             n_neighbors=self.graph_knn,
             metric=self.graph_metric,
-            n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
-            backend=getattr(self, "_backend_resolved", self.backend),
+            n_jobs=self._n_jobs_effective,
+            backend=self._backend_resolved,
             return_instance=False,
             verbose=self.bases_graph_verbose,
-            **kwargs,
         )
         self.runtimes["kNN_Z"] = time.time() - t0
 
-        # Refined kernels
         t0 = time.time()
         self._kernel_msZ, self.GraphKernelDict = self._build_kernel(
             self._knn_msZ,

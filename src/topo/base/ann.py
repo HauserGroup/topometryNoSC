@@ -41,13 +41,14 @@ from topo.base.graph_matrix import as_csr_matrix
 logger = logging.getLogger(__name__)
 
 
-def _resolve_n_jobs(n_jobs: int | str | None) -> int:
-    """Resolve sklearn/joblib-style n_jobs."""
-    if n_jobs is None:
-        return 1
+def _resolve_n_jobs(n_jobs: int) -> int:
+    """Resolve joblib-style n_jobs to a positive worker count."""
+    n_jobs = int(n_jobs)
     if n_jobs == -1:
-        return cpu_count()
-    return int(n_jobs)
+        return int(cpu_count())
+    if n_jobs < 1:
+        raise ValueError("n_jobs must be -1 or a positive integer.")
+    return n_jobs
 
 
 def _validate_n_neighbors(n_neighbors: int | float | str) -> int:
@@ -242,7 +243,7 @@ def _sklearn_knn_graph(
     *,
     n_neighbors: int,
     metric: str,
-    n_jobs: int | None,
+    n_jobs: int = -1,
     include_self: bool = False,
 ) -> csr_matrix:
     """Build kNN distance graph using sklearn kneighbors_graph."""
@@ -271,7 +272,7 @@ def kNN(
     Y: np.ndarray | csr_matrix | None = None,
     n_neighbors: int | float | str = 5,
     metric: str = "euclidean",
-    n_jobs: int | str | None = -1,
+    n_jobs: int = -1,
     backend: str = "sklearn",
     low_memory: bool = True,
     M: int = 60,
@@ -292,7 +293,7 @@ def kNN(
     Y: np.ndarray | csr_matrix | None = None,
     n_neighbors: int | float | str = 5,
     metric: str = "euclidean",
-    n_jobs: int | str | None = -1,
+    n_jobs: int = -1,
     backend: str = "sklearn",
     low_memory: bool = True,
     M: int = 60,
@@ -312,7 +313,7 @@ def kNN(
     Y: np.ndarray | csr_matrix | None = None,
     n_neighbors: int | float | str = 5,
     metric: str = "euclidean",
-    n_jobs: int | str | None = -1,
+    n_jobs: int = -1,
     backend: str = "sklearn",
     low_memory: bool = True,
     M: int = 60,
@@ -331,7 +332,7 @@ def kNN(
     Y: np.ndarray | csr_matrix | None = None,
     n_neighbors: int | float | str = 5,
     metric: str = "euclidean",
-    n_jobs: int | str | None = -1,
+    n_jobs: int = -1,
     backend: str = "sklearn",
     low_memory: bool = True,
     M: int = 60,

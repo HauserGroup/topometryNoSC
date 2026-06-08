@@ -11,7 +11,7 @@ def spectral_embedding_from_affinity(
     n_components: int = 2,
     random_state=None,
     eigen_solver: Literal["arpack", "lobpcg", "amg"] | None = None,
-    n_jobs: int | None = None,
+    n_jobs: int = -1,
 ):
     """Compute Laplacian Eigenmaps from a precomputed affinity matrix.
 

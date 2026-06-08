@@ -57,27 +57,24 @@ layout troubleshooting, see [`docs/faq.md`](docs/faq.md).
 > `pip uninstall topometry` first.
 
 topometry-nosc is a standard, pip-installable package. The **core** install
-depends only on numpy, scipy, scikit-learn, numba and joblib:
+depends on numpy, scipy, scikit-learn, numba, joblib, matplotlib, pandas, and jupyterlab:
 
 ```bash
 pip install topometry-nosc            # core
-pip install "topometry-nosc[all]"     # core + plotting, dataframes, ANN backends and extra layouts
+pip install "topometry-nosc[all]"     # core + ANN backends and extra layouts
 ```
 
 Optional features are grouped into extras — install only what you need:
 
 | Extra        | Adds                                                        |
 |--------------|------------------------------------------------------------|
-| `plot`       | matplotlib (plotting)                                       |
-| `pandas`     | pandas (DataFrame I/O)                                      |
 | `ann`        | hnswlib (fast approximate nearest neighbors)               |
 | `amg`        | pyamg (algebraic-multigrid `eigensolver='amg'`)            |
 | `layouts`    | pacmap, pymde, trimap (extra projections)                  |
-| `notebooks`  | jupyterlab / ipywidgets                                    |
 | `all`        | everything above                                           |
 
 Missing an optional dependency raises a clear message telling you which extra to
-install (e.g. `pip install topometry-nosc[plot]`).
+install (e.g. `pip install topometry-nosc[layouts]`).
 
 ### Development install
 

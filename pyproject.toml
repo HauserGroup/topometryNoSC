@@ -88,7 +88,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.15.11",
 ]
-nmslib = ["nmslib>=2.1.2"]
+nmslib = []
 docs = [
     "mkdocs-material[imaging]>=9",
     "mkdocstrings[python]>=0.25",

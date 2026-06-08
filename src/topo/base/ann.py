@@ -10,13 +10,11 @@
 Backend hierarchy and strategy:
 - sklearn.neighbors: Exact kNN (reference behavior, correctness standard)
 - HNSWlib: Fast approximate ANN for large-scale problems (default advanced backend)
-- NMSlib: Alternative approximate ANN backend (specialized metrics)
 - Fallback: All backends gracefully degrade to sklearn if initialization fails
 
-This module provides small sklearn-style wrappers around NMSlib and HNSWlib,
+This module provides small sklearn-style wrappers around HNSWlib,
 plus a convenience `kNN` function that can fall back to sklearn. Metric name
-translation is centralized via _nmslib_dense_space, _nmslib_sparse_space, and
-_hnswlib_space.
+translation is centralized via _hnswlib_space.
 
 Important conventions
 ---------------------
@@ -241,56 +239,6 @@ def _build_sparse_knn_graph(
     return graph
 
 
-def _nmslib_sparse_space(metric: str) -> str:
-    spaces = {
-        "sqeuclidean": "l2_sparse",
-        "euclidean": "l2_sparse",
-        "cosine": "cosinesimil_sparse_fast",
-        "lp": "lp_sparse",
-        "l1": "l1_sparse",
-        "l1_sparse": "l1_sparse",
-        "linf": "linf_sparse",
-        "linf_sparse": "linf_sparse",
-        "angular": "angulardist_sparse_fast",
-        "angular_sparse": "angulardist_sparse_fast",
-        "negdotprod": "negdotprod_sparse_fast",
-        "negdotprod_sparse": "negdotprod_sparse_fast",
-        "jaccard": "jaccard_sparse",
-        "jaccard_sparse": "jaccard_sparse",
-        "bit_jaccard": "bit_jaccard",
-        "bit_hamming": "bit_hamming",
-        "levenshtein": "leven",
-        "normleven": "normleven",
-    }
-    try:
-        return spaces[metric]
-    except KeyError as exc:
-        raise ValueError(f"Unsupported NMSlib sparse metric: {metric!r}") from exc
-
-
-def _nmslib_dense_space(metric: str) -> str:
-    spaces = {
-        "sqeuclidean": "l2",
-        "euclidean": "l2",
-        "cosine": "cosinesimil",
-        "lp": "lp",
-        "l1": "l1",
-        "linf": "linf",
-        "angular": "angulardist",
-        "negdotprod": "negdotprod",
-        "inner_product": "negdotprod",
-        "levenshtein": "leven",
-        "jaccard_sparse": "jaccard_sparse",
-        "bit_jaccard": "bit_jaccard",
-        "bit_hamming": "bit_hamming",
-        "jansen-shan": "jsmetrfastapprox",
-    }
-    try:
-        return spaces[metric]
-    except KeyError as exc:
-        raise ValueError(f"Unsupported NMSlib dense metric: {metric!r}") from exc
-
-
 def _hnswlib_space(metric: str) -> str:
     spaces = {
         "sqeuclidean": "l2",
@@ -430,7 +378,7 @@ def kNN(
         Distance metric.
     n_jobs : int, default=-1
         Number of threads. ``-1`` uses all available CPUs.
-    backend : {'nmslib', 'hnswlib', 'sklearn'}, default='hnswlib'
+    backend : {'hnswlib', 'sklearn'}, default='hnswlib'
         Neighbor-search backend.
     return_instance : bool, default=False
         If True, return ``(estimator, graph)``.
@@ -465,7 +413,7 @@ def kNN(
                 "(n_query_samples, n_fit_samples)."
             )
 
-        if backend in {"nmslib", "hnswlib"}:
+        if backend == "hnswlib" and verbose:
             warn(
                 "Only the sklearn backend supports Y. Falling back to sklearn.",
                 stacklevel=2,
@@ -476,22 +424,7 @@ def kNN(
 
     nbrs: BaseEstimator | None
 
-    if backend == "nmslib":
-        X_fit = _as_csr_matrix(X)
-        nbrs = NMSlibTransformer(
-            n_neighbors=n_neighbors,
-            metric=metric,
-            p=p,
-            method="hnsw",
-            n_jobs=n_jobs,
-            M=M,
-            efC=efC,
-            efS=efS,
-            verbose=verbose,
-        ).fit(X_fit)
-        knn = nbrs.transform(X_fit)
-
-    elif backend == "hnswlib":
+    if backend == "hnswlib":
         X_fit = _as_dense_array(X)
         nbrs = HNSWlibTransformer(
             n_neighbors=n_neighbors,
@@ -559,376 +492,10 @@ def kNN(
     return knn_csr
 
 
-class NMSlibTransformer(BaseEstimator, TransformerMixin):
-    """Sklearn-style wrapper around NMSlib.
-
-    Parameters
-    ----------
-    n_neighbors : int, default=15
-        Number of neighbors to return.
-
-    metric : str, default='cosine'
-        NMSlib metric.
-
-    method : str, default='hnsw'
-        NMSlib index method.
-
-    n_jobs : int, default=-1
-        Number of threads.
-
-    p : float, optional
-        Minkowski/fractional norm parameter for `metric='lp'`.
-
-    M : int, default=60
-        HNSW graph connectivity parameter.
-
-    efC : int, default=200
-        Construction-time search parameter.
-
-    efS : int, default=200
-        Query-time search parameter.
-
-    dense : bool, default=False
-        Force dense-vector NMSlib mode.
-
-    verbose : bool, default=False
-        Print timing/backend messages.
-    """
-
-    def __init__(
-        self,
-        n_neighbors=15,
-        metric="cosine",
-        method="hnsw",
-        n_jobs=-1,
-        p=None,
-        M=60,
-        efC=200,
-        efS=200,
-        dense=False,
-        verbose=False,
-    ):
-        self.n_neighbors = n_neighbors
-        self.method = method
-        self.metric = metric
-        self.n_jobs = n_jobs
-        self.p = p
-        self.M = M
-        self.efC = efC
-        self.efS = efS
-        self.space = metric
-        self.dense = dense
-        self.verbose = verbose
-
-        self.nmslib_ = None
-        self.n_samples_fit_ = None
-        self.n_features_in_ = None
-
-    def fit(self, data):
-        """Fit the NMSlib index."""
-        try:
-            import nmslib  # type: ignore[reportMissingImports]
-
-        except ImportError as exc:
-            raise ImportError(
-                "NMSlib is required for NMSlibTransformer. "
-                "Install it with `pip install nmslib`."
-            ) from exc
-
-        _check_2d_data(data)
-        self.n_neighbors = _validate_n_neighbors(self.n_neighbors)
-        self.n_jobs = _resolve_n_jobs(self.n_jobs)
-
-        self.n_samples_fit_, self.n_features_in_ = data.shape
-
-        start = time.time()
-
-        if self.dense:
-            data_fit = _as_dense_array(data)
-            self.space = _nmslib_dense_space(self.metric)
-            data_type = nmslib.DataType.DENSE_VECTOR
-        else:
-            if self.metric in {"levenshtein", "normleven"}:
-                data_fit = _as_dense_array(data)
-                self.space = _nmslib_sparse_space(self.metric)
-                data_type = nmslib.DataType.OBJECT_AS_STRING
-            elif issparse(data) or not isinstance(data, np.ndarray):
-                data_fit = _as_csr_matrix(data)
-                self.space = _nmslib_sparse_space(self.metric)
-                data_type = nmslib.DataType.SPARSE_VECTOR
-            else:
-                data_fit = data
-                self.space = _nmslib_dense_space(self.metric)
-                data_type = nmslib.DataType.DENSE_VECTOR
-
-        if self.metric == "lp" and self.p is None:
-            raise ValueError("metric='lp' requires p to be specified.")
-
-        if self.metric == "lp" and self.p is not None and self.p < 1:
-            warn(
-                "Fractional Lp norms may be slower to compute. "
-                "Fractions such as 0.5 or 0.25 are typically faster.",
-                stacklevel=2,
-            )
-
-        init_kwargs = {
-            "method": self.method,
-            "space": self.space,
-            "data_type": data_type,
-        }
-        if self.metric == "lp":
-            init_kwargs["space_params"] = {"p": self.p}
-
-        self.nmslib_ = nmslib.init(**init_kwargs)
-        self.nmslib_.addDataPointBatch(data_fit)
-
-        index_time_params = {
-            "M": self.M,
-            "indexThreadQty": self.n_jobs,
-            "efConstruction": self.efC,
-            "post": 2,
-        }
-        self.nmslib_.createIndex(index_time_params)
-
-        if self.verbose:
-            elapsed = time.time() - start
-            logger.info(
-                "NMSlib index-time parameters M=%s n_threads=%s efConstruction=%s post=2",
-                self.M,
-                self.n_jobs,
-                self.efC,
-            )
-            logger.info("Indexing time = %f (sec)", elapsed)
-
-        return self
-
-    def _prepare_query_data(self, data):
-        """Prepare query data using the same dense/sparse convention as fit."""
-        _check_2d_data(data)
-        if data.shape[1] != self.n_features_in_:
-            raise ValueError(
-                f"Query data has {data.shape[1]} features, but the index was "
-                f"fit with {self.n_features_in_} features."
-            )
-
-        if self.dense:
-            return _as_dense_array(data)
-
-        if self.metric in {"levenshtein", "normleven"}:
-            return _as_dense_array(data)
-
-        if "sparse" in self.space:
-            return _as_csr_matrix(data)
-
-        return _as_dense_array(data)
-
-    def transform(self, data):
-        """Return a CSR kNN distance graph for query data."""
-        if self.nmslib_ is None or self.n_samples_fit_ is None:
-            raise ValueError("This NMSlibTransformer instance is not fitted yet.")
-
-        start = time.time()
-        query_data = self._prepare_query_data(data)
-        n_query_samples, _ = _check_2d_data(query_data, "query_data")
-        query_qty = n_query_samples
-        query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
-
-        query_time_params = {"efSearch": self.efS}
-        if self.verbose:
-            logger.info("Query-time parameter efSearch: %s", self.efS)
-        self.nmslib_.setQueryTimeParams(query_time_params)
-
-        results = self.nmslib_.knnQueryBatch(
-            query_data,
-            k=query_k,
-            num_threads=self.n_jobs,
-        )
-
-        indices, distances = zip(*results)
-        indices = np.vstack(indices)
-        distances = np.vstack(distances)
-
-        if self.metric == "sqeuclidean":
-            distances = distances**2
-
-        kneighbors_graph = _build_sparse_knn_graph(
-            indices=indices,
-            distances=distances,
-            n_query_samples=n_query_samples,
-            n_fit_samples=self.n_samples_fit_,
-            n_neighbors=self.n_neighbors,
-            is_self_query=(n_query_samples == self.n_samples_fit_),
-        )
-
-        if self.verbose:
-            elapsed = time.time() - start
-            logger.info(
-                "Search time =%f (sec), per query=%f (sec), "
-                "per query adjusted for thread number=%f (sec)",
-                elapsed,
-                elapsed / query_qty,
-                self.n_jobs * elapsed / query_qty,
-            )
-
-        return kneighbors_graph
-
-    @overload
-    def ind_dist_grad(  # pyright: ignore[reportOverlappingOverload]
-        self,
-        data,
-        return_grad: Literal[False] = ...,
-        return_graph: Literal[False] = ...,
-    ) -> tuple[np.ndarray, np.ndarray]: ...
-
-    @overload
-    def ind_dist_grad(
-        self, data, return_grad: Literal[False] = ..., return_graph: Literal[True] = ...
-    ) -> tuple[np.ndarray, np.ndarray, csr_matrix]: ...
-
-    def ind_dist_grad(self, data, return_grad=True, return_graph=True):
-        """Return neighbor indices/distances and optionally the sparse graph.
-
-        Gradients are intentionally not implemented. The previous implementation
-        used graph row/column indices as if they were feature vectors, which is
-        mathematically invalid.
-        """
-        if return_grad:
-            raise NotImplementedError(
-                "return_grad=True is not supported. "
-                "Distance gradients require access to feature-space vectors and "
-                "metric-specific formulas."
-            )
-
-        if self.nmslib_ is None or self.n_samples_fit_ is None:
-            raise ValueError("This NMSlibTransformer instance is not fitted yet.")
-
-        start = time.time()
-        query_data = self._prepare_query_data(data)
-        query_shape = query_data.shape
-        if query_shape is None:
-            raise ValueError("Query data must have a 2-D shape.")
-        n_query_samples = int(query_shape[0])
-        query_qty = n_query_samples
-        query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
-
-        query_time_params = {"efSearch": self.efS}
-        if self.verbose:
-            logger.info("Query-time parameter efSearch: %s", self.efS)
-        self.nmslib_.setQueryTimeParams(query_time_params)
-
-        results = self.nmslib_.knnQueryBatch(
-            query_data,
-            k=query_k,
-            num_threads=self.n_jobs,
-        )
-
-        indices, distances = zip(*results)
-        indices = np.vstack(indices)
-        distances = np.vstack(distances)
-
-        if self.metric == "sqeuclidean":
-            distances = distances**2
-        indices, distances = _drop_self_and_truncate_neighbors(
-            indices,
-            distances,
-            n_neighbors=self.n_neighbors,
-            n_query_samples=n_query_samples,
-            n_fit_samples=self.n_samples_fit_,
-            is_self_query=(n_query_samples == self.n_samples_fit_),
-        )
-
-        kneighbors_graph = None
-        if return_graph:
-            kneighbors_graph = _build_sparse_knn_graph(
-                indices=indices,
-                distances=distances,
-                n_query_samples=n_query_samples,
-                n_fit_samples=self.n_samples_fit_,
-            )
-
-        if self.verbose:
-            elapsed = time.time() - start
-            logger.info(
-                f"kNN time total={elapsed:f} (sec), per query={elapsed / query_qty:f} (sec), "
-                f"per query adjusted for thread number={self.n_jobs * elapsed / query_qty:f} (sec)"
-            )
-
-        if return_graph:
-            return indices, distances, kneighbors_graph
-        return indices, distances
-
-    def test_efficiency(self, data, data_use=0.1):
-        """Estimate ANN recall against sklearn brute-force nearest neighbors."""
-        if self.nmslib_ is None or self.n_samples_fit_ is None:
-            raise ValueError("This NMSlibTransformer instance is not fitted yet.")
-
-        _check_2d_data(data)
-        query_data = self._prepare_query_data(data)
-
-        _, test = train_test_split(query_data, test_size=data_use)
-        test = np.asarray(test)
-        query_qty = test.shape[0]
-        query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
-
-        query_time_params = {"efSearch": self.efS}
-        if self.verbose:
-            logger.info("Setting query-time parameters %s", query_time_params)
-        self.nmslib_.setQueryTimeParams(query_time_params)
-
-        start = time.time()
-        ann_results = self.nmslib_.knnQueryBatch(
-            test,
-            k=query_k,
-            num_threads=self.n_jobs,
-        )
-        if self.verbose:
-            elapsed = time.time() - start
-            logger.info(
-                f"ANN kNN time total={elapsed:f} (sec), per query={elapsed / query_qty:f} (sec), "
-                f"per query adjusted for thread number={self.n_jobs * elapsed / query_qty:f} (sec)"
-            )
-
-        exact_metric = "euclidean" if self.metric == "sqeuclidean" else self.metric
-        start = time.time()
-        nbrs = NearestNeighbors(
-            n_neighbors=query_k,
-            metric=exact_metric,
-            algorithm="brute",
-        ).fit(data)
-        true_indices = nbrs.kneighbors(test, return_distance=False)
-        if self.verbose:
-            elapsed = time.time() - start
-            logger.info(
-                f"Brute-force kNN time total={elapsed:f} (sec), per query={elapsed / query_qty:f} (sec)"
-            )
-
-        recall = 0.0
-        for i in range(query_qty):
-            correct_set = set(true_indices[i])
-            ret_set = set(ann_results[i][0])
-            recall += len(correct_set.intersection(ret_set)) / len(correct_set)
-        recall /= query_qty
-
-        if self.verbose:
-            logger.info("kNN recall %f", recall)
-
-        return recall
-
-    def update_search(self, n_neighbors):
-        """Update number of neighbors for kNN distance computation."""
-        self.n_neighbors = _validate_n_neighbors(n_neighbors)
-        return self
-
-    def fit_transform(self, X, y=None, **fit_params):  # type: ignore
-        """Fit to X, then return the kNN graph for X."""
-        return self.fit(X).transform(X)
-
-
 def grid_search(
     X,
     n_neighbors=15,
     metric="euclidean",
-    nmslib_params=None,
     hnswlib_params=None,
     n_jobs=-1,
     verbose=False,
@@ -943,8 +510,6 @@ def grid_search(
         Number of non-self neighbors to retrieve.
     metric : str, default='euclidean'
         Distance metric used for neighbor search.
-    nmslib_params : dict, optional
-        Parameter grid for NMSlibTransformer.
     hnswlib_params : dict, optional
         Parameter grid for HNSWlibTransformer.
     n_jobs : int, default=-1
@@ -993,32 +558,7 @@ def grid_search(
         is_self_query=True,
     )
 
-    results = {"nmslib": [], "hnswlib": []}
-
-    for params in ParameterGrid(nmslib_params) if nmslib_params else [{}]:
-        model = NMSlibTransformer(
-            n_neighbors=n_neighbors,
-            metric=metric,
-            n_jobs=n_jobs,
-            **params,
-        )
-
-        start = time.time()
-        model.fit(X)
-        ind, _ = model.ind_dist_grad(
-            X,
-            return_grad=False,
-            return_graph=False,
-        )
-        elapsed = time.time() - start
-
-        recall = np.mean(
-            [
-                np.intersect1d(true_ind[i], ind[i]).size / n_neighbors
-                for i in range(n_samples)
-            ]
-        )
-        results["nmslib"].append({"params": params, "recall": recall, "time": elapsed})
+    results = {"hnswlib": []}
 
     for params in ParameterGrid(hnswlib_params) if hnswlib_params else [{}]:
         model = HNSWlibTransformer(
@@ -1068,7 +608,7 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         Number of neighbors to return.
 
     metric : {'sqeuclidean', 'euclidean', 'cosine', 'inner_product'}, default='cosine'
-        HNSWlib metric. For additional metrics, use NMSlibTransformer.
+        HNSWlib metric.
 
     n_jobs : int, default=-1
         Number of threads.

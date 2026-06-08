@@ -214,7 +214,7 @@ def test_local_intrinsic_dim(swiss_roll_data):
 
 def test_kernel_helper_validation_and_sanitizing():
     dense = np.array([[1.0, np.inf], [-1.0, 2.0]])
-    csr = kernels._as_csr_matrix(dense)
+    csr = kernels._as_ann_csr_matrix(dense)
     arr = kernels._as_dense_array(csr)
 
     assert sparse.issparse(csr)

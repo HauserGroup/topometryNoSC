@@ -13,7 +13,7 @@ Laplacian-eigenmaps (``LE``) layout that the rest of the package builds on.
 """
 
 import logging
-from typing import Any, cast
+from typing import Any, Literal, cast, overload
 
 import numpy as np
 from scipy import sparse
@@ -459,9 +459,31 @@ def LE(
         return evecs
 
 
+@overload
 def diffusion_operator(
-    W, alpha=1.0, symmetric=False, semi_aniso=False, return_D_inv_sqrt=False
-) -> csr_matrix | tuple[csr_matrix, np.ndarray]:
+    W,
+    alpha=1.0,
+    symmetric=False,
+    semi_aniso=False,
+    *,
+    return_D_inv_sqrt: Literal[False] = False,
+) -> csr_matrix | np.ndarray: ...
+
+
+@overload
+def diffusion_operator(
+    W,
+    alpha=1.0,
+    symmetric=False,
+    semi_aniso=False,
+    *,
+    return_D_inv_sqrt: Literal[True],
+) -> tuple[csr_matrix | np.ndarray, np.ndarray]: ...
+
+
+def diffusion_operator(
+    W, alpha=1.0, symmetric=False, semi_aniso=False, *, return_D_inv_sqrt=False
+) -> csr_matrix | np.ndarray | tuple[csr_matrix | np.ndarray, np.ndarray]:
     """Compute the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
 
     Parameters
@@ -499,6 +521,7 @@ def diffusion_operator(
 
     """
     # Compute diffusion operator
+    is_sparse_input = sparse.issparse(W)
     W = csr_matrix(W)
     D_left: Any = None
     if sparse.issparse(W):
@@ -525,13 +548,17 @@ def diffusion_operator(
                 )
         else:
             P = _dense_diffusion(W, alpha, semi_aniso)
+    P_out = csr_matrix(P)
+    if not is_sparse_input:
+        P_out = P_out.toarray()
+
     if symmetric:
         if return_D_inv_sqrt:
-            return csr_matrix(P), D_left
+            return P_out, D_left
         else:
-            return csr_matrix(P)
+            return P_out
     else:
-        return csr_matrix(P)
+        return P_out
 
 
 def spectral_clustering(

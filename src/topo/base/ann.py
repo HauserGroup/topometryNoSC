@@ -176,8 +176,32 @@ def _build_sparse_knn_graph(
     n_fit_samples: int,
     *,
     n_neighbors: int | None = None,
+    is_self_query: bool = False,
 ) -> csr_matrix:
-    """Build a CSR neighbor-distance graph from dense index/distance arrays."""
+    """Build a CSR neighbor-distance graph from dense index/distance arrays.
+
+    Parameters
+    ----------
+    indices : ndarray of shape (n_query_samples, k)
+        Neighbor column indices.
+    distances : ndarray of shape (n_query_samples, k)
+        Distances for the corresponding indices.
+    n_query_samples : int
+        Number of query samples / output rows.
+    n_fit_samples : int
+        Number of fitted/reference samples / output columns.
+    n_neighbors : int, optional
+        If provided, truncate each row to exactly this many neighbors after
+        optional self-removal.
+    is_self_query : bool, default=False
+        Whether the query samples are the fitted samples and zero-distance
+        diagonal hits should be removed.
+
+    Returns
+    -------
+    graph : scipy.sparse.csr_matrix
+        Sparse distance graph of shape ``(n_query_samples, n_fit_samples)``.
+    """
     indices = np.asarray(indices)
     distances = np.asarray(distances)
 
@@ -187,6 +211,15 @@ def _build_sparse_knn_graph(
         raise ValueError("indices and distances must have the same shape.")
     if indices.shape[0] != n_query_samples:
         raise ValueError("indices row count does not match n_query_samples.")
+    if n_query_samples < 1:
+        raise ValueError("n_query_samples must be >= 1.")
+    if n_fit_samples < 1:
+        raise ValueError("n_fit_samples must be >= 1.")
+    if indices.size and (indices.min() < 0 or indices.max() >= n_fit_samples):
+        raise ValueError("indices contain values outside [0, n_fit_samples).")
+    if not np.issubdtype(distances.dtype, np.number):
+        raise ValueError("distances must be numeric.")
+
     if n_neighbors is not None:
         indices, distances = _drop_self_and_truncate_neighbors(
             indices,
@@ -194,17 +227,18 @@ def _build_sparse_knn_graph(
             n_neighbors=n_neighbors,
             n_query_samples=n_query_samples,
             n_fit_samples=n_fit_samples,
-            is_self_query=(n_query_samples == n_fit_samples),
+            is_self_query=is_self_query,
         )
 
-    k = indices.shape[1]
-    # Create row pointers for CSR format directly from the regular k-neighbor grid
+    k = int(indices.shape[1])
     indptr = np.arange(0, n_query_samples * k + 1, k, dtype=np.int64)
 
-    return csr_matrix(
+    graph = csr_matrix(
         (distances.ravel(), indices.ravel(), indptr),
         shape=(n_query_samples, n_fit_samples),
     )
+    graph.eliminate_zeros()
+    return graph
 
 
 def _nmslib_sparse_space(metric: str) -> str:
@@ -384,35 +418,29 @@ def kNN(
     Parameters
     ----------
     X : array-like or scipy.sparse matrix, shape (n_samples, n_features)
-        Reference data used to fit the neighbor index.
-
+        Reference data used to fit the neighbor index. If ``metric='precomputed'``,
+        ``X`` must be a square distance matrix.
     Y : array-like or scipy.sparse matrix, optional
         Query data. If provided, the output graph has shape
-        `(Y.shape[0], X.shape[0])`. NMSlib and HNSWlib are not used for `Y`;
+        ``(Y.shape[0], X.shape[0])``. ANN backends are not used for ``Y``;
         the function falls back to sklearn.
-
     n_neighbors : int, default=5
         Number of neighbors to return.
-
     metric : str, default='euclidean'
         Distance metric.
-
     n_jobs : int, default=-1
-        Number of threads. `-1` uses all available CPUs.
-
+        Number of threads. ``-1`` uses all available CPUs.
     backend : {'nmslib', 'hnswlib', 'sklearn'}, default='hnswlib'
         Neighbor-search backend.
-
     return_instance : bool, default=False
-        If True, return `(estimator, graph)`.
-
+        If True, return ``(estimator, graph)``.
     verbose : bool, default=False
-        Print timing/backend messages.
+        Emit backend/timing diagnostics through logging.
 
     Returns
     -------
-    scipy.sparse.csr_matrix
-        kNN distance graph.
+    scipy.sparse.csr_matrix or tuple
+        kNN distance graph, or ``(estimator, graph)`` if ``return_instance=True``.
     """
     n_fit_samples, n_features = _check_2d_data(X, "X")
 
@@ -430,13 +458,23 @@ def kNN(
         )
 
     if Y is not None:
-        _check_2d_data(Y, "Y")
+        n_query_samples, n_query_features = _check_2d_data(Y, "Y")
+        if metric == "precomputed" and n_query_features != n_fit_samples:
+            raise ValueError(
+                "When metric='precomputed', Y must have shape "
+                "(n_query_samples, n_fit_samples)."
+            )
+
         if backend in {"nmslib", "hnswlib"}:
             warn(
                 "Only the sklearn backend supports Y. Falling back to sklearn.",
                 stacklevel=2,
             )
             backend = "sklearn"
+    else:
+        n_query_samples = n_fit_samples  # type: ignore # noqa: F841
+
+    nbrs: BaseEstimator | None
 
     if backend == "nmslib":
         X_fit = _as_csr_matrix(X)
@@ -470,8 +508,7 @@ def kNN(
         if verbose and backend != "sklearn":
             logger.info("Falling back to sklearn nearest-neighbors.")
         backend = "sklearn"
-        # Drop ANN-only kwargs (random_state, M, efC, efS, ...) that the
-        # sklearn estimator does not accept.
+
         _valid = set(NearestNeighbors().get_params())
         sk_kwargs = {k: v for k, v in kwargs.items() if k in _valid}
 
@@ -491,26 +528,26 @@ def kNN(
                 n_jobs=n_jobs,
                 **sk_kwargs,
             ).fit(X)
+
             if Y is None:
                 if metric == "precomputed":
                     distances, indices = nbrs.kneighbors(None, return_distance=True)
-
                 else:
                     distances, indices = nbrs.kneighbors(X, return_distance=True)
+
                 knn = _build_sparse_knn_graph(
                     indices=indices,
                     distances=distances,
                     n_query_samples=n_fit_samples,
                     n_fit_samples=n_fit_samples,
                     n_neighbors=n_neighbors,
+                    is_self_query=True,
                 )
             else:
                 knn = nbrs.kneighbors_graph(Y, mode="distance")
 
-    # knn_csr = knn.tocsr() if issparse(knn) else csr_matrix(knn)
-    knn_csr = as_csr_matrix(
-        knn, "knn graph from kNN function"
-    )  # Ensure output is CSR format
+    knn_csr = as_csr_matrix(knn, "knn graph from kNN function")
+
     if return_instance:
         if nbrs is None:
             raise ValueError(
@@ -518,6 +555,7 @@ def kNN(
                 "Pass return_instance=False or use a different backend."
             )
         return nbrs, knn_csr
+
     return knn_csr
 
 
@@ -691,10 +729,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
 
         start = time.time()
         query_data = self._prepare_query_data(data)
-        query_shape = query_data.shape
-        if query_shape is None:
-            raise ValueError("Query data must have a 2-D shape.")
-        n_query_samples = int(query_shape[0])
+        n_query_samples, _ = _check_2d_data(query_data, "query_data")
         query_qty = n_query_samples
         query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
 
@@ -722,16 +757,33 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
             n_query_samples=n_query_samples,
             n_fit_samples=self.n_samples_fit_,
             n_neighbors=self.n_neighbors,
+            is_self_query=(n_query_samples == self.n_samples_fit_),
         )
 
         if self.verbose:
             elapsed = time.time() - start
             logger.info(
-                f"Search time ={elapsed:f} (sec), per query={elapsed / query_qty:f} (sec), "
-                f"per query adjusted for thread number={self.n_jobs * elapsed / query_qty:f} (sec)"
+                "Search time =%f (sec), per query=%f (sec), "
+                "per query adjusted for thread number=%f (sec)",
+                elapsed,
+                elapsed / query_qty,
+                self.n_jobs * elapsed / query_qty,
             )
 
         return kneighbors_graph
+
+    @overload
+    def ind_dist_grad(  # pyright: ignore[reportOverlappingOverload]
+        self,
+        data,
+        return_grad: Literal[False] = ...,
+        return_graph: Literal[False] = ...,
+    ) -> tuple[np.ndarray, np.ndarray]: ...
+
+    @overload
+    def ind_dist_grad(
+        self, data, return_grad: Literal[False] = ..., return_graph: Literal[True] = ...
+    ) -> tuple[np.ndarray, np.ndarray, csr_matrix]: ...
 
     def ind_dist_grad(self, data, return_grad=True, return_graph=True):
         """Return neighbor indices/distances and optionally the sparse graph.
@@ -887,47 +939,59 @@ def grid_search(
     ----------
     X : array-like or sparse matrix
         Input data used to build the neighborhood graph.
-
     n_neighbors : int, default=15
-        Number of neighbors to retrieve.
-
+        Number of non-self neighbors to retrieve.
     metric : str, default='euclidean'
         Distance metric used for neighbor search.
-
     nmslib_params : dict, optional
         Parameter grid for NMSlibTransformer.
-
     hnswlib_params : dict, optional
         Parameter grid for HNSWlibTransformer.
-
     n_jobs : int, default=-1
         Number of parallel jobs for the transformers.
-
     verbose : bool, default=False
-        If True, print recall and timing for each parameter combination.
+        If True, log recall and timing for each parameter combination.
 
     Returns
     -------
     dict
-        Mapping of backend names to lists of dictionaries containing
-        parameter settings, recall and execution time.
+        Mapping of backend names to lists of dictionaries containing parameter
+        settings, recall and execution time.
     """
-    n_fit_samples, n_features = _check_2d_data(X, "X")
-
-    metric = str(metric)
+    n_samples, _ = _check_2d_data(X, "X")
     n_neighbors = _validate_n_neighbors(n_neighbors)
     n_jobs = _resolve_n_jobs(n_jobs)
 
-    if metric == "precomputed" and n_fit_samples != n_features:
-        raise ValueError("X must be square when metric='precomputed'.")
+    if n_neighbors >= n_samples:
+        raise ValueError(
+            f"n_neighbors={n_neighbors} must be smaller than n_samples={n_samples} "
+            "for self-query recall evaluation."
+        )
 
     exact_metric = "euclidean" if metric == "sqeuclidean" else metric
+    if exact_metric == "inner_product":
+        exact_metric = "cosine"
+        warn(
+            "Using cosine brute-force neighbors as an approximate recall "
+            "reference for metric='inner_product'.",
+            stacklevel=2,
+        )
+
+    query_k = _query_k(n_neighbors, n_samples)
     gt = NearestNeighbors(
-        n_neighbors=n_neighbors,
+        n_neighbors=query_k,
         metric=exact_metric,
         algorithm="brute",
     ).fit(X)
-    true_ind = gt.kneighbors(X, return_distance=False)
+    true_dist, true_ind = gt.kneighbors(X, return_distance=True)
+    true_ind, _ = _drop_self_and_truncate_neighbors(
+        true_ind,
+        true_dist,
+        n_neighbors=n_neighbors,
+        n_query_samples=n_samples,
+        n_fit_samples=n_samples,
+        is_self_query=True,
+    )
 
     results = {"nmslib": [], "hnswlib": []}
 
@@ -941,21 +1005,17 @@ def grid_search(
 
         start = time.time()
         model.fit(X)
-        res = model.ind_dist_grad(
+        ind, _ = model.ind_dist_grad(
             X,
             return_grad=False,
             return_graph=False,
         )
-        ind = res[0]
         elapsed = time.time() - start
-
-        # Drop self-neighbor if present.
-        ind_eval = ind[:, 1:] if ind.shape[1] > n_neighbors else ind
 
         recall = np.mean(
             [
-                np.intersect1d(true_ind[i], ind_eval[i]).size / n_neighbors
-                for i in range(X.shape[0])
+                np.intersect1d(true_ind[i], ind[i]).size / n_neighbors
+                for i in range(n_samples)
             ]
         )
         results["nmslib"].append({"params": params, "recall": recall, "time": elapsed})
@@ -970,21 +1030,17 @@ def grid_search(
 
         start = time.time()
         model.fit(X)
-        res = model.ind_dist_grad(
+        ind, _ = model.ind_dist_grad(
             X,
             return_grad=False,
             return_graph=False,
         )
-        ind = res[0]
         elapsed = time.time() - start
-
-        # Drop self-neighbor if present.
-        ind_eval = ind[:, 1:] if ind.shape[1] > n_neighbors else ind
 
         recall = np.mean(
             [
-                np.intersect1d(true_ind[i], ind_eval[i]).size / n_neighbors
-                for i in range(X.shape[0])
+                np.intersect1d(true_ind[i], ind[i]).size / n_neighbors
+                for i in range(n_samples)
             ]
         )
         results["hnswlib"].append({"params": params, "recall": recall, "time": elapsed})
@@ -993,9 +1049,11 @@ def grid_search(
         for backend, backend_results in results.items():
             for row in backend_results:
                 logger.info(
-                    f"{backend}: params={row['params']}, "
-                    f"recall={row['recall']:.3f}, "
-                    f"time={row['time']:.3f}s"
+                    "%s: params=%s, recall=%.3f, time=%.3fs",
+                    backend,
+                    row["params"],
+                    row["recall"],
+                    row["time"],
                 )
 
     return results
@@ -1150,6 +1208,19 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
             )
 
         return kneighbors_graph
+
+    @overload
+    def ind_dist_grad(
+        self,
+        data,
+        return_grad: Literal[False] = ...,
+        return_graph: Literal[False] = ...,
+    ) -> tuple[np.ndarray, np.ndarray]: ...
+
+    @overload
+    def ind_dist_grad(
+        self, data, return_grad: Literal[False] = ..., return_graph: Literal[True] = ...
+    ) -> tuple[np.ndarray, np.ndarray, csr_matrix]: ...
 
     def ind_dist_grad(self, data, return_grad=True, return_graph=True):
         """Return neighbor indices/distances and optionally the sparse graph.

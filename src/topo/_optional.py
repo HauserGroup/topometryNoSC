@@ -1,7 +1,7 @@
 """Centralised handling of optional dependencies.
 
-The core package depends on the numerical stack and ``umap-learn``. Everything
-else (plotting, dataframe I/O, the AMG eigensolver, approximate-nearest-neighbour
+The core package depends on the numerical stack, plotting (matplotlib), dataframe
+I/O (pandas), jupyter, and ``umap-learn``. Everything else (the AMG eigensolver, approximate-nearest-neighbour
 backends and the third-party layout libraries) is optional and gated through the
 helpers in this module so that:
 
@@ -26,8 +26,6 @@ __all__ = [
 # Map an importable module name to the pip extra that provides it. Modules not
 # listed here fall back to a ``pip install <name>`` hint.
 _EXTRA_FOR: dict[str, str] = {
-    "matplotlib": "plot",
-    "pandas": "pandas",
     "pyamg": "amg",
     "hnswlib": "ann",
     "nmslib": "ann",

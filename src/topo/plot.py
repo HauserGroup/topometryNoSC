@@ -2,23 +2,18 @@
 
 Scatter plots for 2-D/3-D and manifold embeddings (hyperboloid, Poincaré disk,
 sphere, toroid), eigenspectrum decay plots, score bar charts, Riemann-metric
-ellipses, heatmaps and a training-animation writer. Requires the optional
-``matplotlib`` dependency (``pip install topometry-nosc[plot]``).
+ellipses, heatmaps and a training-animation writer.
 """
 
 from collections.abc import Sequence
 from typing import Any, Literal, cast
 
+import matplotlib.pyplot as plt
 import numba
 import numpy as np
+from matplotlib.patches import Circle, Ellipse
 from sklearn.neighbors import KDTree
 from sklearn.utils import check_random_state
-
-from topo._optional import require
-
-require("matplotlib", purpose="plotting")
-import matplotlib.pyplot as plt
-from matplotlib.patches import Circle, Ellipse
 
 
 def decay_plot(

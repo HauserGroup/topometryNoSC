@@ -47,18 +47,18 @@ class TestOptionalHelpers:
 
     @pytest.mark.optional_deps
     def test_require_names_extra_for_known_optional(self, monkeypatch):
-        # Force matplotlib to look missing and assert the hint names the extra.
+        # Force pyamg to look missing and assert the hint names the extra.
         real_import = importlib.import_module
 
         def fake_import(name, *args, **kwargs):
-            if name == "matplotlib":
+            if name == "pyamg":
                 raise ImportError("blocked for test")
             return real_import(name, *args, **kwargs)
 
         monkeypatch.setattr(importlib, "import_module", fake_import)
         with pytest.raises(ImportError) as exc:
-            _optional.require("matplotlib", purpose="plotting")
-        assert "topometry-nosc[plot]" in str(exc.value)
+            _optional.require("pyamg", purpose="AMG eigensolver")
+        assert "topometry-nosc[amg]" in str(exc.value)
 
 
 class TestBackendSelection:
@@ -116,12 +116,12 @@ class TestNoEagerOptionalImports:
             "topo.base.ann",
         ],
     )
-    def test_core_module_imports_without_matplotlib(self, module, monkeypatch):
+    def test_core_module_imports_without_pyamg(self, module, monkeypatch):
         real_import = builtins.__import__
 
         def guarded_import(name, *args, **kwargs):
-            if name == "matplotlib" or name.startswith("matplotlib."):
-                raise ImportError("matplotlib is blocked for this test")
+            if name == "pyamg" or name.startswith("pyamg."):
+                raise ImportError("pyamg is blocked for this test")
             return real_import(name, *args, **kwargs)
 
         monkeypatch.setattr(builtins, "__import__", guarded_import)

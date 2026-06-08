@@ -124,6 +124,78 @@ class TestGraphOperators:
         with pytest.raises(ValueError, match="zero-norm"):
             _spectral.spectral_clustering(np.zeros((3, 2)))
 
+    def test_degree_vector_and_matrix_shapes(self):
+        """degree_vector and degree_matrix must have consistent semantics."""
+        W = _path_graph()
+        d_vec = _spectral.degree_vector(W)
+        D_mat = _spectral.degree_matrix(W)
+
+        assert d_vec.shape == (3,), "degree_vector should return 1-D array"
+        assert D_mat.shape == (3, 3), "degree_matrix should return square matrix"
+        np.testing.assert_allclose(d_vec, [1.0, 2.0, 1.0])
+        np.testing.assert_allclose(D_mat.diagonal(), d_vec)
+
+    def test_degree_vector_both_dense_and_sparse(self):
+        """degree_vector should work with both dense and sparse input."""
+        W_sparse = _path_graph()
+        W_dense = W_sparse.toarray()
+
+        d_sparse = _spectral.degree_vector(W_sparse)
+        d_dense = _spectral.degree_vector(W_dense)
+
+        np.testing.assert_allclose(d_sparse, d_dense)
+
+    def test_inverse_degree_vector_zero_safe(self):
+        """inverse_degree_vector must handle zero-degree nodes safely."""
+        W = sparse.csr_matrix((3, 3))  # Isolated nodes
+        inv_d = _spectral.inverse_degree_vector(W)
+
+        assert np.all(np.isfinite(inv_d)), "Should be finite (no NaN/Inf)"
+        assert np.all(inv_d == 0.0), "Zero-degree nodes should have zero inverse"
+
+    def test_inverse_sqrt_degree_vector_zero_safe(self):
+        """inverse_sqrt_degree_vector must handle zero-degree nodes safely."""
+        W = sparse.csr_matrix((3, 3))  # Isolated nodes
+        inv_sqrt_d = _spectral.inverse_sqrt_degree_vector(W)
+
+        assert np.all(np.isfinite(inv_sqrt_d)), "Should be finite (no NaN/Inf)"
+        assert np.all(inv_sqrt_d == 0.0), (
+            "Zero-degree nodes should have zero inverse sqrt"
+        )
+
+    # =====================================================================
+    # Step 4: Diffusion operator return-type policy (Option A: preserve input type)
+    # =====================================================================
+
+    def test_diffusion_operator_preserves_sparse_for_sparse_input(self):
+        """Sparse input must produce sparse output (policy enforcement)."""
+        W = _path_graph()
+        P = _spectral.diffusion_operator(W, alpha=0.5, symmetric=False)
+
+        assert sparse.isspmatrix_csr(P), "Sparse input should produce sparse output"
+
+    def test_diffusion_operator_preserves_dense_for_dense_input(self):
+        """Dense input must produce dense output (policy enforcement)."""
+        W = _path_graph().toarray()
+        P = _spectral.diffusion_operator(W, alpha=0.5, symmetric=False)
+
+        assert isinstance(P, np.ndarray), "Dense input should produce dense output"
+        assert not sparse.issparse(P), "Dense input should not produce sparse output"
+
+    def test_diffusion_operator_symmetric_preserves_dense_for_dense(self):
+        """Symmetric diffusion with dense input must return dense."""
+        W = _path_graph().toarray()
+        P = _spectral.diffusion_operator(W, alpha=0.5, symmetric=True)
+
+        assert isinstance(P, np.ndarray), "Dense input should produce dense output"
+
+    def test_diffusion_operator_symmetric_preserves_sparse_for_sparse(self):
+        """Symmetric diffusion with sparse input must return sparse."""
+        W = _path_graph()
+        P = _spectral.diffusion_operator(W, alpha=0.5, symmetric=True)
+
+        assert sparse.isspmatrix_csr(P), "Sparse input should produce sparse output"
+
 
 class TestUmapLayoutKernels:
     def test_clip_bounds_values(self):

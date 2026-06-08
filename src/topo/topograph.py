@@ -20,10 +20,12 @@ from os import PathLike
 from typing import Any, cast
 
 import numpy as np
+from numpy.random import RandomState
 from numpy.typing import NDArray
 from scipy.sparse import csr_matrix, issparse
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.exceptions import NotFittedError
+from sklearn.utils import check_random_state
 
 from topo import analysis as _analysis
 from topo._pipeline.eigen import EigenBuildMixin
@@ -318,7 +320,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.n_eigs_: int | None = None
         self.selected_scaffold_components_: int | None = None
         self._n_jobs_effective = n_jobs
-        self._random_state_resolved = None
+        self._random_state_resolved: RandomState
         self.base_nbrs_class: BaseEstimator | None = None
         self.base_knn_graph: csr_matrix | None = None
         self.eigenbasis: Any = None
@@ -711,6 +713,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
         self._n_jobs_effective = _resolve_n_jobs(int(self.n_jobs))
         self._backend_resolved = self.backend
+        self._random_state_resolved = check_random_state(self.random_state)
         self.uom_enabled = bool(self.uom)
 
         if self.n_eigs_ is None:

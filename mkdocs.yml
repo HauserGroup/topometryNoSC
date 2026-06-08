@@ -69,14 +69,14 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Quickstart: quickstart.md
-  - Practical FAQ: faq.md
+  - 'Practical FAQ: Manifold Learning & Dimensionality Reduction': faq.md
   - Tutorials:
-      - Step by step: tutorials/step-by-step.md
+      - 'Step by step: Manifold Learning Pipeline': tutorials/step-by-step.md
       - Plotting: tutorials/plotting.md
       - Data provenance: tutorials/data-provenance.md
-  - Concepts: concepts.md
-  - Math details: math_details.md
-  - Background & reading: background.md
+  - 'Concepts: Graphs & Spectral Scaffolds': concepts.md
+  - 'Math Details: LBO, Diffusion Maps, & CkNN': math_details.md
+  - 'Background: CkNN, Diffusion Maps, & Manifold Learning': background.md
   - API Reference:
       - Overview: api/index.md
       - 'Main workflow: TopOGraph': api/topograph.md

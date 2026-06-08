@@ -18,7 +18,7 @@ from typing import Any, cast
 import numpy as np
 from scipy import sparse
 from scipy.linalg import LinAlgError
-from scipy.sparse import csc_matrix
+from scipy.sparse import csc_matrix, csr_matrix
 from sklearn.utils import check_random_state
 
 logger = logging.getLogger(__name__)
@@ -499,6 +499,7 @@ def diffusion_operator(
 
     """
     # Compute diffusion operator
+    W = csr_matrix(W)
     D_left: Any = None
     if sparse.issparse(W):
         if symmetric:
@@ -526,11 +527,11 @@ def diffusion_operator(
             P = _dense_diffusion(W, alpha, semi_aniso)
     if symmetric:
         if return_D_inv_sqrt:
-            return P, D_left
+            return csr_matrix(P), D_left
         else:
-            return P
+            return csr_matrix(P)
     else:
-        return P
+        return csr_matrix(P)
 
 
 def spectral_clustering(

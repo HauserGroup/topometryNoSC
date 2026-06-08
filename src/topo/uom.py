@@ -15,6 +15,7 @@ import numpy as np
 import scipy.sparse as sp
 
 from topo.base.ann import kNN
+from topo.base.graph_matrix import as_float32_csr
 from topo.spectral.eigen import EigenDecomposition
 from topo.tpgraph.intrinsic_dim import automated_scaffold_sizing
 
@@ -24,23 +25,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Standalone helpers
 # ---------------------------------------------------------------------------
-
-
-def _to_float32_csr(A: Any) -> sp.csr_matrix:
-    """Return A as a CSR sparse matrix with float32 dtype."""
-    if A is None:
-        raise ValueError("Sparse matrix input must not be None.")
-
-    if sp.issparse(A):
-        out = A.tocsr()
-    else:
-        out = sp.csr_matrix(A)
-
-    if out.dtype != np.float32:
-        out = out.astype(np.float32, copy=False)
-
-    out.eliminate_zeros()
-    return sp.csr_matrix(out)
 
 
 def _as_1d_labels(labels, n: int | None = None) -> np.ndarray:
@@ -61,7 +45,7 @@ def _sparse_identity(n: int) -> sp.csr_matrix:
 
 def _symmetrize_geometric(P: Any) -> sp.csr_matrix:
     """Return geometric symmetrization on overlapping support."""
-    P_csr = _to_float32_csr(P)
+    P_csr = as_float32_csr(P, "P")
 
     shape = P_csr.shape
     if shape is None or len(shape) != 2:
@@ -83,7 +67,7 @@ def _symmetrize_geometric(P: Any) -> sp.csr_matrix:
 
 def _symmetrize_sum(A) -> sp.csr_matrix:
     """Return additive undirected symmetrization with zero diagonal."""
-    A = _to_float32_csr(A)
+    A = as_float32_csr(A, "A")
     S = sp.csr_matrix(A + A.T)
     S.setdiag(0)
     S.eliminate_zeros()
@@ -92,7 +76,7 @@ def _symmetrize_sum(A) -> sp.csr_matrix:
 
 def _normalized_laplacian(A: Any) -> sp.csr_matrix:
     """Compute zero-degree-safe symmetric normalized graph Laplacian."""
-    A_csr = _to_float32_csr(A)
+    A_csr = as_float32_csr(A, "A")
 
     shape = A_csr.shape
     if shape is None or len(shape) != 2:
@@ -505,7 +489,7 @@ class _ProxyKernel:
     __slots__ = ("P", "K", "L")
 
     def __init__(self, P):
-        P = _to_float32_csr(P)
+        P = as_float32_csr(P, "P")
         self.P = P
         self.K = P
         self.L = _normalized_laplacian(_symmetrize_sum(P))
@@ -723,7 +707,7 @@ class UoMMixin:
                 verbose=False,
                 **kwargs,
             )
-            knn_i = _to_float32_csr(knn_i)
+            knn_i = as_float32_csr(knn_i, "knn_i")
             self.uom_knn_X_list.append(knn_i)
 
             Ki, _ = self._build_kernel(
@@ -801,7 +785,7 @@ class UoMMixin:
             self.uom_msZ_list.append(msZi)
 
             k_graph_i = min(int(self.graph_knn), max(1, n_i - 1))
-            knn_Z_i = _to_float32_csr(
+            knn_Z_i = as_float32_csr(
                 kNN(
                     Zi,
                     n_neighbors=k_graph_i,
@@ -813,7 +797,7 @@ class UoMMixin:
                     **kwargs,
                 )
             )
-            knn_msZ_i = _to_float32_csr(
+            knn_msZ_i = as_float32_csr(
                 kNN(
                     msZi,
                     n_neighbors=k_graph_i,
@@ -1021,7 +1005,7 @@ class UoMMixin:
         if n is None:
             raise ValueError("UoM aggregation requires fitted sample count.")
 
-        csr_blocks = [_to_float32_csr(B) for B in blocks]
+        csr_blocks = [as_float32_csr(B, "B") for B in blocks]
         B_cat = sp.block_diag(csr_blocks, format="csr", dtype="float32")
 
         order = self._component_order()

@@ -16,8 +16,6 @@ The only contract the tutorial relies on is the return value of ``load_cells``:
              plots; it is never given to the model.
 """
 
-from __future__ import annotations
-
 import urllib.request
 from pathlib import Path
 from shutil import copyfileobj

@@ -304,12 +304,17 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         # If CkNN is used with a normalized Laplacian, use unnormalized by
         # default. This preserves the intended binary graph semantics while
         # still allowing explicit non-default laplacian_type choices.
+        self.requested_laplacian_type = laplacian_type
+
         uses_cknn = base_kernel_version == "cknn" or graph_kernel_version == "cknn"
-        self._effective_laplacian_type = (
+
+        self.laplacian_type = (
             "unnormalized"
             if uses_cknn and laplacian_type == "normalized"
             else laplacian_type
         )
+
+        self._effective_laplacian_type = self.laplacian_type
 
         # Fitted state
         self.n: int | None = None
@@ -526,9 +531,12 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
                 self.uom_eigenvalues_dm_list, self.uom_eigenvalues_ms_list = [], []
 
                 if self.uom_enabled:
-                    return self._fit_uom(X, **kwargs)
+                    out = self._fit_uom(X, **kwargs)
+                else:
+                    out = self._fit_global(X, **kwargs)
 
-                return self._fit_global(X, **kwargs)
+                self._sync_fitted_state_from_caches()
+                return out
 
     # ------------------------------------------------------------------
     # Input validation / setup
@@ -631,6 +639,45 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         else:
             self.n_eigs_ = int(self.n_eigs)
 
+    def _sync_fitted_state_from_caches(self) -> None:
+        """Synchronize canonical fitted attributes from legacy cache dictionaries.
+
+        Older pipeline mixins may populate EigenbasisDict / GraphKernelDict without
+        also setting the newer private attributes used by public properties.
+        """
+        if self.current_eigenbasis is None and self.EigenbasisDict:
+            keys = list(self.EigenbasisDict)
+            preferred = (
+                [k for k in keys if str(k).startswith("msDM")]
+                or [k for k in keys if "ms" in str(k).lower()]
+                or keys
+            )
+            self.current_eigenbasis = preferred[0]
+
+        if self.eigenbasis is None and self.current_eigenbasis is not None:
+            self.eigenbasis = self.EigenbasisDict.get(self.current_eigenbasis)
+
+        if self._kernel_msZ is None and self.GraphKernelDict:
+            for key, value in self.GraphKernelDict.items():
+                key_l = str(key).lower()
+                if "msz" in key_l or "msdm" in key_l or "multiscale" in key_l:
+                    self._kernel_msZ = value
+                    break
+
+        if self._kernel_Z is None and self.GraphKernelDict:
+            for key, value in self.GraphKernelDict.items():
+                key_l = str(key).lower()
+                if (
+                    ("_z" in key_l or " dm" in key_l or key_l.startswith("dm"))
+                    and "ms" not in key_l
+                    and "multiscale" not in key_l
+                ):
+                    self._kernel_Z = value
+                    break
+
+        if self.graph_kernel is None:
+            self.graph_kernel = self._kernel_msZ or self._kernel_Z
+
     def _setup_environment(self) -> None:
         from topo._logging import configure
 
@@ -691,6 +738,9 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             return {"mode": mode, "per_component": per_comp, "component_sizes": sizes}
 
         if self.current_eigenbasis is None:
+            self._sync_fitted_state_from_caches()
+
+        if self.current_eigenbasis is None:
             raise AttributeError("Eigenvalues unavailable. Call .fit() first.")
 
         return self.EigenbasisDict[self.current_eigenbasis].eigenvalues
@@ -731,8 +781,13 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         """The diffusion operator on the fixed-time DM scaffold."""
         if self.uom_enabled and self.P_of_Z_uom is not None:
             return csr_matrix(self.P_of_Z_uom)
+
+        if self._kernel_Z is None:
+            self._sync_fitted_state_from_caches()
+
         if self._kernel_Z is None:
             raise AttributeError("P_of_Z unavailable. Call .fit() first.")
+
         return csr_matrix(self._kernel_Z.P)
 
     @P_of_Z.setter

@@ -1,7 +1,5 @@
 """Isomap wrapper around sklearn.manifold.Isomap."""
 
-from __future__ import annotations
-
 from typing import Any, Literal
 
 from sklearn.base import BaseEstimator, TransformerMixin

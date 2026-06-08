@@ -309,4 +309,4 @@ The mathematical foundations are detailed in:
 - Bérard, Besson & Gallot (1994) — The heat kernel isometric embedding theorem.
 - Hein, Audibert & von Luxburg (2007) — Convergence of graph Laplacians to the LBO.
 
-For a self-contained mathematical treatment covering all of the above, see the [preprint](https://github.com/davisidarta/topometry).
+For a self-contained mathematical treatment covering all of the above, see the original [TopOMetry paper](https://doi.org/10.7554/eLife.100361.2).

@@ -22,7 +22,7 @@
 - **Operator-native metrics** to quantify geometry preservation and **Riemannian diagnostics** to evaluate distortion in visualizations
 - Designed for **large, diverse datasets**
 
-For background, see the preprint: https://doi.org/10.1101/2022.03.14.484134
+For background, see the original paper: https://doi.org/10.7554/eLife.100361.2
 
 ## Geometry-first rationale (short)
 
@@ -173,15 +173,16 @@ Example `TopOGraph` fit:
 ---
 
 ```
-@article {Oliveira2022.03.14.484134,
-	author = {Oliveira, David S and Domingos, Ana I. and Velloso, Licio A},
-	title = {TopoMetry systematically learns and evaluates the latent geometry of single-cell data},
-	elocation-id = {2022.03.14.484134},
-	year = {2025},
-	doi = {10.1101/2022.03.14.484134},
-	publisher = {Cold Spring Harbor Laboratory},
-	URL = {https://www.biorxiv.org/content/early/2025/10/15/2022.03.14.484134},
-	eprint = {https://www.biorxiv.org/content/early/2025/10/15/2022.03.14.484134.full.pdf},
-	journal = {bioRxiv}
+@article{Oliveira_2024,
+	title={TopoMetry systematically learns and evaluates the latent geometry of single-cell data},
+	volume={13},
+	ISSN={2050-084X},
+	url={http://dx.doi.org/10.7554/eLife.100361.2},
+	DOI={10.7554/elife.100361.2},
+	journal={eLife},
+	publisher={eLife Sciences Publications, Ltd},
+	author={Oliveira, David S and Domingos, Ana I and Velloso, Licio A},
+	year={2024},
+	month=aug
 }
 ```

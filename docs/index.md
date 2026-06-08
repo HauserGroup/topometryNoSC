@@ -22,7 +22,7 @@ visualization.
   **Riemannian diagnostics** to evaluate distortion in visualizations
 - Designed for **large, diverse datasets**
 
-For background, see the preprint: <https://doi.org/10.1101/2022.03.14.484134>
+For background, see the original paper: <https://doi.org/10.7554/eLife.100361.2>
 
 ## Status
 

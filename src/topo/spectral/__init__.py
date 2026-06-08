@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 __all__ = [
     "graph_laplacian",
     "diffusion_operator",
+    "LE",
+    "degree",
     "EigenDecomposition",
     "eigendecompose",
 ]
@@ -18,6 +20,8 @@ __all__ = [
 _EXPORTS = {
     "graph_laplacian": ("._spectral", "graph_laplacian"),
     "diffusion_operator": ("._spectral", "diffusion_operator"),
+    "LE": ("._spectral", "LE"),
+    "degree": ("._spectral", "degree"),
     "EigenDecomposition": (".eigen", "EigenDecomposition"),
     "eigendecompose": (".eigen", "eigendecompose"),
 }

@@ -90,3 +90,35 @@ def test_shortest_paths_with_indices():
 
     assert D.shape == (1, 3)
     np.testing.assert_allclose(D[0], [0.0, 2.0, 5.0])
+
+
+def test_shortest_paths_disconnected_graph():
+    """Test shortest paths on disconnected graph."""
+    W = csr_matrix(
+        [[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]], dtype=float
+    )
+    D = graph_shortest_paths(W, directed=False)
+
+    assert D.shape == (4, 4)
+    # Nodes in same component have finite distances
+    assert np.isfinite(D[0, 1])
+    assert np.isfinite(D[2, 3])
+    # Nodes in different components should have infinite distance
+    assert np.isinf(D[0, 2])
+    assert np.isinf(D[1, 3])
+
+
+def test_shortest_paths_zero_degree_nodes():
+    """Test shortest paths with isolated (zero-degree) nodes."""
+    W = csr_matrix(
+        [[0, 1, 0, 0], [1, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 0]], dtype=float
+    )
+    D = graph_shortest_paths(W, directed=False)
+
+    assert D.shape == (4, 4)
+    # Connected nodes have finite distances
+    assert np.isfinite(D[0, 1])
+    assert np.isfinite(D[1, 2])
+    # Distances from/to isolated node are infinite
+    assert np.isinf(D[0, 3])
+    assert np.isinf(D[3, 2])

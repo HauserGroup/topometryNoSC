@@ -32,12 +32,14 @@ warnings.simplefilter("ignore", SparseEfficiencyWarning)
 
 @runtime_checkable
 class _SupportsTransform(Protocol):
-    def transform(self, X: np.ndarray | csr_matrix) -> np.ndarray: ...
+    def transform(self, X: np.ndarray | csr_matrix) -> np.ndarray:
+        raise NotImplementedError
 
 
 @runtime_checkable
 class _SupportsFitTransform(Protocol):
-    def fit_transform(self, *args: Any, **kwargs: Any) -> Any: ...
+    def fit_transform(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError
 
 
 def _n_rows(matrix_like: object, name: str) -> int:

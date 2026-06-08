@@ -7,8 +7,16 @@
 
 """Approximate nearest-neighbor wrappers.
 
+Backend hierarchy and strategy:
+- sklearn.neighbors: Exact kNN (reference behavior, correctness standard)
+- HNSWlib: Fast approximate ANN for large-scale problems (default advanced backend)
+- NMSlib: Alternative approximate ANN backend (specialized metrics)
+- Fallback: All backends gracefully degrade to sklearn if initialization fails
+
 This module provides small sklearn-style wrappers around NMSlib and HNSWlib,
-plus a convenience `kNN` function that can fall back to sklearn.
+plus a convenience `kNN` function that can fall back to sklearn. Metric name
+translation is centralized via _nmslib_dense_space, _nmslib_sparse_space, and
+_hnswlib_space.
 
 Important conventions
 ---------------------
@@ -17,6 +25,7 @@ Important conventions
   because the sample itself is usually returned as the nearest neighbor.
 - The public estimator state is never mutated during `transform`.
 - Returned sparse graphs have shape `(n_query_samples, n_fit_samples)`.
+- Self-neighbor removal is centralized via _drop_self_and_truncate_neighbors.
 """
 
 import logging

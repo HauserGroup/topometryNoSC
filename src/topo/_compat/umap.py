@@ -1,5 +1,11 @@
 """Adapter for UMAP-specific graph and layout internals.
 
+Delegation strategy:
+- Fuzzy simplicial graph construction: delegated to upstream umap-learn
+- Standard UMAP layout: available via umap.UMAP estimator
+- MAP (Manifold Approximation & Projection): custom TopoMetry implementation
+  with checkpoint support (save_every, save_callback, include_init_snapshot)
+
 Only this module imports from :mod:`umap.umap_`. The rest of the package uses
 these wrappers so kNN-array validation and return contracts stay centralized.
 """

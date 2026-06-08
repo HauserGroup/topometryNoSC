@@ -412,11 +412,12 @@ def run_pipeline(data: DemoData, config: DemoConfig) -> PipelineResult:
         n_components=config.n_components_2d,
         n_neighbors=config.n_neighbors,
         num_iters=config.num_iters,
-        init="spectral",
+        init=init_Y,
+        random_state=config.random_state,
     )
 
     if config.projection_method == "MAP":
-        projector.fit(K_Z)
+        projector.fit(kernel_Z)
     else:
         projector.fit(Z)
 

@@ -99,7 +99,7 @@ def fuzzy_graph_from_data(
 ):
     """Build a UMAP fuzzy simplicial-set graph directly from data."""
     if metric == "precomputed" and issparse(X):
-        from topo.utils._utils import get_indices_distances_from_sparse_matrix
+        from topo.base.graph_matrix import get_indices_distances_from_sparse_matrix
 
         knn_indices, knn_dists = get_indices_distances_from_sparse_matrix(
             X, n_neighbors

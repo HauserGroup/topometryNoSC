@@ -6,6 +6,10 @@ import numpy as np
 import pytest
 from scipy import sparse
 
+from topo.base.graph_matrix import (
+    get_indices_distances_from_sparse_matrix,
+    get_sparse_matrix_from_indices_distances,
+)
 from topo.utils import _utils, map_utils
 
 
@@ -49,10 +53,10 @@ class TestLandmarkAndSparseMatrixUtilities:
         indices = np.array([[0, 1], [1, 2], [2, 1]])
         dists = np.array([[0.0, 0.5], [0.0, 0.25], [0.0, 0.25]])
 
-        graph = _utils.get_sparse_matrix_from_indices_distances(
+        graph = get_sparse_matrix_from_indices_distances(
             indices, dists, n_obs=3, n_neighbors=2
         )
-        out_idx, out_dist = _utils.get_indices_distances_from_sparse_matrix(
+        out_idx, out_dist = get_indices_distances_from_sparse_matrix(
             graph, n_neighbors=1
         )
 
@@ -64,7 +68,7 @@ class TestLandmarkAndSparseMatrixUtilities:
         graph = sparse.csr_matrix([[0.0, 1.0], [0.0, 0.0]])
 
         with pytest.raises(ValueError, match="fewer than n_neighbors"):
-            _utils.get_indices_distances_from_sparse_matrix(graph, n_neighbors=2)
+            get_indices_distances_from_sparse_matrix(graph, n_neighbors=2)
 
 
 class TestUmapUtilities:

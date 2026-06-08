@@ -39,10 +39,10 @@ from sklearn.utils import check_random_state
 from topo._compat.umap import fuzzy_graph_from_knn
 from topo.base.ann import kNN
 from topo.base.dists import pairwise_distances
+from topo.base.graph_matrix import get_indices_distances_from_sparse_matrix
 from topo.spectral._spectral import degree as compute_degree
 from topo.spectral._spectral import diffusion_operator, graph_laplacian
 from topo.tpgraph.cknn import cknn_graph
-from topo.utils._utils import get_indices_distances_from_sparse_matrix
 
 warnings.simplefilter("ignore", SparseEfficiencyWarning)
 

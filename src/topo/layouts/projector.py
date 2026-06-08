@@ -22,7 +22,6 @@ from sklearn.utils import check_random_state
 
 from topo._compat.umap import validate_knn_for_umap
 from topo.base.ann import kNN
-from topo.layouts.isomap import Isomap
 from topo.layouts.map import fuzzy_embedding
 from topo.spectral.eigen import spectral_layout
 from topo.tpgraph.kernels import Kernel
@@ -342,12 +341,15 @@ class Projector(BaseEstimator, TransformerMixin):
                 )
         # Fit the desired method
         if self.projection_method == "Isomap":
-            self.Y_ = Isomap(
+            from sklearn.manifold import Isomap as SklearnIsomap
+
+            self.estimator_ = SklearnIsomap(
                 n_components=self.n_components,
                 n_neighbors=self.n_neighbors,
                 metric="precomputed",
                 n_jobs=self.n_jobs,
-            ).fit_transform(K)
+            )
+            self.Y_ = _estimator_fit_transform(self.estimator_, K)
 
         elif self.projection_method == "t-SNE":
             if importlib.util.find_spec("MulticoreTSNE") is not None:

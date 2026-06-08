@@ -75,9 +75,6 @@ jobs:
       - name: Check UMAP dependency
         run: uv run --python ${{ matrix.python-version }} python -c "import umap; from umap.umap_ import fuzzy_simplicial_set"
 
-      - name: Run UMAP parity tests
-        run: uv run --python ${{ matrix.python-version }} pytest tests/test_umap_compat.py -q
-
       - name: Run tests
         run: uv run --python ${{ matrix.python-version }} pytest -q --cov=topo --cov-report=xml
 

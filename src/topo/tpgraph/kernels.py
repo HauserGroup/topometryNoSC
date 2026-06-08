@@ -16,7 +16,7 @@ sparsification and imputation.
 
 import logging
 import warnings
-from typing import cast
+from typing import Literal, cast, overload
 
 import numpy as np
 
@@ -363,28 +363,85 @@ def _compute_adaptive_bandwidth_kernel(
     return W, dens_dict
 
 
+@overload
 def compute_kernel(
     X,
-    metric="cosine",
-    n_neighbors=10,
-    fuzzy=False,
-    cknn=False,
-    cknn_delta=1.0,
-    cknn_candidate_neighbors=None,
-    cknn_exact=False,
-    pairwise=False,
-    sigma=None,
-    adaptive_bw=True,
-    expand_nbr_search=False,
-    alpha_decaying=False,
-    return_densities=False,
-    symmetrize=True,
-    backend="hnswlib",
-    n_jobs=-1,
-    verbose=False,
-    use_angular=True,
-    square_distances=True,
-    random_state=None,
+    metric: str = ...,
+    n_neighbors: int = ...,
+    fuzzy: bool = ...,
+    cknn: bool = ...,
+    cknn_delta: float = ...,
+    cknn_candidate_neighbors: int | None = ...,
+    cknn_exact: bool = ...,
+    pairwise: bool = ...,
+    sigma: float | None = ...,
+    adaptive_bw: bool = ...,
+    expand_nbr_search: bool = ...,
+    alpha_decaying: bool = ...,
+    *,
+    return_densities: Literal[False] = ...,
+    symmetrize: bool = ...,
+    backend: str = ...,
+    n_jobs: int | str = ...,
+    verbose: bool = ...,
+    use_angular: bool = ...,
+    square_distances: bool = ...,
+    random_state: int | np.random.RandomState | None = ...,
+    **kwargs,
+) -> csr_matrix: ...
+
+
+@overload
+def compute_kernel(
+    X,
+    metric: str = ...,
+    n_neighbors: int = ...,
+    fuzzy: bool = ...,
+    cknn: bool = ...,
+    cknn_delta: float = ...,
+    cknn_candidate_neighbors: int | None = ...,
+    cknn_exact: bool = ...,
+    pairwise: bool = ...,
+    sigma: float | None = ...,
+    adaptive_bw: bool = ...,
+    expand_nbr_search: bool = ...,
+    alpha_decaying: bool = ...,
+    *,
+    return_densities: Literal[True],
+    symmetrize: bool = ...,
+    backend: str = ...,
+    n_jobs: int | str = ...,
+    verbose: bool = ...,
+    use_angular: bool = ...,
+    square_distances: bool = ...,
+    random_state: int | np.random.RandomState | None = ...,
+    **kwargs,
+) -> tuple[csr_matrix, dict[str, csr_matrix | np.ndarray | int]]: ...
+
+
+def compute_kernel(
+    X,
+    metric: str = "cosine",
+    n_neighbors: int = 10,
+    fuzzy: bool = False,
+    cknn: bool = False,
+    cknn_delta: float = 1.0,
+    cknn_candidate_neighbors: int | None = None,
+    cknn_exact: bool = False,
+    pairwise: bool = False,
+    sigma: float | None = None,
+    adaptive_bw: bool = True,
+    expand_nbr_search: bool = False,
+    alpha_decaying: bool = False,
+    *,
+    return_densities: bool = False,
+    symmetrize: bool = True,
+    backend: str = "hnswlib",
+    n_jobs: int | str = -1,
+    verbose: bool = False,
+    use_angular: bool = True,
+    square_distances: bool = True,
+    random_state: int | np.random.RandomState | None = None,
     **kwargs,
 ) -> csr_matrix | tuple[csr_matrix, dict[str, csr_matrix | np.ndarray | int]]:
     """

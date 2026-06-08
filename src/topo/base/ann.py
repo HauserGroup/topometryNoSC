@@ -409,7 +409,7 @@ def kNN(
         and not issparse(X)
     )
 
-    nbrs: BaseEstimator | None
+    nbrs: HNSWlibTransformer | NearestNeighbors | None
 
     if use_hnswlib:
         X_fit = _as_dense_array(X)
@@ -450,6 +450,7 @@ def kNN(
                 **sk_kwargs,
             ).fit(X)
 
+            assert isinstance(nbrs, NearestNeighbors)
             if Y is None:
                 if metric == "precomputed":
                     distances, indices = nbrs.kneighbors(None, return_distance=True)

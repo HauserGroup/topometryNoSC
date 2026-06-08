@@ -121,13 +121,6 @@ def _is_finite_matrix(X) -> bool:
     return bool(np.isfinite(np.asarray(X)).all())
 
 
-def _as_csr_or_none(X) -> csr_matrix | None:
-    """Return X as CSR if available, otherwise None."""
-    if X is None:
-        return None
-    return X if isinstance(X, csr_matrix) else csr_matrix(X)
-
-
 # ============================================================================
 # TopOGraph
 # ============================================================================
@@ -172,8 +165,9 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         Kernel choice for the base graph.
     graph_kernel_version : str, default="bw_adaptive"
         Kernel choice for scaffold graphs.
-    backend : {"hnswlib", "sklearn"}, default="hnswlib"
-        Approximate nearest-neighbor backend.
+    backend : {"sklearn", "hnswlib"}, default="sklearn"
+        Nearest-neighbor backend. Use "sklearn" for exact search and "hnswlib"
+        for optional dense-vector HNSW search.
     base_metric : str, default="cosine"
         Distance metric for the base kNN graph.
     graph_metric : str, default="euclidean"
@@ -244,7 +238,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         low_memory: bool = False,
         eigen_tol: float = 1e-8,
         eigensolver: str = "arpack",
-        backend: str = "hnswlib",
+        backend: str = "sklearn",
         cache: bool = True,
         verbosity: int = 0,
         random_state=42,
@@ -290,17 +284,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.laplacian_type = laplacian_type
 
         # Validate backend and resolve fallback
-        from topo._optional import has
-
-        if backend not in {"hnswlib", "sklearn"}:
-            raise ValueError(
-                f"Invalid backend: {backend!r}. Must be 'hnswlib' or 'sklearn'."
-            )
-        if backend == "hnswlib" and not has("hnswlib"):
-            self._backend_resolved = "sklearn"
-        else:
-            self._backend_resolved = backend
-
+        self._backend_resolved = backend
         self.id_method = id_method
         self.id_ks = id_ks
         self.id_metric = id_metric
@@ -440,6 +424,14 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         if knn is None:
             raise ValueError("knn must not be None.")
 
+        if not hasattr(knn, "shape") or len(knn.shape) != 2:
+            raise ValueError("knn must be a 2-D sparse/dense matrix.")
+        if knn.shape[0] != knn.shape[1]:
+            raise ValueError("knn must be a square graph.")
+
+        if self._backend_resolved not in {"sklearn", "hnswlib"}:
+            raise ValueError("backend must be one of {'sklearn', 'hnswlib'}.")
+
         cfg = _KERNEL_CONFIGS[kernel_version].copy()
 
         uses_raw_data = bool(cfg.get("expand_nbr_search")) or kernel_version == "cknn"
@@ -458,7 +450,15 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
                         "data_for_expansion is required for kernel version "
                         f"'{kernel_version}' with metric='{metric}'."
                     )
-                if data_for_expansion.shape[0] != knn.shape[0]:
+                if (
+                    not hasattr(data_for_expansion, "shape")
+                    or len(data_for_expansion.shape) != 2
+                ):
+                    raise ValueError(
+                        "data_for_expansion must be a 2-D array-like or sparse matrix."
+                    )
+
+                if int(data_for_expansion.shape[0]) != int(knn.shape[0]):
                     raise ValueError(
                         "data_for_expansion must have the same number of rows "
                         "as the kNN graph."
@@ -542,6 +542,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             out = self._fit_global(X, **kwargs)
 
         self._sync_fitted_state_from_caches()
+        self._check_fitted_pipeline_state()
         return out
 
     # ------------------------------------------------------------------
@@ -555,10 +556,14 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             raise ValueError(
                 f"Invalid graph_kernel_version: {self.graph_kernel_version}"
             )
-        if self.laplacian_type not in VALID_LAPLACIAN_TYPES:
+        if self.backend not in {"sklearn", "hnswlib"}:
+            raise ValueError("backend must be one of {'sklearn', 'hnswlib'}.")
+        if self.requested_laplacian_type not in VALID_LAPLACIAN_TYPES:
             raise ValueError(
                 f"laplacian_type must be one of {sorted(VALID_LAPLACIAN_TYPES)}."
             )
+        if int(self.n_jobs) < -1 or int(self.n_jobs) == 0:
+            raise ValueError("n_jobs must be -1 or a positive integer.")
 
         for name in (
             "base_knn",
@@ -601,6 +606,19 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         if X is None:
             if self.base_kernel is None:
                 raise ValueError("X was not passed and no base_kernel was provided.")
+
+            if not hasattr(self.base_kernel, "P"):
+                raise ValueError(
+                    "base_kernel must expose a fitted diffusion operator `P`."
+                )
+
+            kernel_X = getattr(self.base_kernel, "X", None)
+            if self.base_metric != "precomputed" and kernel_X is None:
+                raise ValueError(
+                    "base_kernel must expose original input data as `X` when automated "
+                    "sizing is required."
+                )
+
             return
 
         if not hasattr(X, "shape") or len(X.shape) != 2:
@@ -691,19 +709,42 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self._parse_random_state()
         self._n_jobs_effective = self.n_jobs
 
+        self._n_jobs_effective = int(self.n_jobs)
+
         if self.n_jobs == -1:
             try:
                 from joblib import cpu_count
 
-                self._n_jobs_effective = cpu_count()
+                self._n_jobs_effective = int(cpu_count())
             except Exception:
-                logger.debug("Could not resolve cpu_count(); keeping n_jobs=-1.")
+                logger.debug("Could not resolve cpu_count(); using n_jobs=1.")
+                self._n_jobs_effective = 1
 
         if self.n_eigs_ is None:
             self.n_eigs_ = int(self.n_eigs)
 
         self.layout_verbose = self.verbosity >= 2
         self.bases_graph_verbose = self.verbosity >= 3
+        self.uom_enabled = bool(self.uom)
+
+    def _check_fitted_pipeline_state(self) -> None:
+        """Validate that core fitted pipeline state is internally consistent."""
+        if self.base_kernel is None:
+            raise RuntimeError("fit() completed without a fitted base_kernel.")
+
+        if self.uom_enabled:
+            if self.P_of_msZ_uom is None:
+                raise RuntimeError("fit() completed without fitted UoM msDM operator.")
+            return
+
+        if self.current_eigenbasis is None or self.eigenbasis is None:
+            raise RuntimeError("fit() completed without an active eigenbasis.")
+
+        if self._kernel_msZ is None:
+            raise RuntimeError("fit() completed without an msDM scaffold kernel.")
+
+        if self.graph_kernel is None:
+            raise RuntimeError("fit() completed without an active graph_kernel.")
 
     # ------------------------------------------------------------------
     # Scaffold access

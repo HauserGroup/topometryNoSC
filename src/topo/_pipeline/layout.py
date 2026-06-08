@@ -26,7 +26,7 @@ class LayoutBuildMixin:
     """Projection / layout construction and visualisation methods."""
 
     # Interface contract — attributes supplied by TopOGraph
-    projection_methods: list[str] | None
+    projection_methods: list[str]
     graph_kernel_version: str
     base_kernel_version: str
     ProjectionDict: dict[str, np.ndarray]

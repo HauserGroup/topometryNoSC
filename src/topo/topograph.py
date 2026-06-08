@@ -15,7 +15,8 @@ import copy
 import gc
 import logging
 import warnings
-from typing import Any, cast
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 from scipy.sparse import csr_matrix, issparse
@@ -241,7 +242,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         graph_knn: int = 30,
         min_eigs: int = 128,
         n_jobs: int = -1,
-        projection_methods: list[str] | None = None,
+        projection_methods: Sequence[str] | None = None,
         base_kernel=None,
         base_kernel_version: str = "bw_adaptive",
         graph_kernel_version: str = "bw_adaptive",
@@ -280,7 +281,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.min_eigs = min_eigs
         self.n_eigs = min_eigs
         self.n_jobs = n_jobs
-        self.projection_methods = cast(Any, projection_methods)
+        self.projection_methods: list[str] = list(projection_methods)
         self.base_kernel = base_kernel
         self.base_kernel_version = base_kernel_version
         self.graph_kernel_version = graph_kernel_version
@@ -315,31 +316,31 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.id_headroom = id_headroom
 
         # Fitted state
-        self.n = cast(Any, None)
-        self.m = cast(Any, None)
-        self.n_eigs_ = None
-        self.selected_scaffold_components_ = None
+        self.n: int | None = None
+        self.m: int | None = None
+        self.n_eigs_: int | None = None
+        self.selected_scaffold_components_: int | None = None
         self._backend_resolved = backend
         self._n_jobs_effective = n_jobs
         self._random_state_resolved = None
-        self.base_nbrs_class = None
-        self.base_knn_graph = None
-        self.eigenbasis = None
-        self.current_eigenbasis = cast(Any, None)
-        self.current_graphkernel = cast(Any, None)
-        self.graph_kernel = None
-        self.SpecLayout = None
-        self.global_dimensionality = None
-        self.local_dimensionality = None
+        self.base_nbrs_class: BaseEstimator | None = None
+        self.base_knn_graph: csr_matrix | None = None
+        self.eigenbasis: Any = None
+        self.current_eigenbasis: str | None = None
+        self.current_graphkernel: str | None = None
+        self.graph_kernel: Kernel | None = None
+        self.SpecLayout: np.ndarray | None = None
+        self.global_dimensionality: int | float | None = None
+        self.local_dimensionality: np.ndarray | None = None
         self._id_details: dict[str, Any] = {"mle": None, "fsa": None}
         self._scaffold_components_dm = None
         self._scaffold_components_ms = None
 
         # Dual-scaffold products
-        self._knn_msZ = None
-        self._knn_Z = None
-        self._kernel_msZ = None
-        self._kernel_Z = None
+        self._knn_msZ: csr_matrix | None = None
+        self._knn_Z: csr_matrix | None = None
+        self._kernel_msZ: Kernel | None = None
+        self._kernel_Z: Kernel | None = None
 
         # MAP snapshots
         self.msTopoMAP_snapshots = []
@@ -350,10 +351,10 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.layout_verbose = False
 
         # Legacy / benchmarking dictionaries
-        self.BaseKernelDict = {}
-        self.EigenbasisDict = {}
-        self.GraphKernelDict = {}
-        self.ProjectionDict = {}
+        self.BaseKernelDict: dict[str, Kernel] = {}
+        self.EigenbasisDict: dict[str, Any] = {}
+        self.GraphKernelDict: dict[str, Kernel] = {}
+        self.ProjectionDict: dict[str, np.ndarray] = {}
         self.LocalScoresDict: dict[str, Any] = {}
         self.RiemannMetricDict: dict[str, Any] = {}
         self.runtimes = {}
@@ -414,7 +415,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         low_memory=False,
         base=True,
         data_for_expansion=None,
-    ) -> tuple[Any, dict]:
+    ) -> tuple[Kernel, dict[str, Kernel]]:
         """
         Build a :class:`Kernel` from a kNN graph and a named *kernel_version*.
 
@@ -602,7 +603,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.layout_verbose = self.verbosity >= 2
         self.bases_graph_verbose = self.verbosity >= 3
 
-    def spectral_scaffold(self, multiscale: bool = True) -> np.ndarray:
+    def spectral_scaffold(self, multiscale: bool = True) -> np.ndarray | csr_matrix:
         """Return spectral scaffold coordinates.
 
         Parameters
@@ -676,7 +677,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             The sparse distance matrix.
         """
         if self.uom_enabled and self.knn_msZ_uom is not None:
-            return self.knn_msZ_uom
+            return csr_matrix(self.knn_msZ_uom)
         if self._knn_msZ is None:
             raise AttributeError("knn_msZ unavailable. Call .fit() first.")
         return self._knn_msZ
@@ -694,7 +695,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             The sparse distance matrix.
         """
         if self.uom_enabled and self.knn_Z_uom is not None:
-            return self.knn_Z_uom
+            return csr_matrix(self.knn_Z_uom)
         if self._knn_Z is None:
             raise AttributeError("knn_Z unavailable. Call .fit() first.")
         return self._knn_Z
@@ -763,7 +764,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             The sparse distance matrix.
         """
         if self.uom_enabled and self.knn_X_uom is not None:
-            return self.knn_X_uom
+            return csr_matrix(self.knn_X_uom)
         if self.base_knn_graph is None:
             raise AttributeError("knn_X unavailable. Call .fit() first.")
         return self.base_knn_graph
@@ -781,7 +782,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             The sparse Markov transition matrix.
         """
         if self.uom_enabled and self.P_of_X_uom is not None:
-            return self.P_of_X_uom
+            return csr_matrix(self.P_of_X_uom)
         if self.base_kernel is None:
             raise AttributeError("P_of_X unavailable. Call .fit() first.")
         return self.base_kernel.P
@@ -952,7 +953,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         result = _analysis.spectral_selectivity(
             Z,
             evals,
-            P=cast(Any, P),
+            P=P,
             smooth_t=smooth_t,
             **kwargs,  # type: ignore
         )

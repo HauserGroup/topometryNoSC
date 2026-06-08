@@ -22,8 +22,8 @@ class GraphBuildMixin:
     """Base neighbourhood graph and base kernel construction."""
 
     # Interface contract — attributes supplied by TopOGraph
-    n: int
-    m: int
+    n: int | None
+    m: int | None
     verbosity: int
     base_knn: int
     base_metric: str

@@ -16,7 +16,6 @@ sparsification and imputation.
 
 import logging
 import warnings
-from typing import Any, cast
 
 import numpy as np
 
@@ -51,6 +50,13 @@ logger = logging.getLogger(__name__)
 
 def _as_csr_matrix(X, *, dtype=float) -> csr_matrix:
     """Return X as a CSR matrix."""
+    if issparse(X):
+        return X.tocsr().astype(dtype)
+    return csr_matrix(np.asarray(X, dtype=dtype))
+
+
+def _ensure_csr_matrix(X, *, dtype=float) -> csr_matrix:
+    """Normalize sparse/dense matrix results to CSR without changing semantics."""
     if issparse(X):
         return X.tocsr().astype(dtype)
     return csr_matrix(np.asarray(X, dtype=dtype))
@@ -492,13 +498,13 @@ def compute_kernel(
         W = csr_matrix((np.exp(-d_scaled_float), (x, y)), shape=[N, N])
 
     # handle NaN/Inf robustly (set to 0 before symmetrizing)
-    W = cast(csr_matrix, W)
+    W = _ensure_csr_matrix(W)
     W.data = _ensure_nonneg_and_finite(W.data, eps=0.0)
 
     if symmetrize:
         W = (W + W.T) / 2  # type: ignore
 
-    W = cast(csr_matrix, W)
+    W = _ensure_csr_matrix(W)
     # handle NaNs/Infs robustly
     W.data = np.where(np.isfinite(W.data), W.data, 0.0)
 
@@ -1246,13 +1252,13 @@ class Kernel(BaseEstimator, TransformerMixin):
         Y_arr = Y.toarray() if issparse(Y) else np.asarray(Y)
         Y_imp = Y_arr
         if t is None or t < 0:
-            P_mat = cast(csr_matrix, self._P)
+            P_mat = _ensure_csr_matrix(self._P)
             previous = np.asarray(Y_arr, dtype=float)
             P_power = P_mat.copy()
 
             for i in range(1, int(tmax) + 1):
                 if i > 1:
-                    P_power = cast(csr_matrix, P_power @ P_mat)
+                    P_power = _ensure_csr_matrix(P_power @ P_mat)
                 Y_imp = P_power @ Y_arr
                 error, _ = self._calculate_imputation_error(Y_imp, previous)
 
@@ -1263,13 +1269,13 @@ class Kernel(BaseEstimator, TransformerMixin):
                 previous = np.asarray(Y_imp, dtype=float)
 
         else:
-            P_mat = cast(csr_matrix, self._P)
+            P_mat = _ensure_csr_matrix(self._P)
             t_int = int(t)
             if t_int < 1:
                 return Y_arr
             P_power = P_mat.copy()
             for _ in range(1, t_int):
-                P_power = cast(csr_matrix, P_power @ P_mat)
+                P_power = _ensure_csr_matrix(P_power @ P_mat)
             Y_imp = P_power @ Y_arr
         return Y_imp
 
@@ -1375,11 +1381,11 @@ class Kernel(BaseEstimator, TransformerMixin):
                 _LB = LabelBinarizer()
                 _sample_indicators = _LB.fit_transform(sample_labels)
 
-                if issparse(_sample_indicators):
-                    _sample_indicators_sparse = cast(Any, _sample_indicators)
-                    _sample_indicators_dense = _sample_indicators_sparse.toarray()
-                else:
-                    _sample_indicators_dense = np.asarray(_sample_indicators)
+                _sample_indicators_dense = (
+                    _sample_indicators.toarray()
+                    if issparse(_sample_indicators)
+                    else np.asarray(_sample_indicators)
+                )
 
                 sample_indicators = pd.DataFrame(
                     _sample_indicators_dense,

@@ -11,7 +11,7 @@ import importlib
 import importlib.util
 import logging
 import warnings
-from typing import Any, cast
+from typing import Any, Protocol, cast, runtime_checkable
 
 import numpy as np
 
@@ -29,6 +29,33 @@ from topo.tpgraph.kernels import Kernel
 from topo.utils._utils import get_landmark_indices
 
 warnings.simplefilter("ignore", SparseEfficiencyWarning)
+
+
+@runtime_checkable
+class _SupportsTransform(Protocol):
+    def transform(self, X: np.ndarray | csr_matrix) -> np.ndarray: ...
+
+
+@runtime_checkable
+class _SupportsFitTransform(Protocol):
+    def fit_transform(self, *args: Any, **kwargs: Any) -> Any: ...
+
+
+def _n_rows(matrix_like: object, name: str) -> int:
+    shape = getattr(matrix_like, "shape", None)
+    if shape is None or len(shape) < 1:
+        raise ValueError(f"{name} must expose a row dimension.")
+    return int(shape[0])
+
+
+def _estimator_fit_transform(
+    estimator: object | None, *args: Any, **kwargs: Any
+) -> np.ndarray:
+    if not isinstance(estimator, _SupportsFitTransform):
+        raise ValueError(
+            "The selected projection estimator does not support fit_transform."
+        )
+    return np.asarray(estimator.fit_transform(*args, **kwargs))
 
 
 class Projector(BaseEstimator, TransformerMixin):
@@ -116,11 +143,12 @@ class Projector(BaseEstimator, TransformerMixin):
         self.keep_estimator = keep_estimator
         self.random_state = random_state
         self.verbose = verbose
-        self.Y_ = None
-        self.landmarks_ = None
-        self.N = None
-        self.M = None
-        self.init_Y_ = None
+        self.Y_: np.ndarray | None = None
+        self.landmarks_: np.ndarray | None = None
+        self.N: int | None = None
+        self.M: int | None = None
+        self.init_Y_: np.ndarray | None = None
+        self.estimator_: object | None = None
         # NEW: checkpointing options (only used by MAP)
         self.save_every = save_every
         self.save_limit = save_limit
@@ -243,34 +271,40 @@ class Projector(BaseEstimator, TransformerMixin):
                     "'landmarks' must be either an integer or a numpy array."
                 )
 
+        K: Any
+        if isinstance(X, Kernel):
+            if X.N is None:
+                raise ValueError("Kernel must be fitted before projection.")
+            source_n_samples = int(X.N)
+        else:
+            source_n_samples = _n_rows(X, "X")
+
         if isinstance(X, Kernel):
             self.M = X.M
+            kernel_P = X.P
             if self.landmarks_ is not None and self.projection_method != "Isomap":
                 self.N = len(self.landmarks_)
-                K = cast(Any, X.P)[np.ix_(self.landmarks_, self.landmarks_)].copy()
+                K = kernel_P[np.ix_(self.landmarks_, self.landmarks_)].copy()
             else:
                 self.N = X.N
-                K = cast(Any, X.P).copy()
+                K = kernel_P.copy()
         else:
             if self.metric != "precomputed":
                 if issparse(X):
-                    X_fit = cast(Any, X).toarray()
+                    X_fit = csr_matrix(X).toarray()
                 else:
                     X_fit = np.asarray(X)
                 if self.landmarks_ is not None and self.projection_method != "Isomap":
-                    X_fit = cast(Any, X_fit)[self.landmarks_, :]
-                K = cast(
-                    Any,
-                    kNN(
-                        X_fit,
-                        metric=self.metric,
-                        n_neighbors=self.n_neighbors,
-                        n_jobs=self.n_jobs,
-                        backend=self.nbrs_backend,
-                    ),
+                    X_fit = X_fit[self.landmarks_, :]
+                K = kNN(
+                    X_fit,
+                    metric=self.metric,
+                    n_neighbors=self.n_neighbors,
+                    n_jobs=self.n_jobs,
+                    backend=self.nbrs_backend,
                 )
             else:
-                X_precomputed = cast(Any, X)
+                X_precomputed = X
                 if self.landmarks_ is not None and self.projection_method != "Isomap":
                     K = X_precomputed[np.ix_(self.landmarks_, self.landmarks_)].copy()
                 else:
@@ -281,13 +315,15 @@ class Projector(BaseEstimator, TransformerMixin):
         else:
             if self.init == "spectral":
                 try:
-                    self.init_Y_ = spectral_layout(
-                        K,
-                        self.n_components,
-                        self.random_state,
-                        laplacian_type="random_walk",
-                        eigen_tol=10e-4,
-                        return_evals=False,
+                    self.init_Y_ = np.asarray(
+                        spectral_layout(
+                            K,
+                            self.n_components,
+                            self.random_state,
+                            laplacian_type="random_walk",
+                            eigen_tol=10e-4,
+                            return_evals=False,
+                        )
                     )
                 except Exception:
                     warnings.warn(
@@ -295,11 +331,15 @@ class Projector(BaseEstimator, TransformerMixin):
                     )
                     from topo.spectral.eigen import EigenDecomposition
 
-                    self.init_Y_ = EigenDecomposition(
-                        n_components=self.n_components
-                    ).fit_transform(K)
+                    self.init_Y_ = np.asarray(
+                        EigenDecomposition(
+                            n_components=self.n_components
+                        ).fit_transform(K)
+                    )
             else:
-                self.init_Y_ = self.random_state.randn(K.shape[0], self.n_components)
+                self.init_Y_ = self.random_state.randn(
+                    _n_rows(K, "projection graph"), self.n_components
+                )
         # Fit the desired method
         if self.projection_method == "Isomap":
             self.Y_ = Isomap(
@@ -326,7 +366,7 @@ class Projector(BaseEstimator, TransformerMixin):
                     max_iter=int(self.num_iters),
                     init="random",
                 )
-            self.Y_ = self.estimator_.fit_transform(K)
+            self.Y_ = _estimator_fit_transform(self.estimator_, K)
 
         elif self.projection_method == "MAP":
             Y, Y_aux = fuzzy_embedding(
@@ -364,7 +404,7 @@ class Projector(BaseEstimator, TransformerMixin):
             if issparse(K):
                 knn_indices, knn_dists = _csr_to_fixed_knn(K, self.n_neighbors)
                 n_samples = knn_indices.shape[0]
-                if not isinstance(X, Kernel) and cast(Any, X).shape[0] != n_samples:
+                if source_n_samples != n_samples:
                     raise ValueError(
                         "X and precomputed_knn must have the same number of samples."
                     )
@@ -385,7 +425,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 knn_indices, knn_dists = validate_knn_for_umap(
                     K[0],
                     K[1],
-                    n_samples=cast(Any, X).shape[0],
+                    n_samples=source_n_samples,
                     n_neighbors=self.n_neighbors,
                 )
                 search_index = K[2] if len(K) == 3 else None
@@ -405,7 +445,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 verbose=self.verbose,
                 **kwargs,
             )
-            self.Y_ = self.estimator_.fit_transform(X)
+            self.Y_ = _estimator_fit_transform(self.estimator_, X)
 
         elif self.projection_method == "PaCMAP":
             try:
@@ -448,7 +488,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 verbose=self.verbose,
                 **kwargs,
             )
-            self.Y_ = self.estimator_.fit_transform(X=X, init=safe_init)
+            self.Y_ = _estimator_fit_transform(self.estimator_, X=X, init=safe_init)
 
         elif self.projection_method == "TriMAP":
             try:
@@ -469,7 +509,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 verbose=self.verbose,
                 **kwargs,
             )
-            self.Y_ = self.estimator_.fit_transform(X=X, init=self.init_Y_)
+            self.Y_ = _estimator_fit_transform(self.estimator_, X=X, init=self.init_Y_)
 
         elif self.projection_method == "IsomorphicMDE":
             try:
@@ -538,7 +578,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 n_threads=self.n_jobs,
                 **kwargs,
             )
-            self.Y_ = self.estimator_.fit_transform(X)
+            self.Y_ = _estimator_fit_transform(self.estimator_, X)
         return self
 
     def transform(self, X: np.ndarray | csr_matrix | None = None) -> np.ndarray:
@@ -554,8 +594,12 @@ class Projector(BaseEstimator, TransformerMixin):
         if self.Y_ is None:
             raise ValueError("Projector has not been fitted yet.")
         if self.projection_method == "UMAP" and X is not None:
-            return cast(np.ndarray, cast(Any, self.estimator_).transform(X))
-        return cast(np.ndarray, self.Y_)
+            if not isinstance(self.estimator_, _SupportsTransform):
+                raise ValueError(
+                    "The fitted UMAP estimator does not support transform."
+                )
+            return np.asarray(self.estimator_.transform(X))
+        return self.Y_
 
     def fit_transform(self, X, y=None, **kwargs) -> np.ndarray:
         """Fit the projection and return the embedding.
@@ -577,7 +621,9 @@ class Projector(BaseEstimator, TransformerMixin):
             Projection results.
         """
         self.fit(X, **kwargs)
-        return cast(np.ndarray, self.Y_)
+        if self.Y_ is None:
+            raise ValueError("Projector has not been fitted yet.")
+        return self.Y_
 
 
 # Check if pymde is installed

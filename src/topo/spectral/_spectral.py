@@ -467,7 +467,8 @@ def diffusion_operator(
     semi_aniso=False,
     *,
     return_D_inv_sqrt: Literal[False] = False,
-) -> csr_matrix | np.ndarray: ...
+) -> csr_matrix | np.ndarray:
+    pass
 
 
 @overload
@@ -478,7 +479,8 @@ def diffusion_operator(
     semi_aniso=False,
     *,
     return_D_inv_sqrt: Literal[True],
-) -> tuple[csr_matrix | np.ndarray, np.ndarray]: ...
+) -> tuple[csr_matrix | np.ndarray, np.ndarray]:
+    pass
 
 
 def diffusion_operator(

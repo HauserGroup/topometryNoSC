@@ -1,7 +1,5 @@
 """Regression tests for the UMAP adapter."""
 
-from typing import Any, cast
-
 import numpy as np
 import pytest
 from scipy import sparse
@@ -50,7 +48,7 @@ def test_fuzzy_graph_from_knn_matches_umap():
         [[0.25, 0.75], [0.25, 0.5], [0.5, 0.6], [0.6, 0.9]],
         dtype=np.float32,
     )
-    actual_graph, actual_sigmas, actual_rhos = fuzzy_graph_from_knn(
+    res_knn = fuzzy_graph_from_knn(
         X,
         knn_indices=indices,
         knn_dists=dists,
@@ -58,6 +56,7 @@ def test_fuzzy_graph_from_knn_matches_umap():
         random_state=42,
         metric="euclidean",
     )
+    actual_graph, actual_sigmas, actual_rhos = res_knn[:3]
     expected = fuzzy_simplicial_set(
         X=X,
         n_neighbors=2,
@@ -83,12 +82,13 @@ def test_fuzzy_graph_from_data_matches_umap():
 
     X = np.random.RandomState(0).randn(12, 3).astype(np.float32)
 
-    actual_graph, actual_sigmas, actual_rhos = fuzzy_graph_from_data(
+    res_data = fuzzy_graph_from_data(
         X,
         n_neighbors=4,
         random_state=42,
         metric="euclidean",
     )
+    actual_graph, actual_sigmas, actual_rhos = res_data[:3]
     expected = fuzzy_simplicial_set(
         X=X,
         n_neighbors=4,
@@ -112,13 +112,15 @@ def test_fuzzy_graph_from_data_matches_umap():
 def test_fuzzy_graph_from_data_return_dists_contract():
     X = np.random.RandomState(3).randn(12, 3).astype(np.float32)
 
-    graph, sigmas, rhos, dists = fuzzy_graph_from_data(
+    res_dists = fuzzy_graph_from_data(
         X,
         n_neighbors=4,
         random_state=42,
         metric="euclidean",
         return_dists=True,
     )
+    graph, sigmas, rhos = res_dists[:3]
+    dists = res_dists[3] if len(res_dists) > 3 else None
 
     assert sparse.issparse(graph)
     assert sigmas.shape == (12,)
@@ -226,7 +228,8 @@ def test_projector_umap_uses_upstream_estimator_and_is_deterministic():
     from topo.layouts.projector import Projector
 
     X = np.random.RandomState(2).randn(20, 4)
-    kwargs: dict[str, Any] = dict(
+
+    first = Projector(
         projection_method="UMAP",
         n_components=2,
         n_neighbors=5,
@@ -234,19 +237,27 @@ def test_projector_umap_uses_upstream_estimator_and_is_deterministic():
         num_iters=10,
         random_state=42,
         init="random",
-    )
-
-    first = Projector(**kwargs).fit(X)
-    second = Projector(**kwargs).fit(X)
+    ).fit(X)
+    second = Projector(
+        projection_method="UMAP",
+        n_components=2,
+        n_neighbors=5,
+        nbrs_backend="sklearn",
+        num_iters=10,
+        random_state=42,
+        init="random",
+    ).fit(X)
 
     assert isinstance(first.estimator_, UMAP)
     assert first.Y_ is not None
     assert second.Y_ is not None
-    assert first.Y_.shape == (20, 2)
-    est = cast(Any, first.estimator_)
-    assert len(est.precomputed_knn) == 3
-    assert est.precomputed_knn[2] is None
-    np.testing.assert_allclose(first.Y_, second.Y_)
+    Y_first = np.asarray(first.Y_)
+    Y_second = np.asarray(second.Y_)
+    assert Y_first.shape == (20, 2)
+    precomputed_knn = getattr(first.estimator_, "precomputed_knn")
+    assert len(precomputed_knn) == 3
+    assert precomputed_knn[2] is None
+    np.testing.assert_allclose(Y_first, Y_second)
 
 
 def test_projector_umap_accepts_sparse_precomputed_knn():
@@ -266,10 +277,11 @@ def test_projector_umap_accepts_sparse_precomputed_knn():
     ).fit(graph)
 
     assert proj.Y_ is not None
-    assert proj.Y_.shape == (20, 2)
-    est = cast(Any, proj.estimator_)
-    assert len(est.precomputed_knn) == 3
-    assert est.precomputed_knn[2] is None
+    Y_proj = np.asarray(proj.Y_)
+    assert Y_proj.shape == (20, 2)
+    precomputed_knn = getattr(proj.estimator_, "precomputed_knn")
+    assert len(precomputed_knn) == 3
+    assert precomputed_knn[2] is None
 
 
 def test_no_local_umap_graph_helper_definitions():

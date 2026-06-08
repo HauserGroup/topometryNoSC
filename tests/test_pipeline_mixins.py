@@ -8,6 +8,7 @@ from topo._pipeline import eigen as eigen_pipeline
 from topo._pipeline.eigen import EigenBuildMixin
 from topo._pipeline.graph import GraphBuildMixin
 from topo._pipeline.layout import LayoutBuildMixin
+from topo.tpgraph.kernels import Kernel
 
 
 class DummyGraphBuilder(GraphBuildMixin):
@@ -23,17 +24,18 @@ class DummyGraphBuilder(GraphBuildMixin):
         self.runtimes = {}
         self.base_kernel_version = "dummy"
         self.low_memory = True
-        self.BaseKernelDict = {}
+        self.BaseKernelDict: dict[str, Kernel] = {}
         self.base_kernel = None
         self.base_nbrs_class = None
         self.base_knn_graph = None
         self.build_kernel_calls = []
+        self.dummy_kernel = Kernel()
 
-    def _build_kernel(self, *args, **kwargs):
+    def _build_kernel(self, *args, **kwargs) -> tuple[Kernel, dict[str, Kernel]]:
         self.build_kernel_calls.append((args, kwargs))
         updated = dict(args[3])
-        updated[args[2]] = "kernel"
-        return "kernel", updated
+        updated[args[2]] = self.dummy_kernel
+        return self.dummy_kernel, updated
 
 
 class DummyEigenBuilder(EigenBuildMixin):
@@ -95,12 +97,13 @@ class DummyLayoutBuilder(LayoutBuildMixin):
 
 def test_graph_build_base_graph_accepts_precomputed_matrix():
     builder = DummyGraphBuilder()
-    X = sparse.eye(4, format="csr")
+    X = sparse.csr_matrix(np.eye(4))
 
     builder._build_base_graph(X)
 
     assert builder.n == 4
     assert builder.m == 4
+    assert builder.base_knn_graph is not None
     assert builder.base_knn_graph.shape == (4, 4)
 
 
@@ -115,15 +118,19 @@ def test_graph_build_base_graph_rejects_missing_or_nonsquare_input():
 
 def test_graph_build_base_kernel_uses_cache_or_builder():
     builder = DummyGraphBuilder()
-    builder.BaseKernelDict["dummy"] = "cached"
+    cached_kernel = Kernel()
+    builder.BaseKernelDict["dummy"] = cached_kernel
     builder._build_base_kernel(np.ones((3, 2)))
-    assert builder.base_kernel == "cached"
+    assert builder.base_kernel is cached_kernel
     assert builder.build_kernel_calls == []
 
     builder.base_kernel_version = "new"
     builder._build_base_kernel(np.ones((3, 2)))
-    assert builder.base_kernel == "kernel"
-    assert builder.BaseKernelDict == {"dummy": "cached", "new": "kernel"}
+    assert builder.base_kernel is builder.dummy_kernel
+    assert builder.BaseKernelDict == {
+        "dummy": cached_kernel,
+        "new": builder.dummy_kernel,
+    }
 
 
 def test_automated_sizing_updates_component_state(monkeypatch):

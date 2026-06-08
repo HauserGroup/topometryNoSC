@@ -44,6 +44,10 @@ def _brute_force_cknn_reference(X, scale_k, delta):
     return sparse.csr_matrix(adjacency.astype(np.float32))
 
 
+def _as_dense_array(matrix):
+    return matrix.toarray() if sparse.issparse(matrix) else np.asarray(matrix)
+
+
 def test_cknn_exact_threshold_uses_strict_inequality():
     X = np.array([[0.0], [1.0], [3.0]])
 
@@ -67,7 +71,7 @@ def test_cknn_exact_matches_brute_force_reference():
     expected = _brute_force_cknn_reference(X, scale_k=5, delta=1.2)
     actual = cknn_graph(X, scale_k=5, delta=1.2, exact=True)
 
-    assert (actual != expected).nnz == 0
+    np.testing.assert_array_equal(actual.toarray(), expected.toarray())
 
 
 def test_cknn_graph_properties_and_delta_monotonicity():
@@ -77,9 +81,9 @@ def test_cknn_graph_properties_and_delta_monotonicity():
     A_large = cknn_graph(X, scale_k=8, delta=1.2, exact=True)
 
     assert sparse.issparse(A_small)
-    assert (A_large != A_large.T).nnz == 0
+    np.testing.assert_array_equal(A_large.toarray(), A_large.T.toarray())
     assert set(np.unique(A_large.data)).issubset({1.0})
-    assert (A_small.maximum(A_large) != A_large).nnz == 0
+    np.testing.assert_array_equal(A_small.maximum(A_large).toarray(), A_large.toarray())
 
 
 def test_cknn_candidate_mode_matches_exact_when_candidates_are_complete():
@@ -95,7 +99,7 @@ def test_cknn_candidate_mode_matches_exact_when_candidates_are_complete():
         backend="sklearn",
     )
 
-    assert (exact != approx_complete).nnz == 0
+    np.testing.assert_array_equal(exact.toarray(), approx_complete.toarray())
 
 
 def test_cknn_unnormalized_laplacian_zero_modes_match_components():
@@ -123,7 +127,7 @@ def test_cknn_ratio_matrix_threshold_matches_graph():
 
     A = cknn_graph(X, scale_k=5, delta=1.1, exact=True)
 
-    assert (A_from_ratio != A).nnz == 0
+    np.testing.assert_array_equal(A_from_ratio.toarray(), A.toarray())
 
 
 def test_kernel_cknn_returns_binary_sparse_graph():
@@ -139,7 +143,7 @@ def test_kernel_cknn_returns_binary_sparse_graph():
         laplacian_type="unnormalized",
     ).fit(X)
     assert sparse.issparse(ker.K)
-    assert (ker.K != ker.K.T).nnz == 0
+    np.testing.assert_array_equal(ker.K.toarray(), ker.K.T.toarray())
     assert set(np.unique(ker.K.data)).issubset({1.0})
 
 
@@ -160,6 +164,8 @@ def test_topograph_cknn_smoke():
     tg.fit(X)
 
     assert tg.laplacian_type == "unnormalized"
+    assert tg.base_kernel is not None
+    assert tg.base_kernel.K is not None
     assert sparse.issparse(tg.base_kernel.K)
     assert set(np.unique(tg.base_kernel.K.data)).issubset({1.0})
 
@@ -196,6 +202,7 @@ def test_kernel_helper_validation_and_sanitizing():
         kernels._check_square_matrix(np.ones((2, 3)))
 
     sanitized = kernels._sanitize_sparse_data(csr)
+    assert sparse.issparse(sanitized)
     np.testing.assert_allclose(sanitized.toarray(), [[1.0, 0.0], [0.0, 2.0]])
 
 
@@ -275,11 +282,15 @@ def test_kernel_parameterized_operator_caches_recompute_by_key():
 
     L_norm = ker.laplacian("normalized")
     L_unnorm = ker.laplacian("unnormalized")
-    assert not np.allclose(L_norm.toarray(), L_unnorm.toarray())
+    L_norm_arr = _as_dense_array(L_norm)
+    L_unnorm_arr = _as_dense_array(L_unnorm)
+    assert not np.allclose(L_norm_arr, L_unnorm_arr)
 
     P_alpha0 = ker.diff_op(anisotropy=0.0)
     P_alpha1 = ker.diff_op(anisotropy=1.0)
-    assert not np.allclose(P_alpha0.toarray(), P_alpha1.toarray())
+    P_alpha0_arr = _as_dense_array(P_alpha0)
+    P_alpha1_arr = _as_dense_array(P_alpha1)
+    assert not np.allclose(P_alpha0_arr, P_alpha1_arr)
 
 
 def test_shortest_paths_caches_by_indices():
@@ -289,6 +300,8 @@ def test_shortest_paths_caches_by_indices():
     sp_all = ker.shortest_paths(indices=None)
     sp_subset = ker.shortest_paths(indices=[0, 2])
 
+    assert sp_all is not None
+    assert sp_subset is not None
     assert sp_all.shape == (10, 10)
     assert sp_subset.shape == (2, 10)
 
@@ -329,13 +342,16 @@ def test_resistance_distance_sparsify_and_impute_numerics():
         laplacian_type="unnormalized",
     ).fit(graph)
 
-    rd = ker.resistance_distance().toarray()
+    rd_mat = ker.resistance_distance()
+    rd = rd_mat.toarray() if sparse.issparse(rd_mat) else np.asarray(rd_mat)
     np.testing.assert_allclose(rd, rd.T)
     np.testing.assert_allclose(np.diag(rd), np.zeros(4))
     assert np.isfinite(rd).all()
     assert (rd >= -1e-12).all()
 
-    sparse_graph = ker.sparsify(epsilon=0.9, maxiter=1, random_state=0).tocsr()
+    sparse_graph = ker.sparsify(epsilon=0.9, maxiter=1, random_state=0)
+    assert sparse.isspmatrix(sparse_graph)
+    sparse_graph = sparse_graph.tocsr()
     np.testing.assert_allclose(sparse_graph.toarray(), sparse_graph.toarray().T)
     assert (sparse_graph.data >= 0).all()
 

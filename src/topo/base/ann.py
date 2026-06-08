@@ -40,6 +40,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.model_selection import ParameterGrid, train_test_split
 from sklearn.neighbors import NearestNeighbors, kneighbors_graph
 
+from topo.base.graph_matrix import as_csr_matrix
+
 logger = logging.getLogger(__name__)
 
 
@@ -269,14 +271,16 @@ def _sklearn_knn_graph(
     include_self: bool = False,
 ) -> csr_matrix:
     """Build kNN distance graph using sklearn kneighbors_graph."""
-    graph = kneighbors_graph(
-        X,
-        n_neighbors=n_neighbors,
-        mode="distance",
-        metric=metric,
-        include_self=include_self,
-        n_jobs=n_jobs,
-    ).tocsr()  # type: ignore[attr-defined]
+    graph = as_csr_matrix(
+        kneighbors_graph(
+            X,
+            n_neighbors=n_neighbors,
+            mode="distance",
+            metric=metric,
+            include_self=include_self,
+            n_jobs=n_jobs,
+        )
+    )
 
     if not include_self:
         graph.setdiag(0.0)
@@ -481,7 +485,10 @@ def kNN(
             else:
                 knn = nbrs.kneighbors_graph(Y, mode="distance")
 
-    knn_csr = knn.tocsr() if issparse(knn) else csr_matrix(knn)
+    # knn_csr = knn.tocsr() if issparse(knn) else csr_matrix(knn)
+    knn_csr = as_csr_matrix(
+        knn, "knn graph from kNN function"
+    )  # Ensure output is CSR format
     if return_instance:
         if nbrs is None:
             raise ValueError(

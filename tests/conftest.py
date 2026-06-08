@@ -26,5 +26,14 @@ def fitted_topograph(swiss_roll_data):
         backend="sklearn",
     )
     tg.fit(X)
+    tg.fit(X)
+
+    print("BaseKernelDict:", tg.BaseKernelDict.keys())
+    print("EigenbasisDict:", tg.EigenbasisDict.keys())
+    print("GraphKernelDict:", tg.GraphKernelDict.keys())
+    print("current_eigenbasis:", tg.current_eigenbasis)
+    print("_kernel_Z:", tg._kernel_Z)
+    print("_kernel_msZ:", tg._kernel_msZ)
+
     tg.project(projection_method="MAP", multiscale=True, num_iters=50)
     return tg

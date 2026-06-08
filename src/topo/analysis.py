@@ -11,6 +11,8 @@ from typing import Literal
 import numpy as np
 import scipy.sparse as sp
 
+from topo.base.graph_matrix import as_csr_matrix
+
 # ---------------------------------------------------------------------------
 # Validation helpers
 # ---------------------------------------------------------------------------
@@ -59,10 +61,7 @@ def _as_square_operator(P, n: int, name: str):
     if P is None:
         raise ValueError(f"{name} must not be None.")
 
-    if sp.issparse(P):
-        P_checked = P.tocsr()
-    else:
-        P_checked = np.asarray(P, dtype=float)
+    P_checked = as_csr_matrix(P, name)
 
     if P_checked.shape != (n, n):
         raise ValueError(f"{name} must have shape ({n}, {n}), got {P_checked.shape}.")
@@ -477,17 +476,24 @@ def impute(
     t = _validate_nonnegative_int(t, "t")
 
     if sp.issparse(X):
-        X_work = X.tocsr(copy=True).astype(dtype)
-        if X_work.ndim != 2:
+        X_work = as_csr_matrix(X, name="X", dtype=dtype, copy=True)
+
+        shape = X_work.shape
+        if shape is None or len(shape) != 2:
             raise ValueError("X must be a 2-D matrix.")
-        n = X_work.shape[0]
+
+        n = int(shape[0])
         P_checked = _as_square_operator(P, n, "P")
 
         X_out = _matvec_or_matmat_power(P_checked, X_work, t)
 
         if output in {"auto", "sparse"}:
-            return X_out.tocsr() if sp.issparse(X_out) else sp.csr_matrix(X_out)
-        return X_out.toarray() if sp.issparse(X_out) else np.asarray(X_out, dtype=dtype)
+            return as_csr_matrix(X_out, name="output", dtype=dtype, copy=False)
+        if sp.issparse(X_out):
+            result = X_out.toarray()  # pyright: ignore[reportAttributeAccessIssue]
+        else:
+            result = np.asarray(X_out)
+        return np.asarray(result, dtype=dtype)
 
     X_work = np.asarray(X, dtype=dtype)
     if X_work.ndim != 2:

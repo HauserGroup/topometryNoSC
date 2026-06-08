@@ -344,11 +344,10 @@ def test_shortest_paths_indices_and_landmark_guard():
         ker.shortest_paths(landmark=True, recompute=True)
 
 
-def test_adaptive_density_ranks_constant_bandwidth_guard():
+def test_adaptive_density_ranks_constant_bandwidth_uses_neutral_fallback():
     adap_sd = np.ones(5)
     ranks = kernels._density_ranks(adap_sd, high=7)
-
-    np.testing.assert_allclose(ranks, np.full(5, 7.0))
+    np.testing.assert_allclose(ranks, np.full(5, 4.5))
 
 
 def test_resistance_distance_sparsify_and_impute_numerics():

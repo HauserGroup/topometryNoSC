@@ -392,7 +392,7 @@ def compute_kernel(
     square_distances=True,
     random_state=None,
     **kwargs,
-):
+) -> csr_matrix | tuple[csr_matrix, dict[str, csr_matrix | np.ndarray | int]]:
     """
     Compute a kernel matrix from a set of points.
 

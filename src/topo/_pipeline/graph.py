@@ -13,6 +13,7 @@ from scipy.sparse import csr_matrix
 from sklearn.base import BaseEstimator
 
 from topo.base.ann import kNN
+from topo.base.graph_matrix import as_csr_matrix
 from topo.tpgraph.kernels import Kernel
 
 logger = logging.getLogger(__name__)
@@ -62,9 +63,7 @@ class GraphBuildMixin:
                     raise ValueError(
                         "When base_metric='precomputed', X must be square."
                     )
-                self.base_knn_graph = (
-                    X.tocsr(copy=True) if isinstance(X, csr_matrix) else csr_matrix(X)
-                )
+                self.base_knn_graph = as_csr_matrix(X, "base kNN graph", copy=True)
 
         if self.base_knn_graph is None:
             if X is None:

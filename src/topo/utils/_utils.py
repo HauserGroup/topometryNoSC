@@ -49,13 +49,16 @@ def get_landmark_indices(
     if n_samples < 1:
         raise ValueError("data must contain at least one sample.")
 
+    method = str(method).lower()
+    if method not in {"random", "kmeans"}:
+        raise ValueError("Unknown landmark selection method; use 'random' or 'kmeans'.")
+
     n_landmarks = int(n_landmarks)
     if n_landmarks < 1:
         raise ValueError("n_landmarks must be at least 1.")
     if n_landmarks > n_samples:
         raise ValueError(f"n_landmarks={n_landmarks} must be <= n_samples={n_samples}.")
 
-    method = str(method).lower()
     rng = check_random_state(random_state)
 
     if method == "random":

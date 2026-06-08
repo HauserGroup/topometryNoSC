@@ -6,7 +6,6 @@ from typing import Any, cast
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
-from scipy import sparse
 from scipy.sparse import csr_matrix
 from scipy.spatial.distance import cdist
 from sklearn.datasets import make_swiss_roll
@@ -14,6 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils import check_random_state
 
 from topo.base.ann import kNN
+from topo.base.graph_matrix import as_csr_matrix
 from topo.eval.global_scores import global_score_laplacian, global_score_pca
 from topo.eval.local_scores import geodesic_correlation
 from topo.eval.rmetric import (
@@ -189,18 +189,6 @@ def as_1d_float_array(value: Any, name: str) -> FloatArray:
         raise ValueError(f"{name} contains NaN or infinite values.")
 
     return arr
-
-
-def as_csr_matrix(value: Any, name: str) -> csr_matrix:
-    if sparse.issparse(value):
-        mat = value.tocsr()
-    else:
-        mat = csr_matrix(np.asarray(value, dtype=np.float64))
-
-    if mat.ndim != 2:
-        raise ValueError(f"{name} must be a 2-D matrix.")
-
-    return mat
 
 
 def as_scalar_float(value: Any, name: str) -> float:
@@ -480,7 +468,7 @@ def compute_metrics(
         "geodesic_correlation",
     )
 
-    P_input = result.P_X.tocsr()
+    P_input = as_csr_matrix(result.P_X, "P_input")
     P_emb = as_csr_matrix(
         get_P(Y, metric="euclidean", n_neighbors=config.n_neighbors),
         "P_emb",

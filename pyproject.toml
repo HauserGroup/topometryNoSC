@@ -166,7 +166,7 @@ extraPaths = ["src", "notebooks"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra -q --tb=short"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "optional_deps: tests that exercise optional-dependency guard rails",

@@ -323,7 +323,6 @@ class TestUoMAggregationHelpers:
         np.testing.assert_array_equal(Z[1], np.array([0, 0, 21], dtype=np.float32))
 
 
-@pytest.mark.skip
 def test_uom_same_size_components_do_not_share_cached_kernels():
     rng = np.random.default_rng(0)
 

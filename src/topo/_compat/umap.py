@@ -10,8 +10,6 @@ Only this module imports from :mod:`umap.umap_`. The rest of the package uses
 these wrappers so kNN-array validation and return contracts stay centralized.
 """
 
-from __future__ import annotations
-
 from inspect import signature
 from typing import Any, cast
 

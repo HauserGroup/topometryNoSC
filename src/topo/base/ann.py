@@ -1,5 +1,5 @@
 #####################################
-# Wrappers for approximate nearest neighbor search
+# Wrappers for nearest-neighbor graph construction
 # Author: Davi Sidarta-Oliveira
 # School of Medical Sciences, University of Campinas, Brazil
 # contact: davisidarta@fcm.unicamp.br
@@ -33,7 +33,7 @@ import numpy as np
 from joblib import cpu_count
 from scipy.sparse import csr_matrix, issparse
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.model_selection import ParameterGrid, train_test_split
+from sklearn.model_selection import train_test_split
 from sklearn.neighbors import NearestNeighbors, kneighbors_graph
 
 from topo.base.graph_matrix import as_csr_matrix
@@ -63,7 +63,7 @@ def _query_k(n_neighbors: int, n_fit_samples: int) -> int:
     n_neighbors = _validate_n_neighbors(n_neighbors)
     if n_fit_samples < 1:
         raise ValueError("Cannot query an empty index.")
-    # Most ANN backends return the query point itself as the first neighbor
+    # Self-query neighbor searches usually return the query point itself first.
     return min(n_neighbors + 1, n_fit_samples)
 
 
@@ -133,23 +133,6 @@ def _as_dense_array(data: np.ndarray | csr_matrix | list) -> np.ndarray:
     if arr.ndim != 2:
         raise ValueError("Input data must be 2-dimensional.")
     return arr
-
-
-def _as_csr_matrix(data: np.ndarray | csr_matrix | list) -> csr_matrix:
-    """Convert supported array-like inputs to CSR sparse matrix."""
-    if isinstance(data, csr_matrix):
-        return data
-
-    try:
-        import pandas as pd
-
-        if isinstance(data, pd.DataFrame):
-            return csr_matrix(data.to_numpy())
-    except ImportError:
-        # pandas is optional; fall back to generic CSR conversion below.
-        pass
-
-    return csr_matrix(data)
 
 
 def _check_2d_data(data: object, name: str = "data") -> tuple[int, int]:
@@ -271,7 +254,8 @@ def _sklearn_knn_graph(
             metric=metric,
             include_self=include_self,
             n_jobs=n_jobs,
-        )
+        ),
+        "sklearn kneighbors_graph output",
     )
 
     if not include_self:
@@ -288,7 +272,7 @@ def kNN(
     n_neighbors: int | float | str = 5,
     metric: str = "euclidean",
     n_jobs: int | str | None = -1,
-    backend: str = "hnswlib",
+    backend: str = "sklearn",
     low_memory: bool = True,
     M: int = 60,
     p: float = 11 / 16,
@@ -309,7 +293,7 @@ def kNN(
     n_neighbors: int | float | str = 5,
     metric: str = "euclidean",
     n_jobs: int | str | None = -1,
-    backend: str = "hnswlib",
+    backend: str = "sklearn",
     low_memory: bool = True,
     M: int = 60,
     p: float = 11 / 16,
@@ -329,7 +313,7 @@ def kNN(
     n_neighbors: int | float | str = 5,
     metric: str = "euclidean",
     n_jobs: int | str | None = -1,
-    backend: str = "hnswlib",
+    backend: str = "sklearn",
     low_memory: bool = True,
     M: int = 60,
     p: float = 11 / 16,
@@ -495,113 +479,6 @@ def kNN(
         return nbrs, knn_csr
 
     return knn_csr
-
-
-def grid_search(
-    X,
-    n_neighbors=15,
-    metric="euclidean",
-    hnswlib_params=None,
-    n_jobs=-1,
-    verbose=False,
-):
-    """Evaluate approximate kNN graph quality for HNSWlib.
-
-    Parameters
-    ----------
-    X : array-like or sparse matrix
-        Input data used to build the neighborhood graph.
-    n_neighbors : int, default=15
-        Number of non-self neighbors to retrieve.
-    metric : str, default='euclidean'
-        Distance metric used for neighbor search.
-    hnswlib_params : dict, optional
-        Parameter grid for HNSWlibTransformer.
-    n_jobs : int, default=-1
-        Number of parallel jobs for the transformers.
-    verbose : bool, default=False
-        If True, log recall and timing for each parameter combination.
-
-    Returns
-    -------
-    dict
-        Mapping of backend names to lists of dictionaries containing parameter
-        settings, recall and execution time.
-    """
-    n_samples, _ = _check_2d_data(X, "X")
-    n_neighbors = _validate_n_neighbors(n_neighbors)
-    n_jobs = _resolve_n_jobs(n_jobs)
-
-    if n_neighbors >= n_samples:
-        raise ValueError(
-            f"n_neighbors={n_neighbors} must be smaller than n_samples={n_samples} "
-            "for self-query recall evaluation."
-        )
-
-    exact_metric = "euclidean" if metric == "sqeuclidean" else metric
-    if exact_metric == "inner_product":
-        exact_metric = "cosine"
-        warn(
-            "Using cosine brute-force neighbors as an approximate recall "
-            "reference for metric='inner_product'.",
-            stacklevel=2,
-        )
-
-    query_k = _query_k(n_neighbors, n_samples)
-    gt = NearestNeighbors(
-        n_neighbors=query_k,
-        metric=exact_metric,
-        algorithm="brute",
-    ).fit(X)
-    true_dist, true_ind = gt.kneighbors(X, return_distance=True)
-    true_ind, _ = _drop_self_and_truncate_neighbors(
-        true_ind,
-        true_dist,
-        n_neighbors=n_neighbors,
-        n_query_samples=n_samples,
-        n_fit_samples=n_samples,
-        is_self_query=True,
-    )
-
-    results = {"hnswlib": []}
-
-    for params in ParameterGrid(hnswlib_params) if hnswlib_params else [{}]:
-        model = HNSWlibTransformer(
-            n_neighbors=n_neighbors,
-            metric=metric,
-            n_jobs=n_jobs,
-            **params,
-        )
-
-        start = time.time()
-        model.fit(X)
-        ind, _ = model.ind_dist_grad(
-            X,
-            return_grad=False,
-            return_graph=False,
-        )
-        elapsed = time.time() - start
-
-        recall = np.mean(
-            [
-                np.intersect1d(true_ind[i], ind[i]).size / n_neighbors
-                for i in range(n_samples)
-            ]
-        )
-        results["hnswlib"].append({"params": params, "recall": recall, "time": elapsed})
-
-    if verbose:
-        for backend, backend_results in results.items():
-            for row in backend_results:
-                logger.info(
-                    "%s: params=%s, recall=%.3f, time=%.3fs",
-                    backend,
-                    row["params"],
-                    row["recall"],
-                    row["time"],
-                )
-
-    return results
 
 
 class HNSWlibTransformer(TransformerMixin, BaseEstimator):
@@ -820,8 +697,6 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
                 distances=distances,
                 n_query_samples=n_query_samples,
                 n_fit_samples=self.n_samples_fit_,
-                n_neighbors=self.n_neighbors,
-                is_self_query=(n_query_samples == self.n_samples_fit_),
             )
 
         if self.verbose:

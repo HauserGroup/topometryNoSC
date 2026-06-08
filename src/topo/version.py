@@ -10,7 +10,7 @@ from contextlib import suppress
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _version
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 with suppress(PackageNotFoundError):  # local editable / source-tree import
     __version__ = _version("topometry-nosc")

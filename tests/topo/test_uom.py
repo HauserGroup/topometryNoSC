@@ -3,6 +3,7 @@
 import numpy as np
 import scipy.sparse as sp
 
+from topo.topograph import TopOGraph
 from topo.uom import consolidate_macros, find_components, louvain_micro, mbkm
 
 
@@ -93,3 +94,85 @@ class TestConsolidateMacros:
         assert new_labels.shape == (2 * n,)
         # Two well-separated blocks should remain separate
         assert len(np.unique(new_labels)) >= 2
+
+
+def test_uom_component_order_covers_samples_once():
+    tg = TopOGraph(uom=True)
+    tg.n = 5
+    tg._init_uom_state()
+    tg.uom_components_ = [np.array([2, 4]), np.array([0, 1, 3])]
+
+    order = tg._component_order()  # type: ignore[attr-defined]
+    assert sorted(order.tolist()) == [0, 1, 2, 3, 4]
+
+
+def test_uom_block_diag_to_original_order():
+    tg = TopOGraph(uom=True)
+    tg.n = 4
+    tg._init_uom_state()
+    tg.uom_components_ = [np.array([2, 0]), np.array([3, 1])]
+
+    B1 = sp.csr_matrix([[1, 2], [3, 4]], dtype=np.float32)
+    B2 = sp.csr_matrix([[5, 6], [7, 8]], dtype=np.float32)
+
+    M = tg._block_diag_to_original_order([B1, B2]).toarray()  # type: ignore[attr-defined]
+
+    # Component [2,0] means B1 rows/cols map:
+    # local 0 -> global 2, local 1 -> global 0.
+    assert M[2, 2] == 1
+    assert M[2, 0] == 2
+    assert M[0, 2] == 3
+    assert M[0, 0] == 4
+
+    # Component [3,1] means B2 local 0 -> global 3, local 1 -> global 1.
+    assert M[3, 3] == 5
+    assert M[3, 1] == 6
+    assert M[1, 3] == 7
+    assert M[1, 1] == 8
+
+
+def test_uom_tiny_component_list_alignment():
+    tg = TopOGraph(uom=True)
+    tg._init_uom_state()
+    tg.uom_Z_list, tg.uom_msZ_list = [], []
+    tg.uom_knn_Z_list, tg.uom_knn_msZ_list = [], []
+    tg.uom_Kernel_Z_list, tg.uom_Kernel_msZ_list = [], []
+    tg.uom_BaseKernel_list, tg.uom_knn_X_list = [], []
+    tg.uom_DMEig_list, tg.uom_msDMEig_list = [], []
+    tg.uom_eigenvalues_dm_list, tg.uom_eigenvalues_ms_list = [], []
+
+    tg._fit_uom_tiny_component(np.array([0]), 1)
+
+    lists = [
+        tg.uom_Z_list,
+        tg.uom_msZ_list,
+        tg.uom_knn_Z_list,
+        tg.uom_knn_msZ_list,
+        tg.uom_Kernel_Z_list,
+        tg.uom_Kernel_msZ_list,
+        tg.uom_BaseKernel_list,
+        tg.uom_knn_X_list,
+        tg.uom_DMEig_list,
+        tg.uom_msDMEig_list,
+        tg.uom_eigenvalues_dm_list,
+        tg.uom_eigenvalues_ms_list,
+    ]
+    assert all(len(x) == 1 for x in lists)
+
+
+def test_louvain_micro_returns_valid_labels():
+    S = sp.csr_matrix(
+        [
+            [0, 1, 1, 0, 0],
+            [1, 0, 1, 0, 0],
+            [1, 1, 0, 0.1, 0],
+            [0, 0, 0.1, 0, 1],
+            [0, 0, 0, 1, 0],
+        ],
+        dtype=np.float32,
+    )
+
+    labels = louvain_micro(S, random_state=0, max_passes=10)
+    assert labels.shape == (5,)
+    assert labels.min() == 0
+    assert labels.max() < 5

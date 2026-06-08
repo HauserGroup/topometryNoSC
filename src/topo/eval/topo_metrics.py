@@ -177,7 +177,7 @@ def get_P(Y, **kwargs_for_kernel):
         metric="cosine",
         n_neighbors=30,
         adaptive_bw=True,
-        backend="nmslib",
+        backend="sklearn",
         n_jobs=-1,
         symmetrize=True,
         use_angular=True,  # sensible for cosine on z-scored data

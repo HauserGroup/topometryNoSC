@@ -124,9 +124,6 @@ class GraphBuildMixin:
                 raise ValueError("base_kernel exists but does not expose fitted `P`.")
             return
 
-        if self.base_knn_graph is None:
-            raise RuntimeError("Cannot build base kernel before base kNN graph exists.")
-
         if self.base_kernel_version in self.BaseKernelDict:
             self.base_kernel = self.BaseKernelDict[self.base_kernel_version]
             if getattr(self.base_kernel, "P", None) is None:
@@ -134,6 +131,12 @@ class GraphBuildMixin:
                     f"Cached base kernel {self.base_kernel_version!r} is not fitted."
                 )
             return
+
+        if self.base_knn_graph is None:
+            self._build_base_graph(X)
+
+        if self.base_knn_graph is None:
+            raise RuntimeError("Cannot build base kernel before base kNN graph exists.")
 
         t0 = time.time()
         self.base_kernel, self.BaseKernelDict = self._build_kernel(

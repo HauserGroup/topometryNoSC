@@ -17,9 +17,11 @@ class DummyGraphBuilder(GraphBuildMixin):
         self.m = 0
         self.verbosity = 0
         self.base_knn = 2
-        self.base_metric = "precomputed"
+        self.base_metric = "euclidean"
         self.n_jobs = 1
         self.backend = "sklearn"
+        self._backend_resolved = self.backend
+        self._n_jobs_effective = self.n_jobs
         self.bases_graph_verbose = False
         self.runtimes = {}
         self.base_kernel_version = "dummy"
@@ -58,6 +60,11 @@ class DummyEigenBuilder(EigenBuildMixin):
         self.selected_scaffold_components_ = None
         self.global_dimensionality = None
         self.local_dimensionality = None
+        self._backend_resolved = self.backend
+        self._n_jobs_effective = self.n_jobs
+        from sklearn.utils import check_random_state
+
+        self._random_state_resolved = check_random_state(self.random_state)
 
 
 class DummyLayoutBuilder(LayoutBuildMixin):
@@ -112,25 +119,42 @@ def test_graph_build_base_graph_rejects_missing_or_nonsquare_input():
     with pytest.raises(ValueError, match="no base_kernel"):
         builder._build_base_graph(None)
 
+    builder.base_metric = "precomputed"
     with pytest.raises(ValueError, match="must be square"):
         builder._build_base_graph(np.ones((4, 2)))
 
 
 def test_graph_build_base_kernel_uses_cache_or_builder():
+    from scipy.sparse import csr_matrix
+
     builder = DummyGraphBuilder()
     cached_kernel = Kernel()
+    cached_kernel._P = csr_matrix(np.eye(3))
     builder.BaseKernelDict["dummy"] = cached_kernel
-    builder._build_base_kernel(np.ones((3, 2)))
+
+    X = np.ones((3, 2))
+    builder._build_base_graph(X)
+
+    builder._build_base_kernel(X)
     assert builder.base_kernel is cached_kernel
     assert builder.build_kernel_calls == []
 
+    builder.base_kernel = None
     builder.base_kernel_version = "new"
-    builder._build_base_kernel(np.ones((3, 2)))
+
+    builder._build_base_kernel(X)
+
     assert builder.base_kernel is builder.dummy_kernel
     assert builder.BaseKernelDict == {
         "dummy": cached_kernel,
         "new": builder.dummy_kernel,
     }
+    assert len(builder.build_kernel_calls) == 1
+    call_args, call_kwargs = builder.build_kernel_calls[0]
+    assert call_args[0] is builder.base_knn_graph
+    assert call_args[1] == builder.base_knn
+    assert call_args[2] == "new"
+    assert call_args[3] == {"dummy": cached_kernel}
 
 
 def test_automated_sizing_updates_component_state(monkeypatch):

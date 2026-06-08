@@ -485,7 +485,7 @@ def diffusion_operator(
 
 def diffusion_operator(
     W, alpha=1.0, symmetric=False, semi_aniso=False, *, return_D_inv_sqrt=False
-) -> csr_matrix | np.ndarray | tuple[csr_matrix | np.ndarray, np.ndarray]:
+) -> csr_matrix | tuple[csr_matrix, np.ndarray]:
     """Compute the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
 
     Parameters
@@ -511,19 +511,16 @@ def diffusion_operator(
 
     Returns
     -------
-    P : scipy.sparse.csr_matrix or np.ndarray
-        The graph diffusion operator. Return type preserves input type:
-        sparse input → sparse CSR output, dense input → dense ndarray output.
+    P : scipy.sparse.csr_matrix
+        The graph diffusion operator as a sparse CSR matrix.
 
     Notes
     -----
-    Return type policy: Input type is preserved for backward compatibility.
-    Dense input produces dense output; sparse input produces sparse output.
-    Use `.tocsr()` or `.toarray()` to convert as needed.
+    Return type is consistently sparse regardless of input format.
+    Use `.toarray()` to convert to dense ndarray if needed.
 
     """
     # Compute diffusion operator
-    is_sparse_input = sparse.issparse(W)
     W = csr_matrix(W)
     D_left: Any = None
     if sparse.issparse(W):
@@ -551,8 +548,6 @@ def diffusion_operator(
         else:
             P = _dense_diffusion(W, alpha, semi_aniso)
     P_out = csr_matrix(P)
-    if not is_sparse_input:
-        P_out = P_out.toarray()
 
     if symmetric:
         if return_D_inv_sqrt:

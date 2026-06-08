@@ -218,15 +218,16 @@ def find_components(P, random_state=0, consolidate=True, max_passes=100, gamma=0
 
     Returns ``(n_comp, labels)``.
     """
-    from scipy.sparse.csgraph import connected_components
     from scipy.sparse.linalg import eigsh
+
+    from topo._compat.scipy_graph import graph_connected_components
 
     S = _symmetrize_geometric(P)
     n = S.shape[0]
     if S.nnz == 0:
         return 1, np.zeros(n, dtype=int)
 
-    n_cc, cc_labels = connected_components(S, directed=False, return_labels=True)
+    n_cc, cc_labels = graph_connected_components(S, directed=False, return_labels=True)
     if n_cc > 3:
         return n_cc, cc_labels
 

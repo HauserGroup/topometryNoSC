@@ -31,7 +31,6 @@ from scipy.sparse import (
     issparse,
     tril,
 )
-from scipy.sparse.csgraph import connected_components
 from scipy.spatial import procrustes
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import normalize as _l2_normalize_rows
@@ -1483,10 +1482,12 @@ class Kernel(BaseEstimator, TransformerMixin):
         labels : list of int
             The labels of the connected components.
         """
+        from topo._compat.scipy_graph import graph_connected_components
+
         if target is None:
-            n_components, labels = connected_components(self.K, directed=False)
+            n_components, labels = graph_connected_components(self.K, directed=False)
         else:
-            n_components, labels = connected_components(target, directed=False)
+            n_components, labels = graph_connected_components(target, directed=False)
 
         return n_components, labels
 
@@ -1604,7 +1605,11 @@ class Kernel(BaseEstimator, TransformerMixin):
             degrees = np.asarray(sparserW.sum(axis=1)).ravel()
             sparserL = diags(degrees, 0) - sparserW
 
-            n_sparser_components, _ = connected_components(sparserW, directed=False)
+            from topo._compat.scipy_graph import graph_connected_components
+
+            n_sparser_components, _ = graph_connected_components(
+                sparserW, directed=False
+            )
             if n_sparser_components == 1:
                 break
             elif i == maxiter - 1:

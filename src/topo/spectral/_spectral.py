@@ -246,33 +246,9 @@ def graph_laplacian(W, laplacian_type="normalized", return_D=False):
     L : scipy.sparse.csr_matrix
         The graph Laplacian.
     """
-    if sparse.issparse(W):
-        if laplacian_type == "unnormalized":
-            lap_fun = _sparse_unnormalized_laplacian
-        elif laplacian_type == "normalized":
-            lap_fun = _sparse_symmetrized_normalized_laplacian
-        elif laplacian_type == "random_walk":
-            lap_fun = _sparse_normalized_random_walk_laplacian
-        else:
-            raise ValueError(
-                f"Unknown laplacian type: {laplacian_type}"
-                + '. Should \
-            be one of "unnormalized", "normalized", or "random_walk".'
-            )
-    else:
-        if laplacian_type == "unnormalized":
-            lap_fun = _dense_unnormalized_laplacian
-        elif laplacian_type == "normalized":
-            lap_fun = _dense_symmetric_normalized_laplacian
-        elif laplacian_type == "random_walk":
-            lap_fun = _dense_normalized_random_walk_laplacian
-        else:
-            raise ValueError(
-                f"Unknown laplacian type: {laplacian_type}"
-                + '. Should \
-            be one of "unnormalized", "normalized", or "random_walk".'
-            )
-    return lap_fun(W, return_D)
+    from topo._compat.scipy_graph import graph_laplacian as _graph_laplacian
+
+    return _graph_laplacian(W, laplacian_type=laplacian_type, return_D=return_D)
 
 
 def LE(

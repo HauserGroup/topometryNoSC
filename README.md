@@ -14,10 +14,10 @@
 > the upstream `topometry` distribution in the same environment. Please cite
 > both this fork and the original work (see `CITATION.cff`).
 
-**topometry-nosc** is a geometry-aware Python toolkit for exploring high-dimensional data via diffusion/Laplacian operators. It learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** and then finds clusters and builds low-dimensional layouts for analysis and visualization.
+**topometry-nosc** is a Python toolkit for **Manifold Learning**, **Dimensionality Reduction**, and **Spectral Clustering**. It explores high-dimensional data by approximating the **Laplace-Beltrami Operator (LBO)** via **Continuous k-Nearest Neighbors (CkNN)** and **Diffusion Maps**. The pipeline learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** to find clusters and build low-dimensional layouts.
 
-- **scikit-learn–style transformers** with a high-level `TopOGraph` orchestrator
-- **Fixed-time & multiscale spectral scaffolds**
+- **scikit-learn–style transformers** compatible with standard machine learning workflows
+- **Diffusion Maps** and **multiscale spectral scaffolds** for geometry preservation
 - **Operator-native metrics** to quantify geometry preservation and **Riemannian diagnostics** to evaluate distortion in visualizations
 - Designed for **large, diverse datasets**
 

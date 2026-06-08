@@ -1,4 +1,4 @@
-# Background and further reading
+# Background: Diffusion Maps, CkNN, and Manifold Learning
 
 A light, readable tour of the ideas behind `topometry-nosc`, with pointers to the
 papers and package docs that introduce each one. You do **not** need any of this

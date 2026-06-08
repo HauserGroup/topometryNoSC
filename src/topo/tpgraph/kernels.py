@@ -1134,16 +1134,14 @@ class Kernel(BaseEstimator, TransformerMixin):
                 raise ValueError(
                     "No kernel matrix has been fitted yet. Call fit() first."
                 )
-            from topo.eval.local_scores import geodesic_distance
+            from topo._compat.scipy_graph import graph_shortest_paths
 
-            SP = geodesic_distance(
+            SP = graph_shortest_paths(
                 self._K,
                 method="D",
                 unweighted=False,
                 directed=False,
                 indices=indices,
-                n_jobs=self.n_jobs,
-                random_state=self.random_state,
             )
             SP = np.asarray(SP, dtype=float)
             if SP.ndim == 1:

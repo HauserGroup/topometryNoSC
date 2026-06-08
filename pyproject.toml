@@ -92,7 +92,7 @@ dev = [
 ]
 nmslib = ["nmslib>=2.1.2"]
 docs = [
-    "mkdocs-material>=9",
+    "mkdocs-material[imaging]>=9",
     "mkdocstrings[python]>=0.25",
 ]
 

@@ -5,8 +5,11 @@ array representations. These functions enable efficient manipulation of
 sparse k-nearest-neighbor graph matrices.
 """
 
+from typing import Any
+
 import numpy as np
-from scipy.sparse import coo_matrix
+import scipy.sparse as sp
+from scipy.sparse import coo_matrix, csr_matrix
 
 
 def get_sparse_matrix_from_indices_distances(
@@ -86,3 +89,48 @@ def get_indices_distances_from_sparse_matrix(X, n_neighbors):
         _knn_indices[row_id] = row_indices[row_nn_data_indices]
         _knn_dists[row_id] = row_data[row_nn_data_indices]
     return _knn_indices, _knn_dists
+
+
+def as_csr_matrix(
+    value: Any,
+    name: str = "matrix",
+    *,
+    dtype: Any | None = None,
+    copy: bool = False,
+) -> csr_matrix:
+    """Return value as a scipy.sparse.csr_matrix.
+
+    This is a typing/runtime boundary helper. It should not change graph
+    semantics beyond CSR conversion and optional dtype conversion.
+    """
+    if value is None:
+        raise ValueError(f"{name} must not be None.")
+
+    try:
+        out = csr_matrix(value, copy=copy)
+    except Exception as exc:
+        raise TypeError(f"{name} must be convertible to a CSR sparse matrix.") from exc
+
+    if dtype is not None and out.dtype != np.dtype(dtype):
+        out = out.astype(dtype, copy=False)
+
+    return csr_matrix(out)
+
+
+def as_float32_csr(
+    value: Any,
+    name: str = "matrix",
+    *,
+    copy: bool = False,
+) -> csr_matrix:
+    """Return value as CSR float32."""
+    return as_csr_matrix(value, name=name, dtype=np.float32, copy=copy)
+
+
+def sparse_identity(n: int, *, dtype: Any = np.float32) -> csr_matrix:
+    """Return an n-by-n CSR identity matrix."""
+    n = int(n)
+    if n < 0:
+        raise ValueError("n must be non-negative.")
+    diag = np.ones(n, dtype=dtype)
+    return csr_matrix(sp.diags(diag, offsets=0, shape=(n, n), format="csr"))

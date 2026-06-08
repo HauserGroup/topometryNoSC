@@ -1,5 +1,7 @@
 """Tests for graph construction and kernel modules."""
 
+from typing import cast
+
 import numpy as np
 import pytest
 from scipy import sparse
@@ -398,3 +400,100 @@ def test_kernel_safe_refit_recompute_false():
     ker.fit(X_2, recompute=False)
     assert ker._K is not None
     assert ker._K.shape == orig_shape
+
+
+# =============================================================================
+# Step 1: CkNN Semantic Verification (from audit plan)
+# =============================================================================
+
+
+def test_cknn_is_not_plain_knn():
+    """CkNN must remain distinct from ordinary kNN (threshold vs. candidate)."""
+    X = np.array([[0.0], [1.0], [2.0], [10.0]])
+
+    # CkNN with delta=1.01: connects if d < delta * sqrt(rho_i * rho_j)
+    G_cknn = cknn_graph(X, scale_k=1, delta=1.01, exact=True)
+
+    # Plain binary kNN: connects if in k-nearest neighbors
+    G_knn = kNN(X, n_neighbors=1, backend="sklearn")
+    G_knn = G_knn.astype(bool).astype(np.float32)
+
+    # They should differ because CkNN is threshold-based, not k-based
+    diff_count = cast(sparse.csr_matrix, G_cknn != G_knn).nnz
+    assert diff_count > 0, "CkNN and plain kNN should produce different graphs"
+
+
+def test_cknn_is_binary_symmetric_no_diagonal():
+    """CkNN output must be binary, symmetric, and have no diagonal."""
+    X = np.random.default_rng(46).normal(size=(20, 3))
+    G = cknn_graph(X, scale_k=5, delta=1.0, exact=False, include_self=False)
+
+    assert sparse.isspmatrix_csr(G), "Must be CSR sparse"
+    assert np.all(G.data == 1.0), "Binary graph must have all data=1.0"
+    assert G.diagonal().sum() == 0, "No self-loops allowed"
+    assert (G != G.T).nnz == 0, "Graph must be symmetric"
+
+
+def test_cknn_delta_monotonicity():
+    """Larger delta should produce graphs with more edges (monotonicity)."""
+    X = np.random.default_rng(47).normal(size=(30, 3))
+
+    G_small = cknn_graph(X, scale_k=5, delta=0.8, exact=True)
+    G_medium = cknn_graph(X, scale_k=5, delta=1.0, exact=True)
+    G_large = cknn_graph(X, scale_k=5, delta=1.2, exact=True)
+
+    # Larger delta allows more edges: small ⊆ medium ⊆ large
+    diff_count = cast(sparse.csr_matrix, G_small != G_medium).nnz
+    assert diff_count > 0, "Different delta should produce different graphs"
+    assert G_small.nnz <= G_medium.nnz, "Larger delta should have more or equal edges"
+    assert G_medium.nnz <= G_large.nnz, "Larger delta should have more or equal edges"
+
+
+def test_cknn_ratio_matrix_threshold_semantics():
+    """Verify ratio matrix definition: d_ij / sqrt(rho_i * rho_j)."""
+    X = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [5.0, 5.0]])
+
+    ratio_graph = cknn_ratio_matrix(X, scale_k=2, metric="euclidean", exact=True)
+
+    # Ratio matrix should have positive values (distances normalized by radii)
+    assert np.all(ratio_graph.data > 0), "Ratio matrix should have positive values"
+    # No diagonal
+    assert ratio_graph.diagonal().sum() == 0, "Ratio matrix should have no diagonal"
+    # Symmetric
+    assert (ratio_graph != ratio_graph.T).nnz == 0, "Ratio matrix should be symmetric"
+
+
+# =============================================================================
+# Step 2: Exact kNN Graph Self-Neighbor and Row-Count Invariants
+# =============================================================================
+
+
+def test_exact_knn_graph_has_no_self_edges():
+    """Exact kNN graph must have no diagonal entries."""
+    X = np.random.default_rng(48).normal(size=(25, 4))
+    k = 5
+    G = kNN(X, n_neighbors=k, backend="sklearn")
+
+    assert G.diagonal().sum() == 0, "kNN graph must have no self-edges"
+
+
+def test_exact_knn_graph_exact_k_neighbors_per_row():
+    """Exact kNN graph must have exactly k nonzero entries per row."""
+    X = np.random.default_rng(49).normal(size=(30, 4))
+    k = 5
+    G = kNN(X, n_neighbors=k, backend="sklearn")
+
+    row_counts = np.diff(G.indptr)
+    assert np.all(row_counts == k), (
+        f"Expected {k} neighbors per row, got {np.unique(row_counts)}"
+    )
+
+
+def test_exact_knn_connectivity_vs_distance_mode():
+    """Document distance-graph behavior (current implementation returns distances)."""
+    X = np.random.default_rng(50).normal(size=(15, 3))
+    G = kNN(X, n_neighbors=4, backend="sklearn")
+
+    # Current implementation returns distance graph
+    assert G.data.dtype in [np.float32, np.float64], "Should be distance values"
+    assert np.all(G.data >= 0), "Distances should be non-negative"

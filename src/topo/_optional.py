@@ -1,14 +1,14 @@
 """Centralised handling of optional dependencies.
 
-The core package depends on the numerical stack, plotting (matplotlib), dataframe
-I/O (pandas), jupyter, and ``umap-learn``. Everything else (the AMG eigensolver, approximate-nearest-neighbour
-backends and the third-party layout libraries) is optional and gated through the
-helpers in this module so that:
+The core package depends on the numerical stack, plotting (matplotlib),
+dataframe I/O (pandas), Jupyter, and ``umap-learn``. Everything else—the AMG
+eigensolver, approximate-nearest-neighbour backends, and third-party layout
+libraries—is optional and gated through the helpers in this module so that:
 
 * a missing optional dependency raises a single, actionable error message that
   names the ``pip install topometry-nosc[...]`` extra to install, and
-* detection of available backends lives in *one* place instead of being
-  duplicated across :mod:`topo.tpgraph.kernels` and :mod:`topo.layouts.projector`.
+* detection of available backends lives in one place instead of being duplicated
+  across :mod:`topo.tpgraph.kernels` and :mod:`topo.layouts.projector`.
 """
 
 import importlib
@@ -23,8 +23,6 @@ __all__ = [
     "best_ann_backend",
 ]
 
-# Map an importable module name to the pip extra that provides it. Modules not
-# listed here fall back to a ``pip install <name>`` hint.
 _EXTRA_FOR: dict[str, str] = {
     "pyamg": "amg",
     "hnswlib": "ann",
@@ -38,15 +36,15 @@ _EXTRA_FOR: dict[str, str] = {
     "MulticoreTSNE": "layouts",
 }
 
-# Preference order for approximate nearest-neighbour backends.
 _ANN_BACKENDS: tuple[str, ...] = ("hnswlib", "nmslib", "annoy", "faiss")
+_ALLOWED_ANN_BACKENDS: frozenset[str] = frozenset((*_ANN_BACKENDS, "sklearn"))
 
 
 def has(name: str) -> bool:
     """Return ``True`` if importable module ``name`` is installed."""
     try:
         return importlib.util.find_spec(name) is not None
-    except (ImportError, ValueError):
+    except (ImportError, ModuleNotFoundError, ValueError):
         return False
 
 
@@ -94,18 +92,27 @@ def require(name: str, *, purpose: str | None = None) -> ModuleType:
 
 
 def available_ann_backends() -> list[str]:
-    """Return installed approximate nearest-neighbour backends, in preference order."""
+    """Return installed approximate-nearest-neighbour backends in preference order."""
     return [name for name in _ANN_BACKENDS if has(name)]
 
 
 def best_ann_backend(preferred: str | None = None) -> str:
-    """Pick an ANN backend, honouring ``preferred`` when it is installed.
+    """Pick an ANN backend, honouring ``preferred`` when available.
 
     Falls back to the first available backend in :data:`_ANN_BACKENDS`, and
-    finally to ``"sklearn"`` (always available) when no ANN backend is present.
+    finally to ``"sklearn"`` when no ANN backend is present.
     """
-    if preferred and has(preferred):
-        return preferred
+    if preferred is not None:
+        if preferred not in _ALLOWED_ANN_BACKENDS:
+            raise ValueError(
+                f"Unknown ANN backend {preferred!r}. Expected one of "
+                f"{sorted(_ALLOWED_ANN_BACKENDS)}."
+            )
+        if preferred == "sklearn":
+            return "sklearn"
+        if has(preferred):
+            return preferred
+
     available = available_ann_backends()
     if available:
         return available[0]

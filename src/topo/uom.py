@@ -26,49 +26,113 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _to_float32_csr(A):
-    if not sp.isspmatrix_csr(A):
+def _to_float32_csr(A) -> sp.csr_matrix:
+    """Return ``A`` as CSR float32."""
+    if A is None:
+        raise ValueError("Sparse matrix input must not be None.")
+    if not sp.issparse(A):
+        A = sp.csr_matrix(A)
+    elif not sp.isspmatrix_csr(A):
         A = A.tocsr()
     if A.dtype != np.float32:
         A = A.astype(np.float32, copy=False)
+    A.eliminate_zeros()
     return A
 
 
-def _symmetrize_geometric(P):
-    """S_ij = sqrt(P_ij * P_ji) on overlapping support (CSR float32)."""
+def _as_1d_labels(labels, n: int | None = None) -> np.ndarray:
+    """Return labels as a one-dimensional integer array."""
+    out = np.asarray(labels, dtype=int).ravel()
+    if n is not None and out.shape[0] != n:
+        raise ValueError(f"labels must have length {n}, got {out.shape[0]}.")
+    return out
+
+
+def _symmetrize_geometric(P) -> sp.csr_matrix:
+    """Return geometric symmetrization on overlapping support.
+
+    Computes ``S_ij = sqrt(P_ij * P_ji)``. Edges that occur in only one
+    direction are dropped. This is conservative and appropriate when the goal is
+    to identify robust bidirectional manifold connectivity.
+    """
     P = _to_float32_csr(P)
+    if P.shape[0] != P.shape[1]:
+        raise ValueError("P must be square.")
+
     S = P.multiply(P.T)
     if S.nnz == 0:
-        return S
+        return S.tocsr()
+
     S.data = np.sqrt(S.data.astype(np.float64)).astype(np.float32, copy=False)
+    S.eliminate_zeros()
+    return S.tocsr()
+
+
+def _symmetrize_sum(A) -> sp.csr_matrix:
+    """Return additive undirected symmetrization with zero diagonal."""
+    A = _to_float32_csr(A)
+    S = (A + A.T).tocsr()
+    S.setdiag(0)
     S.eliminate_zeros()
     return S
 
 
-def _normalized_laplacian(A):
+def _normalized_laplacian(A) -> sp.csr_matrix:
+    """Compute zero-degree-safe symmetric normalized graph Laplacian."""
     A = _to_float32_csr(A)
+    if A.shape[0] != A.shape[1]:
+        raise ValueError("A must be square.")
+
     n = A.shape[0]
-    d = np.asarray(A.sum(axis=1)).ravel().astype(np.float64).clip(min=1e-12)
-    Dmh = sp.diags((1.0 / np.sqrt(d)).astype(np.float32))
-    return sp.eye(n, dtype=float, format="csr") - (Dmh @ A @ Dmh)
+    d = np.asarray(A.sum(axis=1)).ravel().astype(np.float64)
+    inv_sqrt = np.zeros_like(d, dtype=np.float64)
+    positive = d > 0
+    inv_sqrt[positive] = 1.0 / np.sqrt(d[positive])
+
+    Dmh = sp.eye(n, dtype="float32", format="csr")
+    L = sp.eye(n, dtype="float32", format="csr") - (Dmh @ A @ Dmh)
+    L.eliminate_zeros()
+    return L.tocsr()
 
 
-def _eigengap_k(vals, k_max, k_min=2):
-    vals = np.asarray(vals, dtype=float)
+def _eigengap_k(vals, k_max: int, k_min: int = 2) -> int:
+    """Choose cluster count from eigengap of ascending Laplacian eigenvalues."""
+    vals = np.asarray(vals, dtype=float).ravel()
+    k_max = int(max(1, k_max))
+    k_min = int(max(1, k_min))
+
     if vals.size <= 2:
-        return max(k_min, min(k_max, 2))
+        return int(max(k_min, min(k_max, 2)))
+
     gaps = np.diff(vals)
     if gaps.size <= 1:
-        return max(k_min, min(k_max, 2))
+        return int(max(k_min, min(k_max, 2)))
+
+    # Skip the first gap because lambda_0 is the trivial zero eigenvalue.
     j = int(np.argmax(gaps[1:])) + 1
     return int(max(k_min, min(k_max, j + 1)))
 
 
-def mbkm(X, n_clusters, random_state=0):
-    """MiniBatch KMeans clustering (thin wrapper)."""
+def mbkm(X, n_clusters: int, random_state=0) -> np.ndarray:
+    """MiniBatch KMeans clustering over rows of ``X``."""
     from sklearn.cluster import MiniBatchKMeans
 
-    n_use = int(max(2, n_clusters))
+    X = np.asarray(X, dtype=np.float32)
+    if X.ndim != 2:
+        raise ValueError("X must be a 2-D array.")
+
+    n_samples = X.shape[0]
+    if n_samples < 1:
+        raise ValueError("X must contain at least one sample.")
+
+    n_use = int(n_clusters)
+    if n_use < 1:
+        raise ValueError("n_clusters must be >= 1.")
+    n_use = min(n_use, n_samples)
+
+    if n_use == 1:
+        return np.zeros(n_samples, dtype=int)
+
     batch = int(min(2048, max(256, 8 * n_use * n_use)))
     km = MiniBatchKMeans(
         n_clusters=n_use,
@@ -79,144 +143,221 @@ def mbkm(X, n_clusters, random_state=0):
         random_state=random_state,
         verbose=0,
     )
-    return km.fit_predict(X.astype(np.float32, copy=False))
+    return np.asarray(km.fit_predict(X), dtype=int)
 
 
-def consolidate_macros(W, labels, max_iters=100):
-    """Merge fragile macro-components using conductance outlier detection."""
-    W = _to_float32_csr(W)
-    labels = labels.copy()
+def consolidate_macros(W, labels, max_iters: int = 100) -> np.ndarray:
+    """Merge fragile macro-components using volume and conductance heuristics.
+
+    This is a heuristic post-processing step. It merges very small-volume
+    clusters or conductance outliers into the cluster to which they have the
+    strongest total edge weight.
+    """
+    W = _symmetrize_sum(W)
+    labels = _as_1d_labels(labels, W.shape[0]).copy()
+
+    max_iters = int(max_iters)
+    if max_iters < 1:
+        _, labels_new = np.unique(labels, return_inverse=True)
+        return labels_new.astype(int)
+
     for _ in range(max_iters):
         uniq = np.unique(labels)
         if uniq.size <= 2:
             break
+
         deg = np.asarray(W.sum(axis=1)).ravel().astype(np.float64)
 
-        # Build per-component index lists, volumes, and conductances
-        idx_list, phi, vols = [], [], []
+        idx_list: list[np.ndarray] = []
+        phi: list[float] = []
+        vols: list[float] = []
+
         for g in uniq:
             idx = np.where(labels == g)[0]
             idx_list.append(idx)
-            vols.append(float(W[idx, :].sum()))
-            comp = W[np.ix_(idx, idx)]
-            internal = float(comp.sum() - comp.diagonal().sum())
-            ext = float(deg[idx].sum() - 2.0 * internal)
-            phi.append(ext / (ext + 2.0 * internal + 1e-12))
 
-        phi = np.array(phi, dtype=float)
+            vol = float(deg[idx].sum())
+            vols.append(vol)
+
+            if idx.size == 0 or vol <= 0:
+                phi.append(1.0)
+                continue
+
+            comp = W[idx, :][:, idx]
+            # For symmetric adjacency with zero diagonal, comp.sum() counts
+            # internal undirected edge weights twice.
+            internal_twice = float(comp.sum())
+            ext = max(0.0, float(vol - internal_twice))
+            phi.append(ext / (vol + 1e-12))
+
+        phi_arr = np.asarray(phi, dtype=float)
+        vols_arr = np.asarray(vols, dtype=float)
         merged = False
 
-        # Phase 1: merge tiny-volume components into their heaviest neighbour
-        med_vol = float(np.median(vols))
-        for i, (idx_t, vol) in enumerate(zip(idx_list, vols)):
-            if vol < 0.6 * med_vol and len(idx_t) > 0:
-                best_neighbor, best_w = None, -1.0
+        # Phase 1: merge tiny-volume components into their heaviest neighbour.
+        med_vol = float(np.median(vols_arr)) if vols_arr.size else 0.0
+        if med_vol > 0:
+            for i, (idx_t, vol) in enumerate(zip(idx_list, vols_arr, strict=False)):
+                if vol >= 0.6 * med_vol or idx_t.size == 0:
+                    continue
+
+                best_neighbor_pos = None
+                best_w = 0.0
                 for j, idx_other in enumerate(idx_list):
-                    if j == i or len(idx_other) == 0:
+                    if j == i or idx_other.size == 0:
                         continue
-                    w = float(W[np.ix_(idx_t, idx_other)].sum())
+                    w = float(W[idx_t, :][:, idx_other].sum())
                     if w > best_w:
-                        best_w, best_neighbor = w, j
-                if best_neighbor is not None:
-                    labels[idx_t] = uniq[best_neighbor]
+                        best_w = w
+                        best_neighbor_pos = j
+
+                if best_neighbor_pos is not None and best_w > 0:
+                    labels[idx_t] = uniq[best_neighbor_pos]
                     merged = True
 
-        # Phase 2: conductance-based outlier merge
-        if phi.size >= 3:
-            q1, q3 = np.percentile(phi, [25, 75])
-            thr = q3 + 1.0 * (q3 - q1)
-            mask = phi > thr
+        # Phase 2: conductance-based outlier merge.
+        if not merged and phi_arr.size >= 3:
+            q1, q3 = np.percentile(phi_arr, [25, 75])
+            thr = q3 + (q3 - q1)
+            mask = phi_arr > thr
+
             if mask.any():
-                worst_pos = int(np.argmax(phi * mask))
+                worst_pos = int(np.argmax(np.where(mask, phi_arr, -np.inf)))
                 idx_worst = idx_list[worst_pos]
-                best_neighbor, best_w = None, -1.0
+
+                best_neighbor_label = None
+                best_w = 0.0
                 for pos, idx_other in enumerate(idx_list):
-                    if pos == worst_pos:
+                    if pos == worst_pos or idx_other.size == 0:
                         continue
-                    w = float(W[np.ix_(idx_worst, idx_other)].sum())
+                    w = float(W[idx_worst, :][:, idx_other].sum())
                     if w > best_w:
-                        best_w, best_neighbor = w, uniq[pos]
-                if best_neighbor is not None:
-                    labels[idx_worst] = best_neighbor
+                        best_w = w
+                        best_neighbor_label = uniq[pos]
+
+                if best_neighbor_label is not None and best_w > 0:
+                    labels[idx_worst] = best_neighbor_label
                     merged = True
 
         if not merged:
             break
+
         _, labels = np.unique(labels, return_inverse=True)
 
     _, labels_new = np.unique(labels, return_inverse=True)
-    return labels_new
+    return labels_new.astype(int)
 
 
-def louvain_micro(S, random_state=0, max_passes=100, gamma=0.85):
-    """Greedy Louvain modularity clustering on a weighted undirected graph ``S``.
+def louvain_micro(
+    S,
+    random_state=0,
+    max_passes: int = 100,
+    gamma: float = 0.85,
+) -> np.ndarray:
+    """Greedy one-level Louvain-like modularity clustering.
 
-    Uses no external dependencies beyond NumPy / SciPy.
+    This is intentionally dependency-free. It performs local node moves but does
+    not implement the full multilevel Louvain aggregation cycle.
     """
     rng = np.random.RandomState(int(random_state))
-    S = _to_float32_csr(S)
+    S = _symmetrize_sum(S)
     n = S.shape[0]
+
     if n <= 2 or S.nnz == 0:
         return np.zeros(n, dtype=int)
 
-    w = float(S.sum())
-    if w <= 0:
+    total_weight = float(S.sum())
+    if total_weight <= 0:
         return np.zeros(n, dtype=int)
-    m2 = w
+
     ki = np.asarray(S.sum(axis=1)).ravel().astype(np.float64)
-
     labels = np.arange(n, dtype=int)
-    com_deg = ki.copy()
 
-    S = S.tocsr()
     indptr, indices, data = S.indptr, S.indices, S.data
+    max_passes = int(max_passes)
 
-    improved = True
-    passes = 0
-    while improved and passes < max_passes:
+    for _pass in range(max(1, max_passes)):
         improved = False
-        passes += 1
+
+        # Recompute community degrees after any label compaction or previous pass.
+        n_com = int(labels.max()) + 1
+        com_deg = np.bincount(labels, weights=ki, minlength=n_com).astype(np.float64)
+
         order = np.arange(n)
         rng.shuffle(order)
 
         for v in order:
-            v_lab = labels[v]
-            k_v = ki[v]
+            v_lab = int(labels[v])
+            k_v = float(ki[v])
+            if k_v <= 0:
+                continue
 
             start, end = indptr[v], indptr[v + 1]
             nbrs = indices[start:end]
             wts = data[start:end]
 
-            com_w = {}
-            for u, wvu in zip(nbrs, wts):
-                cu = labels[u]
+            com_w: dict[int, float] = {}
+            for u, wvu in zip(nbrs, wts, strict=False):
+                cu = int(labels[u])
                 com_w[cu] = com_w.get(cu, 0.0) + float(wvu)
 
-            best_c, best_dq = v_lab, 0.0
-            com_deg_v_removed = com_deg[v_lab] - k_v
+            best_c = v_lab
+            best_dq = 0.0
+
+            # Remove v from its current community while evaluating moves.
+            com_deg[v_lab] -= k_v
 
             for c, k_v_in in com_w.items():
-                if c == v_lab and com_deg_v_removed <= 0:
-                    continue
-                dq = k_v_in - gamma * (k_v * com_deg[c] / m2)
-                if c != v_lab and dq > best_dq:
-                    best_dq, best_c = dq, c
-            if best_c != v_lab and best_dq > 1e-12:
+                dq = float(k_v_in) - float(gamma) * (k_v * com_deg[c] / total_weight)
+                if dq > best_dq + 1e-12:
+                    best_dq = dq
+                    best_c = int(c)
+
+            if best_c != v_lab:
                 labels[v] = best_c
-                com_deg[v_lab] -= k_v
                 com_deg[best_c] += k_v
                 improved = True
+            else:
+                com_deg[v_lab] += k_v
 
         _, labels = np.unique(labels, return_inverse=True)
+        labels = labels.astype(int)
 
-    return labels
+        if not improved:
+            break
+
+    return labels.astype(int)
 
 
-def find_components(P, random_state=0, consolidate=True, max_passes=100, gamma=0.85):
-    """
-    Discover macro-components under the Union-of-Manifolds hypothesis.
+def find_components(
+    P,
+    random_state=0,
+    consolidate: bool = True,
+    max_passes: int = 100,
+    gamma: float = 0.85,
+) -> tuple[int, np.ndarray]:
+    """Discover macro-components under the Union-of-Manifolds hypothesis.
 
-    Returns ``(n_comp, labels)``.
+    Parameters
+    ----------
+    P : sparse matrix or array-like, shape (n_samples, n_samples)
+        Diffusion/operator matrix. The geometric overlap symmetrization
+        ``sqrt(P_ij P_ji)`` is used for robust component discovery.
+    random_state : int, default=0
+        Random seed for Louvain order and MiniBatchKMeans.
+    consolidate : bool, default=True
+        Whether to merge fragile macro-components after spectral clustering.
+    max_passes : int, default=100
+        Maximum number of local-move passes in the Louvain-like micro-clustering.
+    gamma : float, default=0.85
+        Resolution parameter for micro-clustering.
+
+    Returns
+    -------
+    n_comp : int
+        Number of discovered components.
+    labels : ndarray of int, shape (n_samples,)
+        Component label per sample.
     """
     from scipy.sparse.linalg import eigsh
 
@@ -224,59 +365,91 @@ def find_components(P, random_state=0, consolidate=True, max_passes=100, gamma=0
 
     S = _symmetrize_geometric(P)
     n = S.shape[0]
+
+    if n == 0:
+        raise ValueError("P must contain at least one sample.")
     if S.nnz == 0:
         return 1, np.zeros(n, dtype=int)
 
     n_cc, cc_labels = graph_connected_components(S, directed=False, return_labels=True)
+    cc_labels = np.asarray(cc_labels, dtype=int)
+
+    # If many disconnected components are already present, use them directly.
+    # For <=3 components, continue to micro/macro splitting because each
+    # connected component may still contain multiple weakly linked manifolds.
     if n_cc > 3:
-        return n_cc, cc_labels
+        _, labels = np.unique(cc_labels, return_inverse=True)
+        return int(labels.max() + 1), labels.astype(int)
 
     micro = louvain_micro(
-        S, random_state=random_state, max_passes=max_passes, gamma=gamma
+        S,
+        random_state=random_state,
+        max_passes=max_passes,
+        gamma=gamma,
     )
     _, micro_labels = np.unique(micro, return_inverse=True)
-    k = micro_labels.max() + 1
+    micro_labels = micro_labels.astype(int)
+    k = int(micro_labels.max() + 1)
 
-    rows, cols = S.nonzero()
-    vals = np.asarray(S[rows, cols]).ravel()
-    mr, mc = micro_labels[rows], micro_labels[cols]
-    u = mr < mc
-    if not np.any(u):
+    if k <= 1:
         return 1, np.zeros(n, dtype=int)
 
-    r, c, w = mr[u], mc[u], vals[u]
-    idx = r * k + c
-    acc = (
-        np.bincount(idx, weights=w, minlength=k * k)
-        .astype(np.float32, copy=False)
-        .reshape(k, k)
-    )
-    W = sp.csr_matrix(acc + acc.T, dtype=np.float32)
+    # Aggregate micro-clusters into a weighted macro graph.
+    S_coo = S.tocoo()
+    rows, cols, vals = S_coo.row, S_coo.col, S_coo.data
+    mr, mc = micro_labels[rows], micro_labels[cols]
+    upper = mr < mc
 
-    if W.nnz == 0 or k <= 2:
-        return (
-            (1, np.zeros(n, dtype=int))
-            if k <= 1
-            else (np.unique(micro_labels).size, micro_labels)
-        )
+    if not np.any(upper):
+        return k, micro_labels
+
+    r, c, w = mr[upper], mc[upper], vals[upper]
+    idx = r * k + c
+    acc = np.bincount(idx, weights=w, minlength=k * k).astype(np.float32).reshape(k, k)
+    W = sp.csr_matrix(acc + acc.T, dtype=np.float32)
+    W.setdiag(0)
+    W.eliminate_zeros()
+
+    if W.nnz == 0:
+        return k, micro_labels
+
+    if k <= 2:
+        return k, micro_labels
 
     Lw = _normalized_laplacian(W)
+
     k_max = int(min(8, max(3, np.floor(np.sqrt(k) + 1))))
-    nev = int(min(k_max + 1, max(2, k - 1)))
-    vals_w, vecs_w = eigsh(Lw, k=nev, which="SM")
+    k_max = int(min(k_max, k))
+    if k_max < 2:
+        return 1, np.zeros(n, dtype=int)
+
+    # eigsh requires k < N. For tiny macro graphs, use dense eigh.
+    if k <= 3:
+        vals_w, vecs_w = np.linalg.eigh(Lw.toarray())
+    else:
+        nev = int(min(k_max + 1, k - 1))
+        vals_w, vecs_w = eigsh(Lw, k=nev, which="SM")
+
     order = np.argsort(vals_w)
-    vals_w, vecs_w = vals_w[order], vecs_w[:, order]
-    k_macro = _eigengap_k(vals_w[:nev], k_max=k_max, k_min=2)
+    vals_w = np.asarray(vals_w)[order]
+    vecs_w = np.asarray(vecs_w)[:, order]
+
+    k_macro = _eigengap_k(vals_w, k_max=k_max, k_min=2)
+    k_macro = int(min(max(1, k_macro), k))
+
     Uw = vecs_w[:, :k_macro]
-    Uw /= np.linalg.norm(Uw, axis=1, keepdims=True) + 1e-12
+    row_norm = np.linalg.norm(Uw, axis=1, keepdims=True)
+    Uw = Uw / (row_norm + 1e-12)
+
     macro = mbkm(Uw, n_clusters=k_macro, random_state=random_state)
 
     if consolidate and np.unique(macro).size > 2:
         macro = consolidate_macros(W, macro)
 
     labels = macro[micro_labels]
-    n_comp = int(np.unique(labels).size)
-    return n_comp, labels
+    _, labels = np.unique(labels, return_inverse=True)
+    labels = labels.astype(int)
+    return int(labels.max() + 1), labels
 
 
 # ---------------------------------------------------------------------------
@@ -285,11 +458,15 @@ def find_components(P, random_state=0, consolidate=True, max_passes=100, gamma=0
 
 
 class _ProxyKernel:
-    __slots__ = ("P", "K")
+    """Minimal Kernel-like object exposing ``P`` and ``K``."""
+
+    __slots__ = ("P", "K", "L")
 
     def __init__(self, P):
+        P = _to_float32_csr(P)
         self.P = P
         self.K = P
+        self.L = _normalized_laplacian(_symmetrize_sum(P))
 
 
 # ---------------------------------------------------------------------------
@@ -306,9 +483,6 @@ class UoMMixin:
 
     # ------------------------------------------------------------------
     # Interface contract — attributes supplied by the host class (TopOGraph).
-    # Declaring them here as class-level annotations tells static analysers
-    # (Pylance, mypy) that they exist on ``self`` without changing runtime
-    # behaviour.
     # ------------------------------------------------------------------
 
     # Core geometry
@@ -349,7 +523,7 @@ class UoMMixin:
     # Projection
     projection_methods: list[str]
 
-    # Computed state (written by TopOGraph.fit before _fit_uom is called)
+    # Computed state
     current_eigenbasis: str | None
     n_jobs: int
     _knn_Z: Any
@@ -357,20 +531,16 @@ class UoMMixin:
 
     # Methods provided by the host class
     def _build_kernel(self, *args: Any, **kwargs: Any) -> Any: ...
-    def spectral_layout(self, *args: Any, **kwargs: Any) -> Any:
-        """Interface stub; implemented by the host ``TopOGraph`` class."""
-        ...
+    def spectral_layout(self, *args: Any, **kwargs: Any) -> Any: ...
+    def project(self, *args: Any, **kwargs: Any) -> Any: ...
 
-    def project(self, *args: Any, **kwargs: Any) -> Any:
-        """Interface stub; implemented by the host ``TopOGraph`` class."""
-        ...
-
-    def _init_uom_state(self):
-        """Initialize all UoM-specific attributes (called from TopOGraph.__init__)."""
+    def _init_uom_state(self) -> None:
+        """Initialize all UoM-specific attributes."""
         self.uom = getattr(self, "uom", False)
         self.uom_enabled = bool(self.uom)
+
         self.uom_comp_labels_: np.ndarray | None = None
-        self.uom_components_: list | None = None
+        self.uom_components_: list[np.ndarray] | None = None
 
         self.uom_knn_X_list = None
         self.knn_X_uom = None
@@ -399,16 +569,18 @@ class UoMMixin:
         self.verbosity = getattr(self, "verbosity", 0)
 
     # -----------------------------------------------------------------
-    # Public component-finding method (delegates to module function)
+    # Public component-finding method
     # -----------------------------------------------------------------
-    def uom_find_components(
-        self, P, random_state=0, consolidate=True, max_passes=100, gamma=0.85
-    ):
-        """
-        Discover disconnected macro-components under the UoM hypothesis.
 
-        See :func:`find_components` for full docstring.
-        """
+    def uom_find_components(
+        self,
+        P,
+        random_state=0,
+        consolidate: bool = True,
+        max_passes: int = 100,
+        gamma: float = 0.85,
+    ) -> tuple[int, np.ndarray]:
+        """Discover macro-components under the UoM hypothesis."""
         n_comp, labels = find_components(
             P,
             random_state=random_state,
@@ -416,6 +588,7 @@ class UoMMixin:
             max_passes=max_passes,
             gamma=gamma,
         )
+        labels = _as_1d_labels(labels)
         self.uom_comp_labels_ = labels
         self.uom_components_ = [np.where(labels == c)[0] for c in np.unique(labels)]
         return n_comp, labels
@@ -423,24 +596,33 @@ class UoMMixin:
     # -----------------------------------------------------------------
     # Per-component fit pipeline
     # -----------------------------------------------------------------
+
     def _fit_uom(self, X, **kwargs):
         """Run the UoM branch of ``fit()``.
 
-        Detects components and builds per-component scaffolds, refined graphs and
-        projections, aggregating results into block-diagonal operators.
+        Detects components and builds per-component scaffolds, refined graphs
+        and projections, aggregating results into block-diagonal operators.
         """
         if self.verbosity >= 1:
             logger.info(
-                "UoM: detecting disconnected components in P(X) and building per-component scaffolds/graphs..."
+                "UoM: detecting components in P(X) and building "
+                "per-component scaffolds/graphs."
             )
 
+        n_total = self.n
+        if n_total is None:
+            if X is None:
+                raise ValueError("UoM fitting requires known sample count.")
+            n_total = int(X.shape[0])
+            self.n = n_total
+
         if (self.uom_comp_labels_ is not None) and (
-            self.uom_comp_labels_.shape[0] == self.n
+            self.uom_comp_labels_.shape[0] == n_total
         ):
-            labels = self.uom_comp_labels_
+            labels = _as_1d_labels(self.uom_comp_labels_, n_total)
             n_comp = int(np.unique(labels).size)
             if self.verbosity >= 1:
-                logger.info(f"UoM: using precomputed component labels (n={n_comp}).")
+                logger.info("UoM: using precomputed component labels (n=%s).", n_comp)
         else:
             base_kernel = getattr(self, "base_kernel", None)
             if base_kernel is None:
@@ -448,10 +630,9 @@ class UoMMixin:
                     "Base kernel is required before UoM component detection."
                 )
             n_comp, labels = self.uom_find_components(P=base_kernel.P)
+            labels = _as_1d_labels(labels, n_total)
             if self.verbosity >= 1:
-                logger.info(
-                    f"UoM: computed component labels on refined graph (n={n_comp})."
-                )
+                logger.info("UoM: computed component labels (n=%s).", n_comp)
 
         self.uom_comp_labels_ = labels
         self.uom_components_ = [np.where(labels == c)[0] for c in np.unique(labels)]
@@ -462,49 +643,26 @@ class UoMMixin:
             self.uom_DMEig_list,
             self.uom_msDMEig_list,
         ) = [], [], [], []
+
         self.uom_Z_list, self.uom_msZ_list = [], []
         self.uom_knn_Z_list, self.uom_knn_msZ_list = [], []
         self.uom_Kernel_Z_list, self.uom_Kernel_msZ_list = [], []
         self.uom_eigenvalues_dm_list, self.uom_eigenvalues_ms_list = [], []
 
-        def _local_size(Xi_or_knn, n_max):
-            assert Xi_or_knn is not None
-            n_i = Xi_or_knn.shape[0]
-            cap = min(int(self.id_max_components), max(2, n_i - 2))
-            res = automated_scaffold_sizing(
-                Xi_or_knn,
-                method=self.id_method,
-                ks=self.id_ks,
-                backend=getattr(self, "_backend_resolved", self.backend),
-                metric=self.id_metric,
-                n_jobs=int(getattr(self, "_n_jobs_effective", self.n_jobs))
-                if self.n_jobs is not None
-                else -1,
-                quantile=self.id_quantile,
-                min_components=int(min(self.id_min_components, cap)),
-                max_components=int(min(cap, n_max)),
-                headroom=float(self.id_headroom),
-                random_state=getattr(self, "_random_state_resolved", self.random_state),
-                return_details=False,
-            )
-            k_auto = res[0] if isinstance(res, tuple) else res
-            k_auto = int(k_auto)
-            return int(max(2, min(k_auto, cap)))
-
         for idx in self.uom_components_:
             n_i = int(idx.size)
+
             if n_i < 3:
                 self._fit_uom_tiny_component(idx, n_i)
                 continue
 
-            # Per-component kNN
-            k_neighbors_i = min(self.base_knn, max(1, n_i - 1))
             Xi = self._get_component_data(X, idx)
             if Xi is None:
                 raise ValueError(
                     "Component data is unavailable for UoM kNN construction."
                 )
 
+            k_neighbors_i = min(int(self.base_knn), max(1, n_i - 1))
             knn_i = kNN(
                 Xi,
                 n_neighbors=k_neighbors_i,
@@ -515,11 +673,12 @@ class UoMMixin:
                 verbose=False,
                 **kwargs,
             )
+            knn_i = _to_float32_csr(knn_i)
             self.uom_knn_X_list.append(knn_i)
 
             Ki, _ = self._build_kernel(
                 knn_i,
-                min(self.base_knn, max(1, n_i - 1)),
+                k_neighbors_i,
                 self.base_kernel_version,
                 {} if self.low_memory else self.BaseKernelDict,
                 suffix=f"_uom_X[{n_i}]",
@@ -529,16 +688,21 @@ class UoMMixin:
             )
             self.uom_BaseKernel_list.append(Ki)
 
-            k_i = _local_size(Xi if Xi is not None else knn_i, n_max=n_i - 2)
-            Ki_mat = getattr(Ki, "K", None) or getattr(Ki, "P", None)
-            assert Ki_mat is not None
+            Ki_mat = getattr(Ki, "K", None)
+            if Ki_mat is None:
+                Ki_mat = getattr(Ki, "P", None)
+            if Ki_mat is None:
+                raise RuntimeError("UoM component kernel has neither K nor P.")
+
             N_i = int(Ki_mat.shape[0])
             if N_i <= 2:
                 self._fit_uom_tiny_component(idx, N_i)
                 continue
 
+            k_i = self._local_uom_size(Xi, n_max=N_i - 2)
+
             n_eigs_eff = self.n_eigs_ if self.n_eigs_ is not None else self.n_eigs
-            k_req = int(min(max(k_i, 2), N_i - 1, n_eigs_eff))
+            k_req = int(min(max(k_i, 2), N_i - 1, int(n_eigs_eff)))
             k_req = max(1, k_req)
 
             eig_dm_i = EigenDecomposition(
@@ -556,50 +720,62 @@ class UoMMixin:
             eig_ms_i = copy.deepcopy(eig_dm_i)
             eig_ms_i.method = "msDM"
 
-            assert eig_dm_i.eigenvalues is not None
-            assert eig_ms_i.eigenvalues is not None
+            if eig_dm_i.eigenvalues is None or eig_ms_i.eigenvalues is None:
+                raise RuntimeError("UoM eigendecomposition did not expose eigenvalues.")
+
             self.uom_eigenvalues_dm_list.append(
-                np.array(eig_dm_i.eigenvalues, copy=True)
+                np.asarray(eig_dm_i.eigenvalues, dtype=float).copy()
             )
             self.uom_eigenvalues_ms_list.append(
-                np.array(eig_ms_i.eigenvalues, copy=True)
+                np.asarray(eig_ms_i.eigenvalues, dtype=float).copy()
             )
 
-            k_avail = eig_dm_i.eigenvalues.shape[0]
-            k_use = min(k_i, k_avail)
             Zi_all = eig_dm_i.transform()
             msZi_all = eig_ms_i.transform()
-            assert Zi_all is not None
-            assert msZi_all is not None
-            Zi = np.asarray(Zi_all)[:, :k_use]
-            msZi = np.asarray(msZi_all)[:, :k_use]
+            if Zi_all is None or msZi_all is None:
+                raise RuntimeError("UoM eigendecomposition transform returned None.")
+
+            Zi_all = np.asarray(Zi_all, dtype=np.float32)
+            msZi_all = np.asarray(msZi_all, dtype=np.float32)
+
+            k_avail = min(Zi_all.shape[1], msZi_all.shape[1])
+            k_use = int(min(k_i, k_avail))
+            k_use = max(1, k_use)
+
+            Zi = Zi_all[:, :k_use]
+            msZi = msZi_all[:, :k_use]
 
             self.uom_DMEig_list.append(eig_dm_i)
             self.uom_msDMEig_list.append(eig_ms_i)
             self.uom_Z_list.append(Zi)
             self.uom_msZ_list.append(msZi)
 
-            k_graph_i = min(self.graph_knn, max(1, n_i - 1))
-            knn_Z_i = kNN(
-                Zi,
-                n_neighbors=k_graph_i,
-                metric=self.graph_metric,
-                n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
-                backend=getattr(self, "_backend_resolved", self.backend),
-                return_instance=False,
-                verbose=False,
-                **kwargs,
+            k_graph_i = min(int(self.graph_knn), max(1, n_i - 1))
+            knn_Z_i = _to_float32_csr(
+                kNN(
+                    Zi,
+                    n_neighbors=k_graph_i,
+                    metric=self.graph_metric,
+                    n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
+                    backend=getattr(self, "_backend_resolved", self.backend),
+                    return_instance=False,
+                    verbose=False,
+                    **kwargs,
+                )
             )
-            knn_msZ_i = kNN(
-                msZi,
-                n_neighbors=k_graph_i,
-                metric=self.graph_metric,
-                n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
-                backend=getattr(self, "_backend_resolved", self.backend),
-                return_instance=False,
-                verbose=False,
-                **kwargs,
+            knn_msZ_i = _to_float32_csr(
+                kNN(
+                    msZi,
+                    n_neighbors=k_graph_i,
+                    metric=self.graph_metric,
+                    n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
+                    backend=getattr(self, "_backend_resolved", self.backend),
+                    return_instance=False,
+                    verbose=False,
+                    **kwargs,
+                )
             )
+
             self.uom_knn_Z_list.append(knn_Z_i)
             self.uom_knn_msZ_list.append(knn_msZ_i)
 
@@ -623,27 +799,28 @@ class UoMMixin:
                 data_for_expansion=msZi,
                 base=False,
             )
+
             self.uom_Kernel_Z_list.append(KZ_i)
             self.uom_Kernel_msZ_list.append(KmsZ_i)
 
-        # ----- Aggregate block-diagonal products -----
         self._aggregate_uom_blocks()
 
-        # Spectral layout + projections
         if self._kernel_msZ is None:
             raise RuntimeError("UoM msDM scaffold kernel was not built.")
+
         _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
-        if self.projection_methods is not None:
-            for proj in self.projection_methods:
-                for ms in (True, False):
-                    try:
-                        self.project(projection_method=proj, multiscale=ms)
-                    except Exception as e:
-                        tag = "msZ" if ms else "Z/DM"
-                        warnings.warn(
-                            f"Projection '{proj}' on {tag} (UoM) failed: {e}",
-                            RuntimeWarning,
-                        )
+
+        for proj in self.projection_methods:
+            for ms in (True, False):
+                try:
+                    self.project(projection_method=proj, multiscale=ms)
+                except Exception as exc:
+                    tag = "msZ" if ms else "Z/DM"
+                    warnings.warn(
+                        f"Projection '{proj}' on {tag} (UoM) failed: {exc}",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
 
         if self.low_memory:
             self.uom_BaseKernel_list = None
@@ -658,8 +835,47 @@ class UoMMixin:
     # Internal helpers
     # -----------------------------------------------------------------
 
-    def _fit_uom_tiny_component(self, idx, n_i):
-        """Fallback for components with < 3 samples."""
+    def _local_uom_size(self, Xi_or_knn, n_max: int) -> int:
+        """Estimate component-local scaffold size."""
+        if Xi_or_knn is None:
+            raise ValueError("Xi_or_knn must not be None.")
+
+        n_i = int(Xi_or_knn.shape[0])
+        if n_i <= 2:
+            return 1
+
+        cap = min(int(self.id_max_components), max(2, n_i - 2), int(n_max))
+        min_components = int(min(self.id_min_components, cap))
+        max_components = int(min(cap, n_max))
+        if max_components < 1:
+            return 1
+
+        res = automated_scaffold_sizing(
+            Xi_or_knn,
+            method=self.id_method,
+            ks=self.id_ks,
+            backend=getattr(self, "_backend_resolved", self.backend),
+            metric=self.id_metric,
+            n_jobs=int(getattr(self, "_n_jobs_effective", self.n_jobs))
+            if self.n_jobs is not None
+            else -1,
+            quantile=self.id_quantile,
+            min_components=max(1, min_components),
+            max_components=max(1, max_components),
+            headroom=float(self.id_headroom),
+            random_state=getattr(self, "_random_state_resolved", self.random_state),
+            return_details=False,
+        )
+
+        k_auto = res[0] if isinstance(res, tuple) else res
+        k_auto = int(k_auto)
+        return int(max(1, min(k_auto, cap)))
+
+    def _fit_uom_tiny_component(self, idx, n_i: int) -> None:
+        """Fallback for components with fewer than three samples."""
+        if n_i < 1:
+            raise ValueError("Tiny UoM component must contain at least one sample.")
+
         assert self.uom_Z_list is not None
         assert self.uom_msZ_list is not None
         assert self.uom_knn_Z_list is not None
@@ -670,47 +886,123 @@ class UoMMixin:
         assert self.uom_knn_X_list is not None
         assert self.uom_DMEig_list is not None
         assert self.uom_msDMEig_list is not None
-        Zi = np.zeros((n_i, 1), dtype=np.float32)
+        assert self.uom_eigenvalues_dm_list is not None
+        assert self.uom_eigenvalues_ms_list is not None
+
+        Zi = np.zeros((n_i, 1), dtype="float32")
+        P_block = sp.eye(n_i, format="csr", dtype="float32")
+
         self.uom_Z_list.append(Zi)
         self.uom_msZ_list.append(Zi.copy())
 
-        P_block = sp.eye(n_i, format="csr", dtype=float)
         self.uom_knn_Z_list.append(P_block.copy())
         self.uom_knn_msZ_list.append(P_block.copy())
         self.uom_Kernel_Z_list.append(_ProxyKernel(P_block))
         self.uom_Kernel_msZ_list.append(_ProxyKernel(P_block))
         self.uom_BaseKernel_list.append(_ProxyKernel(P_block))
         self.uom_knn_X_list.append(P_block.copy())
+
         self.uom_DMEig_list.append(None)
         self.uom_msDMEig_list.append(None)
 
+        # Keep eigenvalue lists aligned with components.
+        self.uom_eigenvalues_dm_list.append(np.ones(1, dtype=float))
+        self.uom_eigenvalues_ms_list.append(np.ones(1, dtype=float))
+
     def _get_component_data(self, X, idx):
         """Slice input data for a UoM component."""
-        base_kernel = getattr(self, "base_kernel", None)
-        if self.base_metric == "precomputed":
-            return (
-                X[np.ix_(idx, idx)]
-                if X is not None
-                else (
-                    base_kernel.X[np.ix_(idx, idx)]
-                    if base_kernel is not None
-                    and getattr(base_kernel, "X", None) is not None
-                    else None
-                )
-            )
-        return (
-            X[idx]
-            if X is not None
-            else (
-                base_kernel.X[idx]
-                if base_kernel is not None
-                and getattr(base_kernel, "X", None) is not None
-                else None
-            )
-        )
+        idx = np.asarray(idx, dtype=int)
 
-    def _aggregate_uom_blocks(self):
-        """Assemble per-component results into block-diagonal aggregates."""
+        base_kernel = getattr(self, "base_kernel", None)
+        kernel_X = getattr(base_kernel, "X", None) if base_kernel is not None else None
+
+        source = X if X is not None else kernel_X
+        if source is None:
+            return None
+
+        if self.base_metric == "precomputed":
+            return source[idx, :][:, idx]
+
+        return source[idx]
+
+    def _component_order(self) -> np.ndarray:
+        """Return original sample indices in component-concatenated order."""
+        components = self.uom_components_
+        if components is None:
+            raise ValueError("UoM components are unavailable.")
+        if not components:
+            raise ValueError("UoM components list is empty.")
+
+        order = np.concatenate([np.asarray(idx, dtype=int) for idx in components])
+
+        n = self.n
+        if n is None:
+            raise ValueError("UoM aggregation requires fitted sample count.")
+
+        if order.size != n:
+            raise ValueError(
+                f"Component indices cover {order.size} samples, expected {n}."
+            )
+        if np.unique(order).size != order.size:
+            raise ValueError("UoM component indices contain duplicates.")
+
+        return order
+
+    def _block_diag_to_original_order(self, blocks) -> sp.csr_matrix:
+        """Build block diagonal matrix and permute rows/cols to original order."""
+        if self.n is None:
+            raise ValueError("UoM aggregation requires fitted sample count.")
+
+        csr_blocks = [_to_float32_csr(B) for B in blocks]
+        B_cat = sp.block_diag(csr_blocks, format="csr", dtype=np.float32)
+
+        order = self._component_order()
+        if B_cat.shape != (order.size, order.size):
+            raise ValueError(
+                f"Block-diagonal shape {B_cat.shape} does not match component "
+                f"order length {order.size}."
+            )
+
+        inv_order = np.empty_like(order)
+        inv_order[order] = np.arange(order.size)
+
+        return sp.csr_matrix(B_cat[inv_order, :][:, inv_order])
+
+    def _aggregate_scaffold_to_original_order(
+        self, blocks
+    ) -> tuple[np.ndarray, list[tuple[int, int]]]:
+        """Aggregate per-component scaffold blocks into original row order.
+
+        Each component occupies its own column block. Rows outside a component
+        are zero in that component's axis block.
+        """
+        if self.n is None:
+            raise ValueError("UoM aggregation requires fitted sample count.")
+        if self.uom_components_ is None:
+            raise ValueError("UoM components are unavailable.")
+
+        n = int(self.n)
+        total_cols = int(sum(np.asarray(B).shape[1] for B in blocks))
+        out = np.zeros((n, total_cols), dtype=np.float32)
+        slices: list[tuple[int, int]] = []
+
+        c0 = 0
+        for idx, B in zip(self.uom_components_, blocks, strict=True):
+            B = np.asarray(B, dtype=np.float32)
+            if B.ndim != 2:
+                raise ValueError("Each scaffold block must be a 2-D array.")
+            if B.shape[0] != len(idx):
+                raise ValueError("Scaffold block row count must match component size.")
+
+            c1 = c0 + B.shape[1]
+            out[np.asarray(idx, dtype=int), c0:c1] = B
+            slices.append((c0, c1))
+            c0 = c1
+
+        return out, slices
+
+    def _aggregate_uom_blocks(self) -> None:
+        """Assemble per-component results into original-order aggregates."""
         assert self.uom_Z_list is not None
         assert self.uom_msZ_list is not None
         assert self.uom_components_ is not None
@@ -720,40 +1012,47 @@ class UoMMixin:
         assert self.uom_knn_msZ_list is not None
         assert self.uom_Kernel_Z_list is not None
         assert self.uom_Kernel_msZ_list is not None
+
         if self.n is None:
             raise ValueError("UoM aggregation requires fitted sample count.")
-        n = self.n
 
-        total_cols_Z = int(sum(z.shape[1] for z in self.uom_Z_list))
-        total_cols_msZ = int(sum(z.shape[1] for z in self.uom_msZ_list))
-        self.Z_uom = np.zeros((n, total_cols_Z), dtype=np.float32)
-        self.msZ_uom = np.zeros((n, total_cols_msZ), dtype=np.float32)
-        self._uom_axis_slices = []
-        c0 = 0
-        for idx, Zi in zip(self.uom_components_, self.uom_Z_list):
-            c1 = c0 + Zi.shape[1]
-            self.Z_uom[idx, c0:c1] = Zi
-            self._uom_axis_slices.append((c0, c1))
-            c0 = c1
-        c0 = 0
-        for idx, msZi in zip(self.uom_components_, self.uom_msZ_list):
-            c1 = c0 + msZi.shape[1]
-            self.msZ_uom[idx, c0:c1] = msZi
-            c0 = c1
+        n_comp = len(self.uom_components_)
+        expected_lists = [
+            self.uom_Z_list,
+            self.uom_msZ_list,
+            self.uom_knn_X_list,
+            self.uom_BaseKernel_list,
+            self.uom_knn_Z_list,
+            self.uom_knn_msZ_list,
+            self.uom_Kernel_Z_list,
+            self.uom_Kernel_msZ_list,
+        ]
+        for lst in expected_lists:
+            if len(lst) != n_comp:
+                raise RuntimeError(
+                    "UoM component lists are misaligned: expected "
+                    f"{n_comp}, got {len(lst)}."
+                )
 
-        def _place_blocks(block_list):
-            assert self.uom_components_ is not None
-            M = sp.lil_matrix((n, n), dtype=np.float32)
-            for idx, B in zip(self.uom_components_, block_list):
-                M[np.ix_(idx, idx)] = B
-            return M.tocsr()
+        self.Z_uom, self._uom_axis_slices = self._aggregate_scaffold_to_original_order(
+            self.uom_Z_list
+        )
+        self.msZ_uom, _ms_slices = self._aggregate_scaffold_to_original_order(
+            self.uom_msZ_list
+        )
 
-        self.knn_X_uom = _place_blocks(self.uom_knn_X_list)
-        self.P_of_X_uom = _place_blocks([K.P for K in self.uom_BaseKernel_list])
-        self.knn_Z_uom = _place_blocks(self.uom_knn_Z_list)
-        self.knn_msZ_uom = _place_blocks(self.uom_knn_msZ_list)
-        self.P_of_Z_uom = _place_blocks([K.P for K in self.uom_Kernel_Z_list])
-        self.P_of_msZ_uom = _place_blocks([K.P for K in self.uom_Kernel_msZ_list])
+        self.knn_X_uom = self._block_diag_to_original_order(self.uom_knn_X_list)
+        self.P_of_X_uom = self._block_diag_to_original_order(
+            [K.P for K in self.uom_BaseKernel_list]
+        )
+        self.knn_Z_uom = self._block_diag_to_original_order(self.uom_knn_Z_list)
+        self.knn_msZ_uom = self._block_diag_to_original_order(self.uom_knn_msZ_list)
+        self.P_of_Z_uom = self._block_diag_to_original_order(
+            [K.P for K in self.uom_Kernel_Z_list]
+        )
+        self.P_of_msZ_uom = self._block_diag_to_original_order(
+            [K.P for K in self.uom_Kernel_msZ_list]
+        )
 
         self.current_eigenbasis = f"UoM_{self._uom_active_mode}"
         self.eigenbasis = None

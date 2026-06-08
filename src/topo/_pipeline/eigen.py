@@ -28,6 +28,7 @@ class EigenBuildMixin:
     id_max_components: int
     id_method: str
     id_ks: int | Sequence[int]
+    backend: str
     _backend_resolved: str
     id_metric: str
     n_jobs: int
@@ -93,7 +94,7 @@ class EigenBuildMixin:
             X,
             method=self.id_method,
             ks=cast(Any, self.id_ks),
-            backend=self._backend_resolved,
+            backend=getattr(self, "_backend_resolved", self.backend),
             metric=self.id_metric,
             n_jobs=self._n_jobs_effective,
             quantile=float(self.id_quantile),

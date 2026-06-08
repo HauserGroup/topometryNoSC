@@ -41,14 +41,13 @@ from topo.base.graph_matrix import as_csr_matrix
 logger = logging.getLogger(__name__)
 
 
-def _resolve_n_jobs(n_jobs: int) -> int:
-    """Resolve joblib-style n_jobs to a positive worker count."""
-    n_jobs = int(n_jobs)
+def _resolve_n_jobs(n_jobs: int | str | None) -> int:
+    """Resolve sklearn/joblib-style n_jobs."""
+    if n_jobs is None:
+        return 1
     if n_jobs == -1:
-        return int(cpu_count())
-    if n_jobs < 1:
-        raise ValueError("n_jobs must be -1 or a positive integer.")
-    return n_jobs
+        return cpu_count()
+    return int(n_jobs)
 
 
 def _validate_n_neighbors(n_neighbors: int | float | str) -> int:
@@ -425,7 +424,14 @@ def kNN(
         ).fit(X_fit)
         knn = nbrs.transform(X_fit)
     else:
-        if verbose and backend == "hnswlib":
+        if backend == "hnswlib":
+            warn(
+                "Falling back to sklearn: HNSWlib does not support this input mode "
+                "in topo.base.ann.kNN.",
+                UserWarning,
+                stacklevel=2,
+            )
+        if verbose:
             logger.info(
                 "Using sklearn because HNSWlib does not support this input mode "
                 "in topo.base.ann.kNN."

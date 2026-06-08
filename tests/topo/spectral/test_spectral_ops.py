@@ -175,19 +175,22 @@ class TestGraphOperators:
         assert sparse.isspmatrix_csr(P), "Sparse input should produce sparse output"
 
     def test_diffusion_operator_preserves_dense_for_dense_input(self):
-        """Dense input must produce dense output (policy enforcement)."""
+        """Diffusion operator always returns sparse regardless of input format."""
         W = _path_graph().toarray()
         P = _spectral.diffusion_operator(W, alpha=0.5, symmetric=False)
 
-        assert isinstance(P, np.ndarray), "Dense input should produce dense output"
-        assert not sparse.issparse(P), "Dense input should not produce sparse output"
+        assert sparse.issparse(P), (
+            "Diffusion operator should always produce sparse output"
+        )
 
     def test_diffusion_operator_symmetric_preserves_dense_for_dense(self):
-        """Symmetric diffusion with dense input must return dense."""
+        """Symmetric diffusion always returns sparse regardless of input format."""
         W = _path_graph().toarray()
         P = _spectral.diffusion_operator(W, alpha=0.5, symmetric=True)
 
-        assert isinstance(P, np.ndarray), "Dense input should produce dense output"
+        assert sparse.issparse(P), (
+            "Diffusion operator should always produce sparse output"
+        )
 
     def test_diffusion_operator_symmetric_preserves_sparse_for_sparse(self):
         """Symmetric diffusion with sparse input must return sparse."""

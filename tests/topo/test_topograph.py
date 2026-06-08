@@ -303,6 +303,8 @@ def test_expanded_kernel_fits_on_expansion_data(monkeypatch):
             return self
 
     monkeypatch.setattr(topograph_module, "Kernel", FakeKernel)
+    from sklearn.utils import check_random_state
+
     tg = TopOGraph(
         graph_kernel_version="bw_adaptive_nbr_expansion",
         graph_metric="euclidean",
@@ -311,6 +313,7 @@ def test_expanded_kernel_fits_on_expansion_data(monkeypatch):
     )
     tg._backend_resolved = "sklearn"
     tg._n_jobs_effective = 1
+    tg._random_state_resolved = check_random_state(tg.random_state)
     knn = np.ones((6, 6))
     raw = np.ones((6, 2))
 

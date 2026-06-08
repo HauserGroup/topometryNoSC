@@ -19,8 +19,6 @@ __all__ = [
     "has",
     "optional_import",
     "require",
-    "available_ann_backends",
-    "best_ann_backend",
 ]
 
 _EXTRA_FOR: dict[str, str] = {
@@ -32,9 +30,6 @@ _EXTRA_FOR: dict[str, str] = {
     "ncvis": "layouts",
     "MulticoreTSNE": "layouts",
 }
-
-_ANN_BACKENDS: tuple[str, ...] = ("hnswlib",)
-_ALLOWED_ANN_BACKENDS: frozenset[str] = frozenset((*_ANN_BACKENDS, "sklearn"))
 
 
 def has(name: str) -> bool:
@@ -86,31 +81,3 @@ def require(name: str, *, purpose: str | None = None) -> ModuleType:
             f"Optional dependency '{name}' is required{reason} but is not "
             f"installed. Install it with `{hint}`."
         ) from exc
-
-
-def available_ann_backends() -> list[str]:
-    """Return installed approximate-nearest-neighbour backends in preference order."""
-    return [name for name in _ANN_BACKENDS if has(name)]
-
-
-def best_ann_backend(preferred: str | None = None) -> str:
-    """Pick an ANN backend, honouring ``preferred`` when available.
-
-    Falls back to the first available backend in :data:`_ANN_BACKENDS`, and
-    finally to ``"sklearn"`` when no ANN backend is present.
-    """
-    if preferred is not None:
-        if preferred not in _ALLOWED_ANN_BACKENDS:
-            raise ValueError(
-                f"Unknown ANN backend {preferred!r}. Expected one of "
-                f"{sorted(_ALLOWED_ANN_BACKENDS)}."
-            )
-        if preferred == "sklearn":
-            return "sklearn"
-        if has(preferred):
-            return preferred
-
-    available = available_ann_backends()
-    if available:
-        return available[0]
-    return "sklearn"

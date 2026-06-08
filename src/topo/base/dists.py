@@ -307,14 +307,19 @@ def matrix_to_matrix_distance(a, b, metric, n_jobs=-1):
 
 
 def pairwise_distances(X, Y=None, metric="euclidean", n_jobs=-1):
-    """Compute pairwise distances between rows of ``X`` and ``Y``."""
-    if metric in ("euclidean", "l2"):
-        return pairwise_euclidean(X, Y, n_jobs=n_jobs)
+    """Compute pairwise distances between rows of ``X`` and ``Y``.
+
+    For poincare metric, uses local implementation. Other metrics delegate to
+    sklearn.metrics.pairwise_distances.
+    """
     if metric == "poincare":
         return pairwise_poincare(X, Y, n_jobs=n_jobs)
-    if metric == "cosine":
-        return pairwise_cosine(X, Y, n_jobs=n_jobs)
-    raise ValueError(f"Unknown metric: {metric}")
+    try:
+        return sklearn_pairwise_distances(X, Y, metric=metric, n_jobs=n_jobs)
+    except ValueError as e:
+        if "metric" in str(e).lower():
+            raise ValueError(f"Unknown metric: {metric}") from e
+        raise
 
 
 named_distances_with_gradients = {

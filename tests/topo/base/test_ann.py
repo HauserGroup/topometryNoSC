@@ -1,12 +1,10 @@
 """Tests for approximate nearest neighbors wrappers."""
 
-import importlib.util
-
 import numpy as np
 import pytest
 from scipy.sparse import csr_matrix
 
-from topo.base.ann import HNSWlibTransformer, NMSlibTransformer, _resolve_n_jobs, kNN
+from topo.base.ann import HNSWlibTransformer, _resolve_n_jobs, kNN
 
 
 def test_kNN_sklearn():
@@ -50,19 +48,6 @@ def test_hnswlib_transformer_raises_or_fits():
         return
 
     model = HNSWlibTransformer(n_neighbors=2).fit(X)
-    knn = model.transform(X)
-    assert knn.shape == (20, 20)
-
-
-def test_nmslib_transformer_raises_or_fits():
-    X = np.random.rand(20, 3)
-
-    if importlib.util.find_spec("nmslib") is None:
-        with pytest.raises(ImportError):
-            NMSlibTransformer(n_neighbors=2).fit(X)
-        return
-
-    model = NMSlibTransformer(n_neighbors=2).fit(X)
     knn = model.transform(X)
     assert knn.shape == (20, 20)
 

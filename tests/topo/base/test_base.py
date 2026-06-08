@@ -119,7 +119,3 @@ class TestANNHelpers:
             hnsw.transform(X)
         hnsw.update_search(2)
         assert hnsw.n_neighbors == 2
-
-        nms = ann.NMSlibTransformer(n_neighbors=1)
-        with pytest.raises(NotImplementedError, match="return_grad=True"):
-            nms.ind_dist_grad(X, return_grad=True)

@@ -378,7 +378,7 @@ def compute_kernel(
         knn_indices, knn_dists = get_indices_distances_from_sparse_matrix(
             K, n_neighbors=n_neighbors
         )
-        W, sigmas, rhos = fuzzy_graph_from_knn(
+        result = fuzzy_graph_from_knn(
             np.zeros((N, 1), dtype=np.float32),
             knn_indices=knn_indices,
             knn_dists=knn_dists,
@@ -389,6 +389,7 @@ def compute_kernel(
             random_state=random_state,
             verbose=verbose,
         )
+        W, sigmas, rhos = result[:3]  # type: ignore[misc]
         if return_densities:
             dens_dict["sigma"] = sigmas
             dens_dict["rho"] = rhos
@@ -665,11 +666,16 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.alpha_decaying = alpha_decaying
         self.symmetrize = symmetrize
         self.n_landmarks = n_landmarks
-        self.laplacian_type = (
-            "unnormalized"
-            if cknn and laplacian_type == "normalized"
-            else laplacian_type
-        )
+        if cknn and laplacian_type == "normalized":
+            warnings.warn(
+                "CkNN theory applies to the unweighted graph and its unnormalized Laplacian; "
+                "overriding laplacian_type='unnormalized'.",
+                UserWarning,
+                stacklevel=2,
+            )
+            self.laplacian_type = "unnormalized"
+        else:
+            self.laplacian_type = laplacian_type
         self.cache_input = cache_input
         self.verbose = verbose
         self.random_state = random_state

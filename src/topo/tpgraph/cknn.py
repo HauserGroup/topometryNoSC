@@ -6,8 +6,6 @@ CkNN, following Berry and Sauer, is an unweighted graph: samples ``i`` and
 neighbor.
 """
 
-from __future__ import annotations
-
 from typing import Literal
 
 import numpy as np
@@ -51,7 +49,6 @@ def _brute_force_ratio_matrix(
     *,
     scale_k: int,
     metric: str,
-    include_self: bool,
 ) -> csr_matrix:
     D = _dense_distances(X, metric)
     n_samples = D.shape[0]
@@ -165,10 +162,10 @@ def _cknn_from_knn_arrays(
         graph.setdiag(0.0)
         graph.eliminate_zeros()
         if symmetrize == "or":
-            graph = graph.maximum(graph.T)
+            graph = graph.minimum(graph.T)
         else:
             mutual = graph.multiply(graph.T.astype(bool))
-            graph = mutual.maximum(mutual.T)
+            graph = mutual.minimum(mutual.T)
         graph.eliminate_zeros()
         return graph.tocsr()
 
@@ -242,7 +239,7 @@ def _candidate_knn_arrays(
 
     if metric == "precomputed":
         graph = X.tocsr() if issparse(X) else csr_matrix(X)
-        query_k = candidate_k
+        query_k = min(candidate_k + 1, n_samples)
     else:
         query_k = min(candidate_k + 1, n_samples - 1)
         graph = kNN(
@@ -270,7 +267,6 @@ def cknn_ratio_matrix(
     metric: str = "euclidean",
     candidate_k: int | None = None,
     exact: bool = False,
-    include_self: bool = False,
     symmetrize: SymmetrizeMode = "or",
     backend: str = "sklearn",
     n_jobs: int | None = None,
@@ -281,14 +277,13 @@ def cknn_ratio_matrix(
 
     Entry ``(i, j)`` is ``d(i, j) / sqrt(rho_i * rho_j)``. This matrix is useful
     for persistence/order diagnostics; it is not the binary CkNN adjacency used
-    for the unnormalized graph Laplacian.
+    for the unnormalized graph Laplacian. Ratios are always computed without
+    self-loops.
     """
     n_samples = int(X.shape[0])
     _validate_cknn_inputs(n_samples, scale_k, delta=1.0)
     if exact:
-        return _brute_force_ratio_matrix(
-            X, scale_k=scale_k, metric=metric, include_self=include_self
-        )
+        return _brute_force_ratio_matrix(X, scale_k=scale_k, metric=metric)
 
     indices, distances = _candidate_knn_arrays(
         X,
@@ -306,7 +301,7 @@ def cknn_ratio_matrix(
         n_samples=n_samples,
         scale_k=scale_k,
         delta=1.0,
-        include_self=include_self,
+        include_self=False,
         symmetrize=symmetrize,
         return_ratio=True,
     )

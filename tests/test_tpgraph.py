@@ -102,6 +102,15 @@ def test_cknn_candidate_mode_matches_exact_when_candidates_are_complete():
     np.testing.assert_array_equal(exact.toarray(), approx_complete.toarray())
 
 
+def test_cknn_candidate_mode_basic_properties():
+    X = np.random.default_rng(0).normal(size=(50, 3))
+    A = cknn_graph(X, scale_k=5, delta=1.0, candidate_k=20, exact=False)
+
+    assert (A != A.T).nnz == 0
+    assert np.all(A.diagonal() == 0)
+    assert set(np.unique(A.data)).issubset({1.0})
+
+
 def test_cknn_unnormalized_laplacian_zero_modes_match_components():
     rng = np.random.default_rng(0)
     X1 = rng.normal(loc=-5, scale=0.2, size=(30, 2))
@@ -123,7 +132,7 @@ def test_cknn_ratio_matrix_threshold_matches_graph():
     A_from_ratio = ratio.copy()
     A_from_ratio.data = (A_from_ratio.data < 1.1).astype(np.float32)
     A_from_ratio.eliminate_zeros()
-    A_from_ratio = A_from_ratio.maximum(A_from_ratio.T)
+    A_from_ratio = A_from_ratio.minimum(A_from_ratio.T)
 
     A = cknn_graph(X, scale_k=5, delta=1.1, exact=True)
 

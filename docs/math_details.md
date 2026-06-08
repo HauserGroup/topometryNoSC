@@ -139,10 +139,12 @@ $$
 Two points are connected with binary weight 1 when
 $r_{ij}^{\text{CkNN}} < \delta$. Equivalently,
 $\|x_i - x_j\| < \delta\sqrt{\rho_k(x_i)\rho_k(x_j)}$.
-The **unnormalised** Laplacian of this binary graph is the unweighted
-$k$-NN-based construction that converges to the pure LBO. In approximate mode,
-TopoMetry tests a candidate-neighbour set for scalability; exact mode thresholds
-all pairs.
+Under the assumptions in Berry & Sauer (2019), the **unnormalised** Laplacian
+of this binary graph converges to a Laplace–Beltrami operator associated with
+the density-adapted geometry. Within the multiscale unweighted graph family
+analyzed in that work, CkNN is the unique choice yielding this consistent
+geometry. In approximate mode, TopoMetry tests a candidate-neighbour set for
+scalability; exact mode thresholds all pairs.
 
 ---
 

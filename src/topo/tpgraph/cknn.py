@@ -11,6 +11,7 @@ from typing import Literal
 import numpy as np
 from scipy.sparse import csr_matrix, issparse
 from sklearn.metrics import pairwise_distances as sklearn_pairwise_distances
+from sklearn.neighbors import NearestNeighbors
 
 from topo.base.ann import kNN
 from topo.utils._utils import get_indices_distances_from_sparse_matrix
@@ -216,6 +217,33 @@ def _complete_candidate_arrays(X, metric: str) -> tuple[np.ndarray, np.ndarray]:
     return order.astype(np.int64), distances.astype(float)
 
 
+def _candidate_knn_arrays_sklearn(
+    X,
+    *,
+    candidate_k: int,
+    metric: str,
+    n_jobs: int | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Get candidate neighbors using scikit-learn NearestNeighbors."""
+    n_samples = int(X.shape[0])
+    query_k = min(candidate_k + 1, n_samples)
+
+    nn = NearestNeighbors(
+        n_neighbors=query_k,
+        metric=metric,
+        n_jobs=n_jobs,
+    )
+    nn.fit(X)
+    distances, indices = nn.kneighbors(X, return_distance=True)
+
+    return _drop_self_and_truncate_candidate_arrays(
+        indices,
+        distances,
+        n_samples=n_samples,
+        candidate_k=candidate_k,
+    )
+
+
 def _candidate_knn_arrays(
     X,
     *,
@@ -236,6 +264,14 @@ def _candidate_knn_arrays(
 
     if candidate_k == n_samples - 1:
         return _complete_candidate_arrays(X, metric)
+
+    if backend == "sklearn" and metric != "precomputed":
+        return _candidate_knn_arrays_sklearn(
+            X,
+            candidate_k=candidate_k,
+            metric=metric,
+            n_jobs=n_jobs,
+        )
 
     if metric == "precomputed":
         graph = X.tocsr() if issparse(X) else csr_matrix(X)

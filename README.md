@@ -161,7 +161,7 @@ Example `TopOGraph` fit:
 
 ## Changelog
 
-**v2.0.0** — Core-only release
+**0.2.0** — Core-only release
 - Removed single-cell / scanpy / AnnData wrappers (now a standalone geometry toolkit)
 - Core API unchanged: `TopOGraph`, spectral scaffolds, graph operators, layouts, metrics, plotting
 

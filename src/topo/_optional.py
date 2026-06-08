@@ -34,6 +34,8 @@ _EXTRA_FOR: dict[str, str] = {
     "pacmap": "layouts",
     "pymde": "layouts",
     "trimap": "layouts",
+    "ncvis": "layouts",
+    "MulticoreTSNE": "layouts",
 }
 
 # Preference order for approximate nearest-neighbour backends.

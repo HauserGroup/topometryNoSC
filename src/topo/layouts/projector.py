@@ -7,11 +7,9 @@ The `Projector` dispatches to the available projection backends
 scikit-learn-style estimator, with optional landmarks and checkpointing.
 """
 
-import importlib
-import importlib.util
 import logging
 import warnings
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -21,7 +19,9 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils import check_random_state
 
 from topo._compat.umap import validate_knn_for_umap
+from topo._optional import has, require
 from topo.base.ann import kNN
+from topo.layouts.isomap import Isomap
 from topo.layouts.map import fuzzy_embedding
 from topo.spectral.eigen import spectral_layout
 from topo.tpgraph.kernels import Kernel
@@ -277,10 +277,6 @@ class Projector(BaseEstimator, TransformerMixin):
             if X.N is None:
                 raise ValueError("Kernel must be fitted before projection.")
             source_n_samples = int(X.N)
-        else:
-            source_n_samples = _n_rows(X, "X")
-
-        if isinstance(X, Kernel):
             self.M = X.M
             kernel_P = X.P
             if self.landmarks_ is not None and self.projection_method != "Isomap":
@@ -290,6 +286,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 self.N = X.N
                 K = kernel_P.copy()
         else:
+            source_n_samples = _n_rows(X, "X")
             if self.metric != "precomputed":
                 if issparse(X):
                     X_fit = csr_matrix(X).toarray()
@@ -343,19 +340,17 @@ class Projector(BaseEstimator, TransformerMixin):
                 )
         # Fit the desired method
         if self.projection_method == "Isomap":
-            from sklearn.manifold import Isomap as SklearnIsomap
-
-            self.estimator_ = SklearnIsomap(
+            isomap_est = Isomap(
                 n_components=self.n_components,
                 n_neighbors=self.n_neighbors,
                 metric="precomputed",
                 n_jobs=self.n_jobs,
             )
-            self.Y_ = _estimator_fit_transform(self.estimator_, K)
+            self.Y_ = isomap_est.fit_transform(K)
 
         elif self.projection_method == "t-SNE":
-            if importlib.util.find_spec("MulticoreTSNE") is not None:
-                tsne_cls = importlib.import_module("MulticoreTSNE").MulticoreTSNE
+            if has("MulticoreTSNE"):
+                tsne_cls = require("MulticoreTSNE").MulticoreTSNE
                 self.estimator_ = tsne_cls(
                     n_components=self.n_components,
                     metric="precomputed",
@@ -376,7 +371,7 @@ class Projector(BaseEstimator, TransformerMixin):
             Y, Y_aux = fuzzy_embedding(
                 K,
                 n_components=self.n_components,
-                init=cast(Any, self.init_Y_),
+                init=self.init_Y_,
                 n_epochs=self.num_iters,
                 random_state=self.random_state,
                 metric=self.metric,
@@ -442,7 +437,7 @@ class Projector(BaseEstimator, TransformerMixin):
                 n_components=self.n_components,
                 precomputed_knn=precomputed_knn,
                 n_neighbors=k_nbrs,
-                init=cast(Any, self.init_Y_),
+                init=self.init_Y_,  # type: ignore[arg-type]
                 n_epochs=self.num_iters,
                 random_state=self.random_state,
                 low_memory=True,
@@ -452,12 +447,7 @@ class Projector(BaseEstimator, TransformerMixin):
             self.Y_ = _estimator_fit_transform(self.estimator_, X)
 
         elif self.projection_method == "PaCMAP":
-            try:
-                import pacmap
-            except ImportError:
-                raise ImportError(
-                    "PaCMAP is not installed. Please install PaCMAP with 'pip install pacmap' before using this method."
-                )
+            pacmap = require("pacmap", purpose="PaCMAP layout")
             logging.getLogger("pacmap").setLevel(logging.ERROR)
             warnings.filterwarnings(
                 "ignore", category=UserWarning, module="pacmap"
@@ -492,15 +482,10 @@ class Projector(BaseEstimator, TransformerMixin):
                 verbose=self.verbose,
                 **kwargs,
             )
-            self.Y_ = _estimator_fit_transform(self.estimator_, X=X, init=safe_init)
+            self.Y_ = _estimator_fit_transform(self.estimator_, X, init=safe_init)
 
         elif self.projection_method == "TriMAP":
-            try:
-                import trimap
-            except ImportError:
-                raise ImportError(
-                    "TriMAP is not installed. Please install TriMAP with 'pip install trimap' before using this method."
-                )
+            trimap = require("trimap", purpose="TriMAP layout")
 
             if self.metric == "cosine":
                 metric = "angular"
@@ -513,21 +498,17 @@ class Projector(BaseEstimator, TransformerMixin):
                 verbose=self.verbose,
                 **kwargs,
             )
-            self.Y_ = _estimator_fit_transform(self.estimator_, X=X, init=self.init_Y_)
+            self.Y_ = _estimator_fit_transform(self.estimator_, X, init=self.init_Y_)
 
         elif self.projection_method == "IsomorphicMDE":
-            try:
-                import pymde
-                from pymde import preprocess
-            except ImportError:
-                raise ImportError(
-                    "pymde is not installed. Please install pymde with 'pip install pymde' before using this method."
-                )
+            pymde = require("pymde", purpose="IsomorphicMDE layout")
+            from pymde import preprocess  # type: ignore
+
             attractive_penalty = pymde.penalties.Log1p
             repulsive_penalty = pymde.penalties.Log
             loss = pymde.losses.Absolute
             graph = preprocess.graph.Graph(K)
-            self.estimator_ = IsomorphicMDE(
+            mde_estimator = IsomorphicMDE(
                 graph,
                 attractive_penalty=attractive_penalty,
                 repulsive_penalty=repulsive_penalty,
@@ -537,25 +518,27 @@ class Projector(BaseEstimator, TransformerMixin):
                 verbose=self.verbose,
                 **kwargs,
             )
+            self.estimator_ = mde_estimator
 
-            self.Y_ = self.estimator_.embed(
-                max_iter=self.num_iters, memory_size=10, eps=10e-4, verbose=self.verbose
+            self.Y_ = np.asarray(
+                mde_estimator.embed(
+                    max_iter=self.num_iters,
+                    memory_size=10,
+                    eps=10e-4,
+                    verbose=self.verbose,
+                )
             )
 
         elif self.projection_method == "IsometricMDE":
-            try:
-                import pymde
-                from pymde import preprocess
-            except ImportError:
-                raise ImportError(
-                    "pymde is not installed. Please install pymde with 'pip install pymde' before using this method."
-                )
+            pymde = require("pymde", purpose="IsometricMDE layout")
+            from pymde import preprocess  # type: ignore
+
             attractive_penalty = pymde.penalties.Log1p
             repulsive_penalty = pymde.penalties.Log
             loss = pymde.losses.Absolute
             graph = preprocess.graph.Graph(K)
             max_distance = 5e7
-            self.estimator_ = IsometricMDE(
+            mde_estimator = IsometricMDE(
                 graph,
                 embedding_dim=self.n_components,
                 loss=loss,
@@ -564,16 +547,15 @@ class Projector(BaseEstimator, TransformerMixin):
                 verbose=self.verbose,
                 **kwargs,
             )
-            self.Y_ = self.estimator_.embed(
-                max_iter=self.num_iters, memory_size=1, verbose=self.verbose
+            self.estimator_ = mde_estimator
+            self.Y_ = np.asarray(
+                mde_estimator.embed(
+                    max_iter=self.num_iters, memory_size=1, verbose=self.verbose
+                )
             )
 
         elif self.projection_method == "NCVis":
-            if importlib.util.find_spec("ncvis") is None:
-                raise ImportError(
-                    "ncvis is not installed. Please install ncvis with 'pip install ncvis' before using this method."
-                )
-            ncvis = importlib.import_module("ncvis")
+            ncvis = require("ncvis", purpose="NCVis layout")
             self.estimator_ = ncvis.NCVis(
                 d=self.n_components,
                 n_neighbors=self.n_neighbors,
@@ -631,7 +613,7 @@ class Projector(BaseEstimator, TransformerMixin):
 
 
 # Check if pymde is installed
-_HAS_PYMDE = importlib.util.find_spec("pymde") is not None
+_HAS_PYMDE = has("pymde")
 
 
 # Define custom pymde problems
@@ -742,9 +724,9 @@ if _HAS_PYMDE:
         pymde.MDE
             A ``pymde.MDE`` object, based on the original data.
         """
-        import torch
-        from pymde import constraints, preprocess, problem, quadratic
-        from pymde.functions import penalties
+        import torch  # type: ignore
+        from pymde import constraints, preprocess, problem, quadratic  # type: ignore
+        from pymde.functions import penalties  # type: ignore
 
         if attractive_penalty is None:
             attractive_penalty = penalties.Log1p
@@ -775,6 +757,7 @@ if _HAS_PYMDE:
             constraint = constraints.Centered()
         elif constraint is None and repulsive_penalty is None:
             constraint = constraints.Standardized()
+        assert constraint is not None
 
         # enforce a max distance, otherwise may very well run out of memory
         # when n_items is large
@@ -785,9 +768,7 @@ if _HAS_PYMDE:
                 f"Computing {n_neighbors}-nearest neighbors, with "
                 f"max_distance={max_distance}"
             )
-        preprocess_generic = cast(Any, preprocess).generic
-        constraint_obj = cast(Any, constraint)
-        knn_graph = preprocess_generic.k_nearest_neighbors(
+        knn_graph = preprocess.generic.k_nearest_neighbors(
             data,
             k=n_neighbors,
             max_distance=max_distance,
@@ -796,10 +777,10 @@ if _HAS_PYMDE:
         edges = knn_graph.edges.to(device)
         weights = knn_graph.weights.to(device)
 
-        if isinstance(constraint_obj, constraints.Anchored):
+        if isinstance(constraint, constraints.Anchored):
             # remove anchor-anchor edges before generating intialization
             edges, weights = _remove_anchor_anchor_edges(
-                edges, weights, constraint_obj.anchors
+                edges, weights, constraint.anchors
             )
 
         # DS: add multicomponent spectral initialization
@@ -810,11 +791,11 @@ if _HAS_PYMDE:
                 problem.LOGGER.info("Computing quadratic initialization.")
             X_init = quadratic.spectral(n, embedding_dim, edges, weights, device=device)
             if not isinstance(
-                constraint_obj, (constraints._Centered, constraints._Standardized)
+                constraint, (constraints._Centered, constraints._Standardized)
             ):
-                constraint_obj.project_onto_constraint(cast(Any, X_init), inplace=True)
+                constraint.project_onto_constraint(X_init, inplace=True)
         elif init == "random":
-            X_init = constraint_obj.initialization(n, embedding_dim, device)
+            X_init = constraint.initialization(n, embedding_dim, device)
         else:
             raise ValueError(
                 f"Unsupported value '{init}' for keyword argument `init`; "
@@ -839,19 +820,19 @@ if _HAS_PYMDE:
                 device
             )
 
-            negative_weights = -cast(Any, torch).ones(
+            negative_weights = -torch.ones(
                 negative_edges.shape[0], dtype=X_init.dtype, device=device
             )
 
-            if isinstance(constraint_obj, constraints.Anchored):
+            if isinstance(constraint, constraints.Anchored):
                 negative_edges, negative_weights = _remove_anchor_anchor_edges(
-                    negative_edges, negative_weights, constraint_obj.anchors
+                    negative_edges, negative_weights, constraint.anchors
                 )
 
             edges = torch.cat([edges, negative_edges])
             weights = torch.cat([weights, negative_weights])
 
-            f = cast(Any, penalties).PushAndPull(
+            f = penalties.PushAndPull(
                 weights,
                 attractive_penalty=attractive_penalty,
                 repulsive_penalty=repulsive_penalty,
@@ -866,21 +847,20 @@ if _HAS_PYMDE:
             embedding_dim=embedding_dim,
             edges=edges,
             distortion_function=f,
-            constraint=constraint_obj,
+            constraint=constraint,
             device=device,
         )
-        mde_any = cast(Any, mde)
-        mde_any._X_init = X_init
+        mde._X_init = X_init
 
         # Won't need to cache the graph - we have already computed it and cached with TopoMetry
 
-        distances = mde.distances(mde_any._X_init)
+        distances = mde.distances(mde._X_init)
         if (distances == 0).any():
             # pathological scenario in which at least two points overlap can yield
             # non-differentiable average distortion. perturb the initialization to
             # mitigate.
-            x_init = mde_any._X_init
-            mde_any._X_init += 1e-4 * cast(Any, torch).randn(
+            x_init = mde._X_init
+            mde._X_init += 1e-4 * torch.randn(
                 x_init.shape,
                 device=x_init.device,
                 dtype=x_init.dtype,
@@ -955,9 +935,9 @@ if _HAS_PYMDE:
         pymde.MDE
             A ``pymde.MDE`` instance, based on preserving the original distances.
         """
-        import torch
-        from pymde import constraints, preprocess, problem
-        from pymde.functions import losses
+        import torch  # type: ignore
+        from pymde import constraints, preprocess, problem  # type: ignore
+        from pymde.functions import losses  # type: ignore
         from scipy.sparse import issparse
 
         if loss is None:
@@ -982,7 +962,7 @@ if _HAS_PYMDE:
             edges = data.edges.to(device)
             deviations = data.distances.to(device)
         else:
-            graph = cast(Any, preprocess).generic.distances(
+            graph = preprocess.generic.distances(
                 data, retain_fraction=retain_fraction, verbose=verbose
             )
             edges = graph.edges.to(device)

@@ -42,7 +42,7 @@ UMAP-derived routine that optimizes a low-dimensional layout from a fuzzy
 simplicial set, used as the ``MAP`` projection backend.
 """
 
-from numpy import random
+import numpy as np
 
 from topo.layouts.graph_utils import find_ab_params, simplicial_set_embedding
 
@@ -60,7 +60,7 @@ def fuzzy_embedding(
     output_metric_kwds=None,
     gamma=1.0,
     negative_sample_rate=5,
-    init="spectral",
+    init: "str | np.ndarray" = "spectral",
     random_state=None,
     euclidean_output=True,
     parallel=True,
@@ -179,7 +179,7 @@ def fuzzy_embedding(
                 euclidean space.
     """
     if random_state is None:
-        random_state = random.RandomState()
+        random_state = np.random.RandomState()
     metric_kwds = metric_kwds or {}
     output_metric_kwds = output_metric_kwds or {}
     densmap_kwds = densmap_kwds or {}

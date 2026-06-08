@@ -472,14 +472,16 @@ class UoMMixin:
                 Xi_or_knn,
                 method=self.id_method,
                 ks=self.id_ks,
-                backend=self.backend,
+                backend=getattr(self, "_backend_resolved", self.backend),
                 metric=self.id_metric,
-                n_jobs=int(self.n_jobs) if self.n_jobs is not None else -1,
+                n_jobs=int(getattr(self, "_n_jobs_effective", self.n_jobs))
+                if self.n_jobs is not None
+                else -1,
                 quantile=self.id_quantile,
                 min_components=int(min(self.id_min_components, cap)),
                 max_components=int(min(cap, n_max)),
                 headroom=float(self.id_headroom),
-                random_state=getattr(self, "random_state", None),
+                random_state=getattr(self, "_random_state_resolved", self.random_state),
                 return_details=False,
             )
             k_auto = res[0] if isinstance(res, tuple) else res
@@ -504,8 +506,8 @@ class UoMMixin:
                 Xi,
                 n_neighbors=k_neighbors_i,
                 metric=self.base_metric,
-                n_jobs=self.n_jobs,
-                backend=self.backend,
+                n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
+                backend=getattr(self, "_backend_resolved", self.backend),
                 return_instance=False,
                 verbose=False,
                 **kwargs,
@@ -532,7 +534,8 @@ class UoMMixin:
                 self._fit_uom_tiny_component(idx, N_i)
                 continue
 
-            k_req = int(min(max(k_i, 2), N_i - 1, self.n_eigs))
+            n_eigs_eff = self.n_eigs_ if self.n_eigs_ is not None else self.n_eigs
+            k_req = int(min(max(k_i, 2), N_i - 1, n_eigs_eff))
             k_req = max(1, k_req)
 
             eig_dm_i = EigenDecomposition(
@@ -543,7 +546,7 @@ class UoMMixin:
                 drop_first=True,
                 weight=True,
                 t=self.diff_t,
-                random_state=getattr(self, "random_state", None),
+                random_state=getattr(self, "_random_state_resolved", self.random_state),
                 verbose=False,
             ).fit(Ki)
 
@@ -578,8 +581,8 @@ class UoMMixin:
                 Zi,
                 n_neighbors=k_graph_i,
                 metric=self.graph_metric,
-                n_jobs=self.n_jobs,
-                backend=self.backend,
+                n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
+                backend=getattr(self, "_backend_resolved", self.backend),
                 return_instance=False,
                 verbose=False,
                 **kwargs,
@@ -588,8 +591,8 @@ class UoMMixin:
                 msZi,
                 n_neighbors=k_graph_i,
                 metric=self.graph_metric,
-                n_jobs=self.n_jobs,
-                backend=self.backend,
+                n_jobs=getattr(self, "_n_jobs_effective", self.n_jobs),
+                backend=getattr(self, "_backend_resolved", self.backend),
                 return_instance=False,
                 verbose=False,
                 **kwargs,

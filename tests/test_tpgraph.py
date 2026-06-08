@@ -3,9 +3,13 @@
 import numpy as np
 import pytest
 from scipy import sparse
+from scipy.sparse.csgraph import connected_components, laplacian
+from sklearn.metrics import pairwise_distances
 
+from topo.base.ann import kNN
+from topo.topograph import TopOGraph
 from topo.tpgraph import kernels
-from topo.tpgraph.cknn import cknn_graph
+from topo.tpgraph.cknn import cknn_graph, cknn_ratio_matrix
 from topo.tpgraph.intrinsic_dim import (
     automated_scaffold_sizing,
     fsa_local,
@@ -31,15 +35,148 @@ def test_kernel_estimator(swiss_roll_data):
     assert sparse.issparse(L)
 
 
-def test_cknn_graph(swiss_roll_data):
-    X, _ = swiss_roll_data
-    res = cknn_graph(
-        X, n_neighbors=10, weighted=None, return_densities=False, backend="sklearn"
+def _brute_force_cknn_reference(X, scale_k, delta):
+    D = pairwise_distances(X)
+    np.fill_diagonal(D, np.inf)
+    rho = np.partition(D, scale_k - 1, axis=1)[:, scale_k - 1]
+    adjacency = delta * np.sqrt(rho[:, None] * rho[None, :]) > D
+    np.fill_diagonal(adjacency, False)
+    return sparse.csr_matrix(adjacency.astype(np.float32))
+
+
+def _as_dense_array(matrix):
+    return matrix.toarray() if sparse.issparse(matrix) else np.asarray(matrix)
+
+
+def test_cknn_exact_threshold_uses_strict_inequality():
+    X = np.array([[0.0], [1.0], [3.0]])
+
+    A = cknn_graph(X, scale_k=1, delta=1.0, exact=True)
+
+    assert A[1, 0] == 0
+
+
+def test_cknn_exact_threshold_positive_case():
+    X = np.array([[0.0], [1.0], [3.0]])
+
+    A = cknn_graph(X, scale_k=1, delta=1.01, exact=True)
+
+    assert A[0, 1] == 1
+    assert A[1, 0] == 1
+
+
+def test_cknn_exact_matches_brute_force_reference():
+    X = np.random.default_rng(0).normal(size=(50, 3))
+
+    expected = _brute_force_cknn_reference(X, scale_k=5, delta=1.2)
+    actual = cknn_graph(X, scale_k=5, delta=1.2, exact=True)
+
+    np.testing.assert_array_equal(actual.toarray(), expected.toarray())
+
+
+def test_cknn_graph_properties_and_delta_monotonicity():
+    X = np.random.default_rng(0).normal(size=(80, 2))
+
+    A_small = cknn_graph(X, scale_k=8, delta=0.8, exact=True)
+    A_large = cknn_graph(X, scale_k=8, delta=1.2, exact=True)
+
+    assert sparse.issparse(A_small)
+    np.testing.assert_array_equal(A_large.toarray(), A_large.T.toarray())
+    assert set(np.unique(A_large.data)).issubset({1.0})
+    np.testing.assert_array_equal(A_small.maximum(A_large).toarray(), A_large.toarray())
+
+
+def test_cknn_candidate_mode_matches_exact_when_candidates_are_complete():
+    X = np.random.default_rng(1).normal(size=(60, 4))
+
+    exact = cknn_graph(X, scale_k=5, delta=1.1, exact=True)
+    approx_complete = cknn_graph(
+        X,
+        scale_k=5,
+        delta=1.1,
+        exact=False,
+        candidate_k=59,
+        backend="sklearn",
     )
-    assert len(res) == 2
-    A, W = res
-    assert sparse.issparse(A)
-    assert sparse.issparse(W)
+
+    np.testing.assert_array_equal(exact.toarray(), approx_complete.toarray())
+
+
+def test_cknn_candidate_mode_basic_properties():
+    X = np.random.default_rng(0).normal(size=(50, 3))
+    A = cknn_graph(X, scale_k=5, delta=1.0, candidate_k=20, exact=False)
+
+    assert (A != A.T).nnz == 0
+    assert np.all(A.diagonal() == 0)
+    assert set(np.unique(A.data)).issubset({1.0})
+
+
+def test_cknn_unnormalized_laplacian_zero_modes_match_components():
+    rng = np.random.default_rng(0)
+    X1 = rng.normal(loc=-5, scale=0.2, size=(30, 2))
+    X2 = rng.normal(loc=5, scale=0.2, size=(30, 2))
+    X = np.vstack([X1, X2])
+
+    A = cknn_graph(X, scale_k=5, delta=1.0, exact=True)
+    n_components, _ = connected_components(A, directed=False)
+    L = laplacian(A, normed=False)
+    evals = np.linalg.eigvalsh(L.toarray())
+
+    assert np.sum(evals < 1e-8) == n_components
+
+
+def test_cknn_ratio_matrix_threshold_matches_graph():
+    X = np.random.default_rng(0).normal(size=(40, 2))
+
+    ratio = cknn_ratio_matrix(X, scale_k=5, exact=True)
+    A_from_ratio = ratio.copy()
+    A_from_ratio.data = (A_from_ratio.data < 1.1).astype(np.float32)
+    A_from_ratio.eliminate_zeros()
+    A_from_ratio = A_from_ratio.minimum(A_from_ratio.T)
+
+    A = cknn_graph(X, scale_k=5, delta=1.1, exact=True)
+
+    np.testing.assert_array_equal(A_from_ratio.toarray(), A.toarray())
+
+
+def test_kernel_cknn_returns_binary_sparse_graph():
+    X = np.random.default_rng(2).normal(size=(40, 3))
+
+    ker = Kernel(
+        n_neighbors=5,
+        metric="euclidean",
+        backend="sklearn",
+        cknn=True,
+        cknn_delta=1.1,
+        cknn_exact=True,
+        laplacian_type="unnormalized",
+    ).fit(X)
+    assert sparse.issparse(ker.K)
+    np.testing.assert_array_equal(ker.K.toarray(), ker.K.T.toarray())
+    assert set(np.unique(ker.K.data)).issubset({1.0})
+
+
+def test_topograph_cknn_smoke():
+    X = np.random.default_rng(3).normal(size=(35, 4))
+    tg = TopOGraph(
+        base_knn=5,
+        graph_knn=5,
+        min_eigs=6,
+        base_kernel_version="cknn",
+        graph_kernel_version="cknn",
+        base_metric="euclidean",
+        backend="sklearn",
+        projection_methods=[],
+        cknn_exact=True,
+    )
+
+    tg.fit(X)
+
+    assert tg.laplacian_type == "unnormalized"
+    assert tg.base_kernel is not None
+    assert tg.base_kernel.K is not None
+    assert sparse.issparse(tg.base_kernel.K)
+    assert set(np.unique(tg.base_kernel.K.data)).issubset({1.0})
 
 
 def test_automated_scaffold_sizing(swiss_roll_data):
@@ -74,6 +211,7 @@ def test_kernel_helper_validation_and_sanitizing():
         kernels._check_square_matrix(np.ones((2, 3)))
 
     sanitized = kernels._sanitize_sparse_data(csr)
+    assert sparse.issparse(sanitized)
     np.testing.assert_allclose(sanitized.toarray(), [[1.0, 0.0], [0.0, 2.0]])
 
 
@@ -91,7 +229,6 @@ def test_kernel_numeric_helpers():
     np.testing.assert_allclose(normalized[0], [0.6, 0.8])
     np.testing.assert_allclose(normalized[1], [0.0, 0.0])
 
-    assert kernels._cosine_knn_requires_unit_vectors("hnswlib")
     assert not kernels._cosine_knn_requires_unit_vectors("sklearn")
     np.testing.assert_allclose(
         kernels._cosine_distance_to_angle_from_sparse_triplets(
@@ -127,5 +264,122 @@ def test_cosine_use_angular_converts_adaptive_bandwidth_units():
     )
 
     raw_bandwidth = kernels._adap_bw(densities["knn"], n_neighbors=2)
-    expected = kernels._cosine_distance_to_angle(raw_bandwidth)
+    expected = kernels._cosine_distance_to_angle_from_sparse_triplets(
+        None, None, raw_bandwidth
+    )
     np.testing.assert_allclose(densities["adaptive_bw"], expected)
+
+
+@pytest.mark.parametrize("backend", ["sklearn", "hnswlib", "nmslib"])
+def test_knn_self_query_returns_requested_nonself_neighbors(backend):
+    if backend == "hnswlib":
+        pytest.importorskip("hnswlib")
+    if backend == "nmslib":
+        pytest.importorskip("nmslib")
+    X = np.random.RandomState(0).randn(12, 4)
+
+    graph = kNN(X, n_neighbors=3, backend=backend, metric="euclidean")
+
+    assert graph.shape == (12, 12)
+    np.testing.assert_allclose(graph.diagonal(), np.zeros(12))
+    np.testing.assert_array_equal(graph.getnnz(axis=1), np.full(12, 3))
+
+
+def test_kernel_parameterized_operator_caches_recompute_by_key():
+    X = np.random.RandomState(1).randn(18, 3)
+    ker = Kernel(n_neighbors=4, backend="sklearn", metric="euclidean").fit(X)
+
+    L_norm = ker.laplacian("normalized")
+    L_unnorm = ker.laplacian("unnormalized")
+    L_norm_arr = _as_dense_array(L_norm)
+    L_unnorm_arr = _as_dense_array(L_unnorm)
+    assert not np.allclose(L_norm_arr, L_unnorm_arr)
+
+    P_alpha0 = ker.diff_op(anisotropy=0.0)
+    P_alpha1 = ker.diff_op(anisotropy=1.0)
+    P_alpha0_arr = _as_dense_array(P_alpha0)
+    P_alpha1_arr = _as_dense_array(P_alpha1)
+    assert not np.allclose(P_alpha0_arr, P_alpha1_arr)
+
+
+def test_shortest_paths_caches_by_indices():
+    X = np.random.RandomState(2).randn(10, 2)
+    ker = kernels.Kernel(n_neighbors=3, backend="sklearn", metric="euclidean").fit(X)
+
+    sp_all = ker.shortest_paths(indices=None)
+    sp_subset = ker.shortest_paths(indices=[0, 2])
+
+    assert sp_all is not None
+    assert sp_subset is not None
+    assert sp_all.shape == (10, 10)
+    assert sp_subset.shape == (2, 10)
+
+
+def test_shortest_paths_indices_and_landmark_guard():
+    X = np.random.RandomState(2).randn(10, 2)
+    ker = Kernel(n_neighbors=3, backend="sklearn", metric="euclidean").fit(X)
+
+    subset = ker.shortest_paths(indices=[0, 2])
+
+    assert subset.shape == (2, 10)
+    assert np.isfinite(subset).any()
+    with pytest.raises(NotImplementedError, match="landmark"):
+        ker.shortest_paths(landmark=True, recompute=True)
+
+
+def test_adaptive_density_ranks_constant_bandwidth_guard():
+    adap_sd = np.ones(5)
+    ranks = kernels._density_ranks(adap_sd, high=7)
+
+    np.testing.assert_allclose(ranks, np.full(5, 7.0))
+
+
+def test_resistance_distance_sparsify_and_impute_numerics():
+    graph = sparse.csr_matrix(
+        [
+            [0.0, 1.0, 0.0, 0.0],
+            [1.0, 0.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0, 0.0],
+        ]
+    )
+    ker = Kernel(
+        metric="precomputed",
+        adaptive_bw=False,
+        sigma=1.0,
+        n_neighbors=2,
+        laplacian_type="unnormalized",
+    ).fit(graph)
+
+    rd_mat = ker.resistance_distance()
+    rd = rd_mat.toarray() if sparse.issparse(rd_mat) else np.asarray(rd_mat)
+    np.testing.assert_allclose(rd, rd.T)
+    np.testing.assert_allclose(np.diag(rd), np.zeros(4))
+    assert np.isfinite(rd).all()
+    assert (rd >= -1e-12).all()
+
+    sparse_graph = ker.sparsify(epsilon=0.9, maxiter=1, random_state=0)
+    assert sparse.isspmatrix(sparse_graph)
+    sparse_graph = sparse_graph.tocsr()
+    np.testing.assert_allclose(sparse_graph.toarray(), sparse_graph.toarray().T)
+    assert (sparse_graph.data >= 0).all()
+
+    Y = sparse.csr_matrix(np.eye(4))
+    Y_imp = ker.impute(Y, t=2)
+    assert Y_imp.shape == (4, 4)
+    assert np.isfinite(Y_imp).all()
+
+
+def test_kernel_safe_refit_recompute_false():
+    X_1 = np.random.RandomState(0).randn(10, 3)
+    X_2 = np.random.RandomState(1).randn(20, 3)
+
+    ker = kernels.Kernel(n_neighbors=2, backend="sklearn").fit(X_1)
+    assert ker._K is not None
+    orig_shape = ker._K.shape
+
+    # Fitting new data with recompute=False should not crash if shape mismatch,
+    # but the current implementation just returns self early.
+    ker.fit(X_2, recompute=False)
+    assert ker._K is not None
+    assert ker._K.shape == orig_shape

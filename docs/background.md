@@ -26,8 +26,10 @@ its closest neighbors. *(Package: `topo.base.ann`.)*
   Navigable Small World graphs give fast, scalable neighbor search — the default
   backend for large data. [IEEE TPAMI 2020 / arXiv:1603.09320](https://arxiv.org/abs/1603.09320)
 - **Continuous k-nearest neighbors (CkNN).** Berry & Sauer show that a
-  *continuous* kNN graph yields a Laplacian that converges to the
-  Laplace–Beltrami operator, capturing topology in a single unweighted graph.
+  *continuous* kNN graph yields an unweighted, undirected graph whose
+  unnormalised Laplacian converges to the Laplace-Beltrami operator. Given
+  local scale radii `rho_i` and `rho_j`, CkNN connects samples when
+  `d(i, j) < delta * sqrt(rho_i * rho_j)`.
   [*Foundations of Data Science* 2019 / arXiv:1606.02353](https://arxiv.org/abs/1606.02353)
 
 ## 2. Kernels and the Laplace–Beltrami operator
@@ -47,8 +49,11 @@ of a continuous operator on the data's underlying shape. *(Package:
   graph Laplacian — the simplest member of this family and a useful baseline.
   [*Neural Computation* 2003](https://doi.org/10.1162/089976603321780317)
 - **Fuzzy simplicial sets (UMAP's graph).** UMAP builds its graph from *fuzzy*
-  neighborhoods combined by a probabilistic union — the option the package uses
-  for `fuzzy` kernels. The docs are the gentlest introduction.
+  neighborhoods combined by a probabilistic union. For `fuzzy` kernels,
+  `topometry-nosc` delegates this UMAP-specific graph construction to
+  `umap-learn`; TopoMetry then continues with its own spectral scaffolds,
+  diffusion operators and graph-refinement pipeline. The docs are the gentlest
+  introduction.
   [UMAP docs](https://umap-learn.readthedocs.io/en/latest/how_umap_works.html) ·
   [McInnes, Healy & Melville, arXiv:1802.03426](https://arxiv.org/abs/1802.03426)
 
@@ -106,8 +111,9 @@ arrangement; trying a few is normal.
   the foundational geodesic-preserving embedding. [*Science* 2000](https://doi.org/10.1126/science.290.5500.2319)
 - **t-SNE.** Van der Maaten & Hinton: heavy-tailed neighbor embedding, excellent
   for local cluster structure. [*JMLR* 2008](https://www.jmlr.org/papers/v9/vandermaaten08a.html)
-- **UMAP / MAP.** Cross-entropy optimization of the fuzzy graph; the package's
-  `MAP` is a lightweight UMAP-style layout. [McInnes et al., arXiv:1802.03426](https://arxiv.org/abs/1802.03426)
+- **UMAP / MAP.** `projection_method="UMAP"` uses `umap-learn`'s UMAP estimator.
+  The package's `MAP` remains a local checkpoint-aware graph-layout optimizer
+  for TopoMetry refined graphs. [McInnes et al., arXiv:1802.03426](https://arxiv.org/abs/1802.03426)
 - **PaCMAP.** Wang, Huang, Rudin & Shaposhnik: balances local and global structure
   by design, with a clear analysis of what makes a good DR loss.
   [*JMLR* 2021](https://www.jmlr.org/papers/v22/20-1061.html)

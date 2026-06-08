@@ -45,9 +45,9 @@ import logging
 from typing import Any, cast
 
 import numpy as np
-from scipy.optimize import curve_fit
 from sklearn.neighbors import KDTree
 
+from topo._compat.umap import find_umap_ab_params, fuzzy_graph_from_data
 from topo.base import dists as dist
 from topo.spectral.eigen import spectral_layout
 from topo.spectral.umap_layouts import (
@@ -55,7 +55,8 @@ from topo.spectral.umap_layouts import (
     optimize_layout_euclidean,
     optimize_layout_generic,
 )
-from topo.tpgraph.fuzzy import fuzzy_simplicial_set
+
+find_ab_params = find_umap_ab_params
 
 logger = logging.getLogger(__name__)
 
@@ -404,12 +405,10 @@ def simplicial_set_embedding(
         if verbose:
             logger.info("Computing embedding densities")
 
-        fss_result = fuzzy_simplicial_set(
+        fss_result = fuzzy_graph_from_data(
             embedding,
             n_neighbors=int(densmap_kwds["n_neighbors"]),
             metric=metric,
-            backend="sklearn",
-            n_jobs=1,
             verbose=verbose,
             return_dists=True,
         )
@@ -454,22 +453,3 @@ def simplicial_set_embedding(
         aux_data["checkpoints"] = checkpoints
 
     return embedding, aux_data
-
-
-def find_ab_params(spread, min_dist):
-    """Fit the ``a``, ``b`` parameters of the low-dimensional membership curve.
-
-    Finds the smooth curve (from a pre-defined family with simple gradient) that
-    best matches an offset exponential decay, used in lower-dimensional fuzzy
-    simplicial complex construction.
-    """
-
-    def curve(x, a, b):
-        return 1.0 / (1.0 + a * x ** (2 * b))
-
-    xv = np.linspace(0, spread * 3, 300)
-    yv = np.zeros(xv.shape)
-    yv[xv < min_dist] = 1.0
-    yv[xv >= min_dist] = np.exp(-(xv[xv >= min_dist] - min_dist) / spread)
-    params, covar = curve_fit(curve, xv, yv)
-    return params[0], params[1]

@@ -70,7 +70,7 @@ The `base_kernel_version` and `graph_kernel_version` parameters control the grap
 | `bw_adaptive_alpha_decaying` | Adaptive bandwidth with exponential decay |
 | `bw_adaptive_nbr_expansion` | Adaptive bandwidth with neighbor expansion |
 | `bw_adaptive_alpha_decaying_nbr_expansion` | Both α-decay and neighbor expansion |
-| `cknn` | Continuous k-NN (Berry & Sauer 2019) |
+| `cknn` | Binary Continuous k-NN graph (Berry & Sauer 2019) |
 | `fuzzy` | Fuzzy simplicial set (UMAP-style) |
 | `gaussian` | Fixed-bandwidth Gaussian |
 

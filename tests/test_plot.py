@@ -12,13 +12,13 @@ from topo.tpgraph.intrinsic_dim import IntrinsicDim
 
 
 def test_decay_plot(fitted_topograph):
-    fig = plot.decay_plot(fitted_topograph.eigenvalues)
+    fig, ax = plot.decay_plot(fitted_topograph.eigenvalues)
     assert fig is not None
     plt.close(fig)
 
 
 def test_scatter(fitted_topograph):
-    fig = plot.scatter(fitted_topograph.msTopoMAP)
+    fig, ax = plot.scatter(fitted_topograph.msTopoMAP)
     assert fig is not None
     plt.close(fig)
 

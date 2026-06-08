@@ -5,8 +5,8 @@
 `TransformerMixin`. This makes the building-block classes compatible with
 scikit-learn pipelines and easy to combine with other workflows.
 
-The **core** install depends only on numpy, scipy, scikit-learn, numba and
-joblib:
+The **core** install includes numpy, scipy, scikit-learn, numba, joblib and
+`umap-learn`:
 
 ```bash
 pip install topometry-nosc            # core
@@ -41,7 +41,7 @@ Optional features are grouped into extras — install only what you need:
 | `pandas`     | pandas (DataFrame I/O)                                  |
 | `ann`        | hnswlib (fast approximate nearest neighbors)           |
 | `amg`        | pyamg (algebraic-multigrid `eigensolver='amg'`)        |
-| `layouts`    | pacmap, pymde, trimap, umap-learn (extra projections)  |
+| `layouts`    | pacmap, pymde, trimap (extra projections)             |
 | `notebooks`  | jupyterlab / ipywidgets                                |
 | `all`        | everything above                                       |
 
@@ -69,9 +69,10 @@ pip install --no-binary :all: nmslib
 ### Additional layout methods
 
 Fast implementations of [Isomap](https://doi.org/10.1126/science.290.5500.2319)
-and a cross-entropy–minimization layout (MAP) are built in. Other layout
-algorithms are available via the `layouts` extra:
-[UMAP](https://umap-learn.readthedocs.io/en/latest/), `umap-learn`;
+and a cross-entropy–minimization layout (MAP) are built in. UMAP fuzzy-graph
+construction and the `projection_method="UMAP"` layout are provided by the core
+`umap-learn` dependency. Other layout algorithms are available via the `layouts`
+extra:
 [PaCMAP](http://jmlr.org/papers/v22/20-1061.html), `pacmap`;
 [TriMAP](https://github.com/eamid/trimap), `trimap`;
 IsomorphicMDE / IsometricMDE, `pymde`. These are handled by

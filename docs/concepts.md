@@ -6,7 +6,7 @@ theory and [API Reference](api/index.md) for signatures.
 ## Kernel graph
 
 The package builds a sparse affinity graph from nearest-neighbor distances. The
-[`Kernel`](api/advanced.md#kernel) class wraps kNN construction
+[`Kernel`](api/advanced.md#topo.tpgraph.kernels.Kernel) class wraps kNN construction
 (`topo.base.ann.kNN`) and several bandwidth/density-correction schemes
 (adaptive bandwidth, continuous k-NN, fuzzy simplicial sets, Gaussian).
 
@@ -20,7 +20,7 @@ signal across the graph over time `t`.
 
 Eigenvectors of a graph Laplacian represent the geometry of the graph in a
 low-dimensional, orthonormal basis. The
-[`EigenDecomposition`](api/advanced.md#eigendecomposition) class computes these spectral
+[`EigenDecomposition`](api/advanced.md#topo.spectral.eigen.EigenDecomposition) class computes these spectral
 scaffolds (diffusion-map `DM`, multiscale `msDM`, and Laplacian-eigenmap variants).
 
 ## Spectral scaffold
@@ -39,6 +39,6 @@ not supervised target predictiveness; for target-aware checks see the
 
 ## High-level orchestrator
 
-[`TopOGraph`](api/topograph.md#topograph) ties the pipeline together: kNN → kernel →
+[`TopOGraph`](api/topograph.md#topo.topograph.TopOGraph) ties the pipeline together: kNN → kernel →
 eigenbasis → scaffold → refined graph → 2-D layouts, with a scikit-learn-style
 `fit` / `transform` interface.

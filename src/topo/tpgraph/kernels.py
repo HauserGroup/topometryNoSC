@@ -8,9 +8,10 @@
 """Graph-kernel construction and graph operators.
 
 Provides `compute_kernel` and the scikit-learn-style `Kernel`
-estimator, which build neighborhood-graph affinity matrices (adaptive bandwidth,
-fuzzy simplicial sets, continuous kNN) and expose graph operators: adjacency,
-Laplacian, diffusion operator, shortest paths, sparsification and imputation.
+estimator, which build neighborhood-graph matrices (adaptive-bandwidth
+affinities, fuzzy simplicial sets, binary continuous kNN graphs) and expose
+graph operators: adjacency, Laplacian, diffusion operator, shortest paths,
+sparsification and imputation.
 """
 
 import logging
@@ -28,9 +29,6 @@ from scipy.sparse import (
     diags,
     find,
     issparse,
-    kron,
-    lil_matrix,
-    linalg,
     tril,
 )
 from scipy.sparse.csgraph import connected_components
@@ -39,12 +37,12 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import normalize as _l2_normalize_rows
 from sklearn.utils import check_random_state
 
+from topo._compat.umap import fuzzy_graph_from_knn
 from topo.base.ann import kNN
 from topo.base.dists import pairwise_distances
 from topo.spectral._spectral import degree as compute_degree
 from topo.spectral._spectral import diffusion_operator, graph_laplacian
 from topo.tpgraph.cknn import cknn_graph
-from topo.tpgraph.fuzzy import fuzzy_simplicial_set
 from topo.utils._utils import get_indices_distances_from_sparse_matrix
 
 warnings.simplefilter("ignore", SparseEfficiencyWarning)
@@ -180,13 +178,25 @@ def _adap_bw(K, n_neighbors):
     return adap_sd
 
 
+def _density_ranks(adap_sd, high):
+    """Interpolate adaptive bandwidths to density ranks with a constant guard."""
+    adap_sd = np.asarray(adap_sd, dtype=float)
+    lo = float(np.nanmin(adap_sd))
+    hi = float(np.nanmax(adap_sd))
+    if np.isclose(lo, hi):
+        return np.full_like(adap_sd, fill_value=float(high), dtype=float)
+    return np.interp(adap_sd, (lo, hi), (2, high))
+
+
 def compute_kernel(
     X,
     metric="cosine",
     n_neighbors=10,
     fuzzy=False,
     cknn=False,
-    delta=1.0,
+    cknn_delta=1.0,
+    cknn_candidate_neighbors=None,
+    cknn_exact=False,
     pairwise=False,
     sigma=None,
     adaptive_bw=True,
@@ -199,6 +209,7 @@ def compute_kernel(
     verbose=False,
     use_angular=False,
     square_distances=True,
+    random_state=None,
     **kwargs,
 ):
     """
@@ -223,11 +234,18 @@ def compute_kernel(
         If set to `True` at the same time that `cknn` is set to `True`, the `cknn` parameter is ignored.
 
     cknn : bool, default=False
-        Whether to build the adjacency and affinity matrices using continuous k-nearest-neighbors.
+        Whether to build the binary, unweighted continuous k-nearest-neighbors graph.
         If set to `True`, the `pairwise`, `sigma`, `adaptive_bw`, `expand_nbr_search` and `alpha_decaying` parameters are ignored.
 
-    delta : float, default=1.0
-        The scaling factor for the CkNN kernel. Ignored if `cknn` set to `False`.
+    cknn_delta : float, default=1.0
+        Unitless CkNN edge threshold. Ignored if `cknn` is ``False``.
+
+    cknn_candidate_neighbors : int or None, default=None
+        Number of candidate neighbors tested in approximate CkNN mode. Ignored
+        when ``cknn_exact=True``.
+
+    cknn_exact : bool, default=False
+        If True, threshold all pairwise distances for CkNN construction.
 
     pairwise : bool, default=False
         Whether to compute the kernel using dense pairwise distances.
@@ -275,7 +293,7 @@ def compute_kernel(
     densities : dict, optional (if `return_densities` is set to `True`)
         If `fuzzy` and `cknn` are `False`, is a dictionary containing the bandwidth metrics.
         If `fuzzy` is set to `True`, the dictionary contains sigma and rho estimates.
-        If `cknn` is set to `True`, the dictionary contains the bandwidth metric.
+        If `cknn` is set to `True`, the dictionary contains the binary adjacency.
     """
     _check_2d_input(X)
 
@@ -306,6 +324,28 @@ def compute_kernel(
         n_jobs = cpu_count()
     k = n_neighbors
 
+    if cknn and not fuzzy:
+        if cknn_delta <= 0:
+            raise ValueError("cknn_delta must be positive.")
+        W = cknn_graph(
+            X,
+            scale_k=n_neighbors,
+            delta=cknn_delta,
+            metric=metric,
+            candidate_k=cknn_candidate_neighbors,
+            exact=cknn_exact,
+            include_self=False,
+            symmetrize="or",
+            backend=backend,
+            n_jobs=n_jobs,
+            verbose=verbose,
+            **kwargs,
+        )
+        if return_densities:
+            dens_dict["unweighted_adjacency"] = W
+            return W, dens_dict
+        return W
+
     if metric == "precomputed":
         K = _as_csr_matrix(X)
         K = _sanitize_sparse_data(K)
@@ -335,42 +375,33 @@ def compute_kernel(
             dens_dict["knn"] = K
     if fuzzy:
         cknn = False
-        _fuzzy_res = fuzzy_simplicial_set(
-            K,
+        knn_indices, knn_dists = get_indices_distances_from_sparse_matrix(
+            K, n_neighbors=n_neighbors
+        )
+        result = fuzzy_graph_from_knn(
+            np.zeros((N, 1), dtype=np.float32),
+            knn_indices=knn_indices,
+            knn_dists=knn_dists,
             n_neighbors=n_neighbors,
             metric="precomputed",
             set_op_mix_ratio=1.0,
             local_connectivity=1.0,
-            apply_set_operations=True,
-            return_dists=False,
+            random_state=random_state,
             verbose=verbose,
         )
-        W, sigmas, rhos = _fuzzy_res[0], _fuzzy_res[1], _fuzzy_res[2]
+        W, sigmas, rhos = result[:3]  # type: ignore[misc]
         if return_densities:
             dens_dict["sigma"] = sigmas
             dens_dict["rho"] = rhos
-    elif cknn:
-        res = cknn_graph(
-            K,
-            n_neighbors=n_neighbors,
-            delta=delta,
-            metric="precomputed",
-            weighted=None,
-            include_self=False,
-            return_densities=True,
-            verbose=verbose,
-        )
-        A = res[0]
-        W = res[1]
-        adap_sd = res[2]  # type: ignore
-        if return_densities:
-            dens_dict["unweighted_adjacency"] = A
-            dens_dict["adaptive_bw"] = adap_sd
     else:
         if adaptive_bw:
             adap_sd = _adap_bw(K, k)
+            if metric == "cosine" and use_angular:
+                adap_sd = _cosine_distance_to_angle_from_sparse_triplets(
+                    None, None, adap_sd
+                )
             # Get an indirect measure of the local density
-            pm = np.interp(adap_sd, (adap_sd.min(), adap_sd.max()), (2, k))
+            pm = _density_ranks(adap_sd, k)
             if return_densities:
                 dens_dict["omega"] = pm
                 dens_dict["adaptive_bw"] = adap_sd
@@ -390,10 +421,12 @@ def compute_kernel(
                         **kwargs,
                     )
                     adap_sd_new = _adap_bw(new_K, new_k)
+                    if metric == "cosine" and use_angular:
+                        adap_sd_new = _cosine_distance_to_angle_from_sparse_triplets(
+                            None, None, adap_sd_new
+                        )
 
-                    pm_new = np.interp(
-                        adap_sd_new, (adap_sd_new.min(), adap_sd_new.max()), (2, new_k)
-                    )
+                    pm_new = _density_ranks(adap_sd_new, new_k)
 
                     if return_densities:
                         dens_dict["expanded_k_neighbor"] = new_k
@@ -522,9 +555,8 @@ class Kernel(BaseEstimator, TransformerMixin):
         If set to `True` at the same time that `cknn` is set to `True`, the `cknn` parameter is ignored.
 
     cknn : bool, default=False
-        Whether to build the adjacency and affinity matrices using continuous k-nearest-neighbors.
+        Whether to build the binary, unweighted continuous k-nearest-neighbors graph.
         If set to `True`, the `pairwise`, `sigma`, `adaptive_bw`, `expand_nbr_search` and `alpha_decaying` parameters are ignored.
-        If set to `True`, `laplacian_type` is automatically set to 'unnormalized'.
 
     pairwise : bool, default=False
         Whether to compute the kernel using dense pairwise distances.
@@ -597,6 +629,9 @@ class Kernel(BaseEstimator, TransformerMixin):
         n_neighbors=10,
         fuzzy=False,
         cknn=False,
+        cknn_delta=1.0,
+        cknn_candidate_neighbors=None,
+        cknn_exact=False,
         pairwise=False,
         sigma=None,
         adaptive_bw=True,
@@ -617,6 +652,9 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.n_neighbors = n_neighbors
         self.fuzzy = fuzzy
         self.cknn = cknn
+        self.cknn_delta = cknn_delta
+        self.cknn_candidate_neighbors = cknn_candidate_neighbors
+        self.cknn_exact = cknn_exact
         self.pairwise = pairwise
         self.n_jobs = n_jobs
         self.backend = backend
@@ -628,7 +666,16 @@ class Kernel(BaseEstimator, TransformerMixin):
         self.alpha_decaying = alpha_decaying
         self.symmetrize = symmetrize
         self.n_landmarks = n_landmarks
-        self.laplacian_type = laplacian_type
+        if cknn and laplacian_type == "normalized":
+            warnings.warn(
+                "CkNN theory applies to the unweighted graph and its unnormalized Laplacian; "
+                "overriding laplacian_type='unnormalized'.",
+                UserWarning,
+                stacklevel=2,
+            )
+            self.laplacian_type = "unnormalized"
+        else:
+            self.laplacian_type = laplacian_type
         self.cache_input = cache_input
         self.verbose = verbose
         self.random_state = random_state
@@ -646,12 +693,17 @@ class Kernel(BaseEstimator, TransformerMixin):
         self._L = None
         self._SP = None
         self._P = None
+        self._laplacian_cache_key = None
+        self._diff_op_cache_key = None
+        self._shortest_paths_cache_key = None
         self._connected = None
         self.D_inv_sqrt_ = None
         self.components_ = None
         self.components_indices_ = None
         self.sigma_ = None
         self.rho_ = None
+        self.umap_sigmas_ = None
+        self.umap_rhos_ = None
         self.adaptive_bw_ = None
         self.omega_ = None
         self.expanded_k_neighbor_ = None
@@ -704,6 +756,9 @@ class Kernel(BaseEstimator, TransformerMixin):
         self._L = None
         self._SP = None
         self._P = None
+        self._laplacian_cache_key = None
+        self._diff_op_cache_key = None
+        self._shortest_paths_cache_key = None
         self._connected = None
         self.D_inv_sqrt_ = None
         self.components_ = None
@@ -760,6 +815,9 @@ class Kernel(BaseEstimator, TransformerMixin):
                 metric=self.metric,
                 fuzzy=self.fuzzy,
                 cknn=self.cknn,
+                cknn_delta=self.cknn_delta,
+                cknn_candidate_neighbors=self.cknn_candidate_neighbors,
+                cknn_exact=self.cknn_exact,
                 pairwise=self.pairwise,
                 n_neighbors=self.n_neighbors,
                 sigma=self.sigma,
@@ -772,18 +830,21 @@ class Kernel(BaseEstimator, TransformerMixin):
                 n_jobs=self.n_jobs,
                 use_angular=self.use_angular,
                 verbose=self.verbose,
+                random_state=self.random_state,
                 **kwargs,
             )
             self._reset_graph_caches()
         assert self.dens_dict is not None
-        if self.metric != "precomputed":
+        if self.metric != "precomputed" and "knn" in self.dens_dict:
             self.knn_ = self.dens_dict["knn"]
         if self.fuzzy:
             self.sigma_ = self.dens_dict["sigma"]
             self.rho_ = self.dens_dict["rho"]
+            self.umap_sigmas_ = self.sigma_
+            self.umap_rhos_ = self.rho_
         elif self.cknn:
             self._A = self.dens_dict["unweighted_adjacency"]
-            self.adaptive_bw_ = self.dens_dict["adaptive_bw"]
+            self.adaptive_bw_ = self.dens_dict.get("adaptive_bw")
         else:
             if self.adaptive_bw:
                 self.adaptive_bw_ = self.dens_dict["adaptive_bw"]
@@ -908,7 +969,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             self._weighted_degree = compute_degree(self._K)
         return self._weighted_degree
 
-    def laplacian(self, laplacian_type=None):
+    def laplacian(self, laplacian_type=None, recompute=False):
         """Compute the graph Laplacian of this kernel's affinity matrix.
 
         For a friendly reference, see this material from James Melville:
@@ -925,12 +986,14 @@ class Kernel(BaseEstimator, TransformerMixin):
         L : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
             The computed graph Laplacian matrix.
         """
-        if self._L is None:
-            if laplacian_type is None:
-                laplacian_type = self.laplacian_type
+        if laplacian_type is None:
+            laplacian_type = self.laplacian_type
+        cache_key = str(laplacian_type)
+        if self._L is None or self._laplacian_cache_key != cache_key or recompute:
             self._L, self._Dd = graph_laplacian(
                 self.K, laplacian_type=laplacian_type, return_D=True
             )
+            self._laplacian_cache_key = cache_key
         return self._L
 
     @property
@@ -951,7 +1014,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             return self.laplacian()
         return self._L
 
-    def diff_op(self, anisotropy=1.0, symmetric=True):
+    def diff_op(self, anisotropy=1.0, symmetric=True, recompute=False):
         """Compute the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
 
         Parameters
@@ -976,18 +1039,18 @@ class Kernel(BaseEstimator, TransformerMixin):
         """
         if anisotropy is None:
             anisotropy = self.anisotropy
+        anisotropy = float(anisotropy)
+        if anisotropy < 0:
+            anisotropy = 0.0
+        if anisotropy > 1:
+            anisotropy = 1.0
+        cache_key = (anisotropy, bool(symmetric))
 
-        if self._P is None:
+        if self._P is None or self._diff_op_cache_key != cache_key or recompute:
             if self._K is None:
                 raise ValueError(
                     "No kernel matrix has been fitted yet. Call fit() first."
                 )
-
-            anisotropy = float(anisotropy)
-            if anisotropy < 0:
-                anisotropy = 0.0
-            if anisotropy > 1:
-                anisotropy = 1.0
 
             if symmetric:
                 P, D_inv_sqrt = _safe_diffusion_operator_with_degree(
@@ -1006,6 +1069,8 @@ class Kernel(BaseEstimator, TransformerMixin):
                     symmetric=False,
                 )
                 self._P = _as_csr_matrix(result)
+                self.D_inv_sqrt_ = None
+            self._diff_op_cache_key = cache_key
 
         return self._P
 
@@ -1027,7 +1092,7 @@ class Kernel(BaseEstimator, TransformerMixin):
             return self.diff_op()
         return self._P
 
-    def shortest_paths(self, landmark=False, indices=None):
+    def shortest_paths(self, landmark=False, indices=None, recompute=False):
         """Compute the shortest paths (geodesic distances) on the graph.
 
         Notes
@@ -1049,13 +1114,21 @@ class Kernel(BaseEstimator, TransformerMixin):
         D : ndarray, shape (n_samples, n_samples)
             The shortest paths matrix. Unreachable nodes evaluate to infinity.
         """
-        if self._SP is None:
+        if landmark:
+            raise NotImplementedError("landmark=True is not implemented.")
+        if indices is None:
+            index_key = None
+        elif np.issubdtype(type(indices), np.integer):
+            index_key = (int(indices),)
+        else:
+            index_key = tuple(int(i) for i in np.asarray(indices).ravel())
+        cache_key = (index_key,)
+
+        if self._SP is None or self._shortest_paths_cache_key != cache_key or recompute:
             if self._K is None:
                 raise ValueError(
                     "No kernel matrix has been fitted yet. Call fit() first."
                 )
-            if landmark:
-                logger.info("Landmarks are still to be implemented.")
             from topo.eval.local_scores import geodesic_distance
 
             SP = geodesic_distance(
@@ -1063,15 +1136,18 @@ class Kernel(BaseEstimator, TransformerMixin):
                 method="D",
                 unweighted=False,
                 directed=False,
-                indices=None,
+                indices=indices,
                 n_jobs=self.n_jobs,
                 random_state=self.random_state,
             )
             SP = np.asarray(SP, dtype=float)
-            SP = (SP + SP.T) / 2.0
-            SP[SP == 0] = np.inf
-            np.fill_diagonal(SP, 0.0)
+            if SP.ndim == 1:
+                SP = SP.reshape(1, -1)
+            if SP.shape[0] == SP.shape[1]:
+                SP = (SP + SP.T) / 2.0
+                np.fill_diagonal(SP, 0.0)
             self._SP = SP
+            self._shortest_paths_cache_key = cache_key
         return self._SP
 
     @property
@@ -1168,14 +1244,17 @@ class Kernel(BaseEstimator, TransformerMixin):
                     "No input data has been fitted yet. Call fit() first with the parameter `cache_input` set to True."
                 )
             Y = self.X.copy()
-        Y_imp = Y
+        Y_arr = Y.toarray() if issparse(Y) else np.asarray(Y)
+        Y_imp = Y_arr
         if t is None or t < 0:
             P_mat = cast(csr_matrix, self._P)
-            previous = np.asarray(Y, dtype=float)
+            previous = np.asarray(Y_arr, dtype=float)
+            P_power = P_mat.copy()
 
             for i in range(1, int(tmax) + 1):
-                P_diffused = cast(csr_matrix, P_mat**i)  # type: ignore
-                Y_imp = np.dot(P_diffused.toarray(), Y)  # type: ignore
+                if i > 1:
+                    P_power = cast(csr_matrix, P_power @ P_mat)
+                Y_imp = P_power @ Y_arr
                 error, _ = self._calculate_imputation_error(Y_imp, previous)
 
                 if error is not None and error < threshold:
@@ -1186,9 +1265,13 @@ class Kernel(BaseEstimator, TransformerMixin):
 
         else:
             P_mat = cast(csr_matrix, self._P)
-            P_diffused = P_mat**t  # type: ignore
-            P_diffused = cast(csr_matrix, P_diffused)
-            Y_imp = np.dot(P_diffused.toarray(), Y)  # type: ignore
+            t_int = int(t)
+            if t_int < 1:
+                return Y_arr
+            P_power = P_mat.copy()
+            for _ in range(1, t_int):
+                P_power = cast(csr_matrix, P_power @ P_mat)
+            Y_imp = P_power @ Y_arr
         return Y_imp
 
     def _get_landmarks(self, X, n_landmarks=None):
@@ -1427,22 +1510,13 @@ class Kernel(BaseEstimator, TransformerMixin):
             L = self.laplacian(laplacian_type="unnormalized")
         else:
             L = self.L
-        try:
-            pseudo = linalg.inv(L)
-        except RuntimeError:
-            L_dense = L.toarray() if hasattr(L, "toarray") else np.asarray(L)  # type: ignore
-            pseudo = lil_matrix(np.linalg.pinv(L_dense))
-
-        N = np.shape(L)[0]
-        d = csc_matrix(pseudo.diagonal())
-        rd = (
-            kron(d, csc_matrix(np.ones((N, 1)))).T
-            + kron(d, csc_matrix(np.ones((N, 1))))
-            - pseudo
-            - pseudo.T
-        )
-
-        return rd
+        L_dense = L.toarray() if hasattr(L, "toarray") else np.asarray(L)  # type: ignore
+        pseudo = np.linalg.pinv(np.asarray(L_dense, dtype=float))
+        diag = np.diag(pseudo)
+        rd = diag[:, None] + diag[None, :] - 2.0 * pseudo
+        rd = np.maximum(rd, 0.0)
+        np.fill_diagonal(rd, 0.0)
+        return csr_matrix(rd)
 
     def sparsify(self, epsilon=0.1, maxiter=10, random_state=None):
         """Sparsify the graph with the Spielman-Srivastava method.
@@ -1527,7 +1601,8 @@ class Kernel(BaseEstimator, TransformerMixin):
                 (new_weights, (start_nodes, end_nodes)), shape=(self.N, self.N)
             )
             sparserW = sparserW + sparserW.T
-            sparserL = diags(sparserW.diagonal(), 0) - sparserW
+            degrees = np.asarray(sparserW.sum(axis=1)).ravel()
+            sparserL = diags(degrees, 0) - sparserW
 
             n_sparser_components, _ = connected_components(sparserW, directed=False)
             if n_sparser_components == 1:

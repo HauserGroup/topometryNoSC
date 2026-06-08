@@ -132,10 +132,19 @@ Setting $\alpha = 1$ completely cancels the drift term. TopoMetry's default `bw_
 An alternative approach (Berry & Sauer, 2019) corrects for density *by construction*. The key observation is that the distance to the $k$-th nearest neighbour scales as $\rho_k(x) \sim C\, p(x)^{-1/d}$ — small in dense regions, large in sparse ones. Normalising pairwise distances by the geometric mean of local neighbour distances factors out the density:
 
 $$
-A_{ij}^{\text{CkNN}} = \frac{\|x_i - x_j\|}{\delta\,\sqrt{\rho_k(x_i)\,\rho_k(x_j)}}
+r_{ij}^{\text{CkNN}} =
+\frac{\|x_i - x_j\|}{\sqrt{\rho_k(x_i)\,\rho_k(x_j)}}.
 $$
 
-Two points are connected (with weight 1) if $A_{ij}^{\text{CkNN}} < 1$. The **unnormalised** Laplacian of this binary graph is the *unique* unweighted $k$-NN-based construction that converges to the pure LBO.
+Two points are connected with binary weight 1 when
+$r_{ij}^{\text{CkNN}} < \delta$. Equivalently,
+$\|x_i - x_j\| < \delta\sqrt{\rho_k(x_i)\rho_k(x_j)}$.
+Under the assumptions in Berry & Sauer (2019), the **unnormalised** Laplacian
+of this binary graph converges to a Laplace–Beltrami operator associated with
+the density-adapted geometry. Within the multiscale unweighted graph family
+analyzed in that work, CkNN is the unique choice yielding this consistent
+geometry. In approximate mode, TopoMetry tests a candidate-neighbour set for
+scalability; exact mode thresholds all pairs.
 
 ---
 

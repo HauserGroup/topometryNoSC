@@ -1,10 +1,9 @@
 """Centralised handling of optional dependencies.
 
-The core package depends only on ``numpy``, ``scipy``, ``scikit-learn``,
-``numba`` and ``joblib``. Everything else (plotting, dataframe I/O, the AMG
-eigensolver, approximate
-nearest-neighbour backends and the third-party layout libraries) is optional and
-gated through the helpers in this module so that:
+The core package depends on the numerical stack and ``umap-learn``. Everything
+else (plotting, dataframe I/O, the AMG eigensolver, approximate-nearest-neighbour
+backends and the third-party layout libraries) is optional and gated through the
+helpers in this module so that:
 
 * a missing optional dependency raises a single, actionable error message that
   names the ``pip install topometry-nosc[...]`` extra to install, and
@@ -37,7 +36,6 @@ _EXTRA_FOR: dict[str, str] = {
     "pacmap": "layouts",
     "pymde": "layouts",
     "trimap": "layouts",
-    "umap": "layouts",
 }
 
 # Preference order for approximate nearest-neighbour backends.

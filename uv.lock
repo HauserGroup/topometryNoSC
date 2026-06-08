@@ -4201,6 +4201,7 @@ dependencies = [
     { name = "scikit-learn", version = "1.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "umap-learn" },
 ]
 
 [package.optional-dependencies]
@@ -4213,7 +4214,6 @@ all = [
     { name = "pyamg" },
     { name = "pymde" },
     { name = "trimap" },
-    { name = "umap-learn" },
 ]
 amg = [
     { name = "pyamg" },
@@ -4225,7 +4225,6 @@ layouts = [
     { name = "pacmap" },
     { name = "pymde" },
     { name = "trimap" },
-    { name = "umap-learn" },
 ]
 notebooks = [
     { name = "ipykernel" },
@@ -4283,8 +4282,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.9" },
     { name = "trimap", marker = "extra == 'all'", specifier = ">=1.1" },
     { name = "trimap", marker = "extra == 'layouts'", specifier = ">=1.1" },
-    { name = "umap-learn", marker = "extra == 'all'", specifier = ">=0.5" },
-    { name = "umap-learn", marker = "extra == 'layouts'", specifier = ">=0.5" },
+    { name = "umap-learn", specifier = ">=0.5.8" },
 ]
 provides-extras = ["all", "amg", "ann", "layouts", "notebooks", "pandas", "plot"]
 

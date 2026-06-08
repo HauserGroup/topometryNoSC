@@ -2,6 +2,15 @@
 
 These scikit-learn compatible transformers can be used individually to build custom manifold learning pipelines.
 
+The `Kernel(..., fuzzy=True)` path delegates UMAP-specific fuzzy simplicial-set
+construction to `umap-learn`; TopoMetry uses the resulting graph inside its own
+spectral-scaffold and graph-refinement pipeline.
+
+The `Kernel(..., cknn=True)` path builds the paper-defined binary CkNN graph:
+samples are adjacent when `d(i, j) < delta * sqrt(rho_i * rho_j)`. This is an
+unweighted graph construction, not a weighted adaptive kernel; use
+`cknn_ratio_matrix` separately when normalized CkNN distance ratios are needed.
+
 ::: topo.base.ann.kNN
     options:
       heading_level: 3
@@ -10,6 +19,18 @@ These scikit-learn compatible transformers can be used individually to build cus
       filters:
         - "!^__"
         - "!^_"
+
+::: topo.tpgraph.cknn.cknn_graph
+    options:
+      heading_level: 3
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: topo.tpgraph.cknn.cknn_ratio_matrix
+    options:
+      heading_level: 3
+      show_root_heading: true
+      show_root_toc_entry: true
 
 ::: topo.tpgraph.kernels.Kernel
     options:

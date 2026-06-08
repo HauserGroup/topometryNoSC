@@ -62,7 +62,9 @@ def test_plot_riemann_metric_accepts_more_than_two_embedding_columns():
 
     ax = plot.plot_riemann_metric(emb, L, H_emb=H, n_plot=5, random_state=0)
     assert ax is not None
-    plt.close(ax.get_figure())
+    fig = ax.get_figure()
+    if fig is not None:
+        plt.close(fig)
 
 
 def test_eval_gaussian_matches_numpy_quadratic_form():

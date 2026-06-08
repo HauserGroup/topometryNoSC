@@ -22,7 +22,7 @@ from topo.tpgraph.kernels import Kernel, compute_kernel
 
 def test_compute_kernel(swiss_roll_data):
     X, _ = swiss_roll_data
-    K = compute_kernel(X, n_neighbors=10, backend="sklearn")
+    K = compute_kernel(X, n_neighbors=10, backend="sklearn", return_densities=False)
     assert sparse.issparse(K)
     assert K.shape[0] == X.shape[0]
 
@@ -136,7 +136,7 @@ def test_cknn_unnormalized_laplacian_zero_modes_match_components():
 
     A = cknn_graph(X, scale_k=5, delta=1.0, exact=True)
     n_components, _ = connected_components(A, directed=False)
-    L = laplacian(A, normed=False)
+    L = cast(sparse.csr_matrix, laplacian(A, normed=False))
     evals = np.linalg.eigvalsh(L.toarray())
 
     assert np.sum(evals < 1e-8) == n_components
@@ -169,8 +169,9 @@ def test_kernel_cknn_returns_binary_sparse_graph():
         laplacian_type="unnormalized",
     ).fit(X)
     assert sparse.issparse(ker.K)
-    np.testing.assert_array_equal(ker.K.toarray(), ker.K.T.toarray())
-    assert set(np.unique(ker.K.data)).issubset({1.0})
+    K = cast(sparse.csr_matrix, ker.K)
+    np.testing.assert_array_equal(K.toarray(), K.T.toarray())
+    assert set(np.unique(K.data)).issubset({1.0})
 
 
 def test_topograph_cknn_smoke():
@@ -214,7 +215,7 @@ def test_local_intrinsic_dim(swiss_roll_data):
 
 def test_kernel_helper_validation_and_sanitizing():
     dense = np.array([[1.0, np.inf], [-1.0, 2.0]])
-    csr = kernels._as_ann_csr_matrix(dense)
+    csr = kernels._as_csr_matrix(dense)
     arr = kernels._as_dense_array(csr)
 
     assert sparse.issparse(csr)
@@ -246,7 +247,6 @@ def test_kernel_numeric_helpers():
     np.testing.assert_allclose(normalized[0], [0.6, 0.8])
     np.testing.assert_allclose(normalized[1], [0.0, 0.0])
 
-    assert not kernels._cosine_knn_requires_unit_vectors("sklearn")
     np.testing.assert_allclose(
         kernels._cosine_distance_to_angle_from_sparse_triplets(
             np.array([0]), np.array([1]), np.array([0.0, 1.0, 2.0])
@@ -280,11 +280,11 @@ def test_cosine_use_angular_converts_adaptive_bandwidth_units():
         symmetrize=False,
     )
 
-    raw_bandwidth = kernels._adap_bw(densities["knn"], n_neighbors=2)
+    raw_bandwidth = kernels._adap_bw(cast(np.ndarray, densities["knn"]), n_neighbors=2)
     expected = kernels._cosine_distance_to_angle_from_sparse_triplets(
         None, None, raw_bandwidth
     )
-    np.testing.assert_allclose(densities["adaptive_bw"], expected)
+    np.testing.assert_allclose(cast(np.ndarray, densities["adaptive_bw"]), expected)
 
 
 @pytest.mark.parametrize("backend", ["sklearn", "hnswlib"])

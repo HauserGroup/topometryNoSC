@@ -1,140 +1,150 @@
-# Isomap implementation
-"""Isomap embedding.
+"""Isomap wrapper around sklearn.manifold.Isomap."""
 
-Classical Isomap: geodesic distances on a neighborhood graph followed by
-eigendecomposition of the centered distance matrix, with optional landmarks.
-"""
+from __future__ import annotations
 
-import numpy as np
-from scipy.sparse import csr_matrix
-from sklearn.preprocessing import KernelCenterer
+from typing import Any, Literal
 
-from topo.base.ann import kNN
-from topo.eval.local_scores import geodesic_distance
-from topo.spectral.eigen import eigendecompose
-from topo.utils._utils import get_landmark_indices
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.manifold import Isomap as SklearnIsomap
 
 
-def Isomap(
-    X: np.ndarray | csr_matrix,
-    n_components: int = 2,
-    n_neighbors: int = 50,
-    metric: str = "cosine",
-    landmarks: int | np.ndarray | None = None,
-    landmark_method: str = "kmeans",
-    eig_tol: float = 0,
-    n_jobs: int = 1,
-    **kwargs,
-) -> np.ndarray:
-    """
-    Isomap embedding of a dataset or precomputed graph.
+class Isomap(BaseEstimator, TransformerMixin):
+    """Scikit-learn Isomap wrapper preserving TopoMetry's local class name.
 
-    Computes geodesic distances on the kNN graph, applies double-centering
-    to the squared distance matrix (classical MDS kernel), and returns the
-    top eigenvectors scaled by the square root of the corresponding
-    eigenvalues — the standard Isomap procedure.
+    Classical Isomap: geodesic distances on a neighborhood graph followed by
+    eigendecomposition of the centered distance matrix.
 
     Parameters
     ----------
-    X : array-like or sparse
-        Input data matrix of shape (n_samples, n_features), or a precomputed
-        kNN graph (sparse) when ``metric='precomputed'``.
-
-    n_components : int, default 2
+    n_components : int, default=2
         Number of dimensions to embed into.
 
-    n_neighbors : int, default 50
-        Number of neighbors used to build the kNN graph (ignored when
-        ``metric='precomputed'``).
+    n_neighbors : int, default=5
+        Number of neighbors used to build the kNN graph.
 
-    metric : str, default 'cosine'
-        Distance metric for the kNN graph.  Pass ``'precomputed'`` if ``X``
-        is already a sparse adjacency matrix.
+    metric : str, default='minkowski'
+        Distance metric.
 
-    landmarks : int or array-like of int, optional
-        If an ``int``, the number of landmarks to select (using
-        ``landmark_method``). If an array, the explicit landmark indices.
-        When set, only the landmark-to-landmark geodesic sub-matrix is used.
+    n_jobs : int | None, default=None
+        Number of parallel jobs.
 
-    landmark_method : {'kmeans', 'random'}, default 'kmeans'
-        Method for landmark selection when ``landmarks`` is an integer.
+    eigen_solver : str, default='auto'
+        Eigendecomposition solver.
 
-    eig_tol : float, default 0
-        Stopping tolerance for the eigendecomposition (passed to ARPACK).
+    path_method : str, default='auto'
+        Shortest-path algorithm.
 
-    n_jobs : int, default 1
-        Number of parallel jobs for kNN construction and shortest-path
-        computation.
+    neighbors_algorithm : str, default='auto'
+        Nearest-neighbor search algorithm.
 
-    **kwargs
-        Additional keyword arguments forwarded to :func:`topo.base.ann.kNN`.
-
-    Returns
-    -------
-    Y : ndarray of shape (n_samples, n_components)
-        Isomap embedding coordinates.
+    p : int, default=2
+        Minkowski metric parameter.
     """
-    landmark_indices: np.ndarray | None = None
-    if landmarks is not None:
-        if isinstance(landmarks, np.ndarray):
-            landmark_indices = np.asarray(landmarks, dtype=np.intp)
-        elif isinstance(landmarks, int):
-            landmark_indices = np.asarray(
-                get_landmark_indices(X, n_landmarks=landmarks, method=landmark_method),
-                dtype=np.intp,
-            )
-        else:
-            raise ValueError("'landmarks' must be an integer or an integer array.")
 
-    # Build kNN graph
-    if metric != "precomputed":
-        K = kNN(X, metric=metric, n_neighbors=n_neighbors, n_jobs=n_jobs, **kwargs)
-    else:
-        K = X.copy()
+    def __init__(
+        self,
+        n_components: int = 2,
+        n_neighbors: int = 5,
+        metric: str = "minkowski",
+        n_jobs: int | None = None,
+        eigen_solver: Literal["auto", "arpack", "dense"] = "auto",
+        path_method: Literal["auto", "FW", "D"] = "auto",
+        neighbors_algorithm: Literal["auto", "brute", "kd_tree", "ball_tree"] = "auto",
+        p: int = 2,
+        **kwargs: Any,
+    ):
+        self.n_components = n_components
+        self.n_neighbors = n_neighbors
+        self.metric = metric
+        self.n_jobs = n_jobs
+        self.eigen_solver = eigen_solver
+        self.path_method = path_method
+        self.neighbors_algorithm = neighbors_algorithm
+        self.p = p
+        self.kwargs = kwargs
+        self.estimator_ = None
+        self.embedding_ = None
 
-    # Pairwise geodesic distances
-    G = geodesic_distance(
-        K,
-        method="D",
-        unweighted=False,
-        directed=False,
-        indices=landmark_indices,
-        n_jobs=n_jobs,
-    )
-    if landmark_indices is not None:
-        G = G.T[landmark_indices].T
+    def fit(self, X, y=None):  # noqa: ARG002
+        """Fit the Isomap embedding.
 
-    # Guarantee symmetry and zero diagonal
-    G = (G + G.T) / 2
-    G[(np.arange(G.shape[0]), np.arange(G.shape[0]))] = 0
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+            Training data.
 
-    # Replace infinities (disconnected pairs) with a large finite distance
-    finite_mask = np.isfinite(G)
-    if not finite_mask.all():
-        max_finite = G[finite_mask].max() if finite_mask.any() else 1.0
-        G[~finite_mask] = max_finite * 2.0
+        y : ignored
+            Not used, present here for API consistency.
 
-    # Standard Isomap: double-center the squared geodesic distance matrix
-    # (equivalent to the MDS kernel -½ H D² H)
-    D2 = G**2
-    K_matrix = KernelCenterer().fit_transform(-0.5 * D2)
+        Returns
+        -------
+        self
+        """
+        metric = self.metric
+        neighbors_algorithm = self.neighbors_algorithm
 
-    # Eigendecompose for the largest eigenpairs
-    evals, evecs = eigendecompose(
-        K_matrix,
-        n_components=n_components,
-        eigensolver="arpack",
-        largest=True,
-        eigen_tol=eig_tol,
-        random_state=None,
-        verbose=False,
-    )
+        if metric == "precomputed":
+            if X.shape[0] != X.shape[1]:
+                raise ValueError(
+                    "Isomap with metric='precomputed' requires a square matrix."
+                )
+            neighbors_algorithm = "auto"
 
-    # Keep only positive eigenvalues
-    pos = evals > 0
-    evals = evals[pos]
-    evecs = evecs[:, pos]
+        self.estimator_ = SklearnIsomap(
+            n_neighbors=self.n_neighbors,
+            n_components=self.n_components,
+            eigen_solver=self.eigen_solver,
+            path_method=self.path_method,
+            neighbors_algorithm=neighbors_algorithm,
+            metric=metric,
+            p=self.p,
+            n_jobs=self.n_jobs,
+            **self.kwargs,
+        )
+        self.embedding_ = self.estimator_.fit_transform(X)
+        return self
 
-    # Isomap coordinates: eigenvectors scaled by sqrt(eigenvalue)
-    Y = evecs * np.sqrt(evals)
-    return Y[:, :n_components]
+    def transform(self, X=None):
+        """Transform the data or return the fitted embedding.
+
+        Parameters
+        ----------
+        X : array-like, optional
+            New data to transform. If None, returns the fitted embedding.
+
+        Returns
+        -------
+        Y : ndarray, shape (n_samples, n_components)
+            Embedded coordinates.
+        """
+        if self.embedding_ is None:
+            raise ValueError("Isomap has not been fitted yet.")
+        if X is None:
+            return self.embedding_
+        if self.estimator_ is None:
+            raise ValueError("Isomap has not been fitted yet.")
+        return self.estimator_.transform(X)
+
+    def fit_transform(self, X, y=None, **_fit_params):
+        """Fit the embedding and return coordinates.
+
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+            Training data.
+
+        y : ignored
+            Not used, present here for API consistency.
+
+        **_fit_params : dict
+            Additional fit parameters (ignored, for sklearn compatibility).
+
+        Returns
+        -------
+        Y : ndarray, shape (n_samples, n_components)
+            Embedded coordinates.
+        """
+        fitted = self.fit(X, y=y)
+        if fitted.embedding_ is None:
+            raise ValueError("Failed to fit Isomap embedding.")
+        return fitted.embedding_

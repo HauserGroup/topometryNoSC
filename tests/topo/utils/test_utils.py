@@ -6,7 +6,11 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-from topo.utils import _utils, umap_utils
+from topo.base.graph_matrix import (
+    get_indices_distances_from_sparse_matrix,
+    get_sparse_matrix_from_indices_distances,
+)
+from topo.utils import _utils, map_utils
 
 
 class TestLandmarkAndSparseMatrixUtilities:
@@ -49,10 +53,10 @@ class TestLandmarkAndSparseMatrixUtilities:
         indices = np.array([[0, 1], [1, 2], [2, 1]])
         dists = np.array([[0.0, 0.5], [0.0, 0.25], [0.0, 0.25]])
 
-        graph = _utils.get_sparse_matrix_from_indices_distances(
+        graph = get_sparse_matrix_from_indices_distances(
             indices, dists, n_obs=3, n_neighbors=2
         )
-        out_idx, out_dist = _utils.get_indices_distances_from_sparse_matrix(
+        out_idx, out_dist = get_indices_distances_from_sparse_matrix(
             graph, n_neighbors=1
         )
 
@@ -64,18 +68,18 @@ class TestLandmarkAndSparseMatrixUtilities:
         graph = sparse.csr_matrix([[0.0, 1.0], [0.0, 0.0]])
 
         with pytest.raises(ValueError, match="fewer than n_neighbors"):
-            _utils.get_indices_distances_from_sparse_matrix(graph, n_neighbors=2)
+            get_indices_distances_from_sparse_matrix(graph, n_neighbors=2)
 
 
 class TestUmapUtilities:
     def test_gaussian_density_helpers(self):
         cov = np.eye(2, dtype=np.float32)
-        assert umap_utils.eval_gaussian(np.array([0.0, 0.0]), cov=cov) == pytest.approx(
+        assert map_utils.eval_gaussian(np.array([0.0, 0.0]), cov=cov) == pytest.approx(
             1.0 / (2.0 * np.pi)
         )
 
         embedding = np.array([[0.0, 0.0, 1.0, 1.0, 0.0]], dtype=np.float32)
-        density = umap_utils.eval_density_at_point(np.array([0.0, 0.0]), embedding)
+        density = map_utils.eval_density_at_point(np.array([0.0, 0.0]), embedding)
         assert density > 0
 
     def test_create_density_plot_normalizes_grid(self):
@@ -88,12 +92,12 @@ class TestUmapUtilities:
             dtype=np.float32,
         )
 
-        Z = umap_utils.create_density_plot(X, Y, embedding)
+        Z = map_utils.create_density_plot(X, Y, embedding)
         assert Z.shape == X.shape
         assert Z.sum() == pytest.approx(1.0)
 
     def test_torus_gradient_wraps_across_boundary(self):
-        dist, grad = umap_utils.torus_euclidean_grad(
+        dist, grad = map_utils.torus_euclidean_grad(
             np.array([0.1, 0.0]),
             np.array([2 * np.pi - 0.1, 0.0]),
             torus_dimensions=(2 * np.pi, 2 * np.pi),
@@ -104,26 +108,26 @@ class TestUmapUtilities:
 
     def test_fast_knn_submatrix_and_norm(self):
         dmat = np.array([[0.3, 0.1, 0.2], [0.0, 2.0, 1.0]], dtype=np.float32)
-        idx = umap_utils.fast_knn_indices(dmat, 2)
-        sub = umap_utils.submatrix(dmat, idx, 2)
+        idx = map_utils.fast_knn_indices(dmat, 2)
+        sub = map_utils.submatrix(dmat, idx, 2)
 
         np.testing.assert_array_equal(idx, [[1, 2], [0, 2]])
         np.testing.assert_allclose(sub, [[0.1, 0.2], [0.0, 1.0]])
-        assert umap_utils.norm(np.array([3.0, 4.0])) == pytest.approx(5.0)
+        assert map_utils.norm(np.array([3.0, 4.0])) == pytest.approx(5.0)
 
     def test_tau_random_updates_state_and_timestamp_is_string(self):
         state = np.array([1, 2, 3], dtype=np.int64)
-        first = umap_utils.tau_rand_int(state)
-        second = umap_utils.tau_rand(state)
+        first = map_utils.tau_rand_int(state)
+        second = map_utils.tau_rand(state)
 
         assert isinstance(int(first), int)
         assert 0.0 <= second <= 1.0
-        assert re.match(r"\w{3} ", umap_utils.ts())
+        assert re.match(r"\w{3} ", map_utils.ts())
 
     def test_csr_unique_reports_unique_sparse_rows(self):
         mat = sparse.csr_matrix([[1.0, 0.0], [1.0, 0.0], [0.0, 2.0]])
         n_rows = 3
-        index, inverse, counts = umap_utils.csr_unique(
+        index, inverse, counts = map_utils.csr_unique(
             mat,
             return_index=True,
             return_inverse=True,

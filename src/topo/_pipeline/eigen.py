@@ -51,7 +51,7 @@ class EigenBuildMixin:
     diff_t: int
     bases_graph_verbose: bool
     runtimes: dict[str, float]
-    current_eigenbasis: str
+    current_eigenbasis: str | None
     eigenbasis: EigenDecomposition | None
     graph_knn: int
     graph_metric: str
@@ -59,7 +59,7 @@ class EigenBuildMixin:
     GraphKernelDict: dict[str, Kernel]
     low_memory: bool
     graph_kernel: Kernel | None
-    current_graphkernel: str
+    current_graphkernel: str | None
     _knn_msZ: csr_matrix | None
     _knn_Z: csr_matrix | None
     _kernel_msZ: Kernel | None

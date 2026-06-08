@@ -1,4 +1,4 @@
-"""Tests for low-level distance, sparse, and neighbor graph helpers."""
+"""Tests for low-level distance and neighbor graph helpers."""
 
 import math
 
@@ -7,7 +7,6 @@ import pytest
 from scipy import sparse
 
 from topo.base import ann, dists
-from topo.base import sparse as sparse_dist
 
 
 class TestDistanceHelpers:
@@ -55,124 +54,6 @@ class TestDistanceHelpers:
         X = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
         out = dists.cosine_vector_to_matrix(X[0], X)
         np.testing.assert_allclose(out, [0.0, 1.0])
-
-
-class TestSparseDistanceHelpers:
-    def test_index_set_operations(self):
-        a = np.array([2, 1, 3], dtype=np.int64)
-        b = np.array([3, 4], dtype=np.int64)
-
-        np.testing.assert_array_equal(sparse_dist.arr_unique(a), [1, 2, 3])
-        np.testing.assert_array_equal(sparse_dist.arr_union(a, b), [1, 2, 3, 4])
-        np.testing.assert_array_equal(sparse_dist.arr_intersect(a, b), [3])
-
-    def test_sparse_arithmetic(self):
-        ind1 = np.array([0, 2], dtype=np.int64)
-        data1 = np.array([1.0, 2.0], dtype=np.float64)
-        ind2 = np.array([1, 2], dtype=np.int64)
-        data2 = np.array([3.0, 4.0], dtype=np.float64)
-
-        sum_ind, sum_data = sparse_dist.sparse_sum(ind1, data1, ind2, data2)
-        np.testing.assert_array_equal(sum_ind, [0, 1, 2])
-        np.testing.assert_allclose(sum_data, [1.0, 3.0, 6.0])
-
-        diff_ind, diff_data = sparse_dist.sparse_diff(ind1, data1, ind2, data2)
-        np.testing.assert_array_equal(diff_ind, [0, 1, 2])
-        np.testing.assert_allclose(diff_data, [1.0, -3.0, -2.0])
-
-        mul_ind, mul_data = sparse_dist.sparse_mul(ind1, data1, ind2, data2)
-        np.testing.assert_array_equal(mul_ind, [2])
-        np.testing.assert_allclose(mul_data, [8.0])
-
-    def test_sparse_metric_family(self):
-        ind1 = np.array([0, 2], dtype=np.int64)
-        data1 = np.array([1.0, 2.0], dtype=np.float64)
-        ind2 = np.array([1, 2], dtype=np.int64)
-        data2 = np.array([3.0, 4.0], dtype=np.float64)
-
-        assert sparse_dist.sparse_euclidean(ind1, data1, ind2, data2) == pytest.approx(
-            math.sqrt(14.0)
-        )
-        assert sparse_dist.sparse_manhattan(ind1, data1, ind2, data2) == pytest.approx(
-            6.0
-        )
-        assert sparse_dist.sparse_chebyshev(ind1, data1, ind2, data2) == pytest.approx(
-            3.0
-        )
-        assert sparse_dist.sparse_minkowski(
-            ind1, data1, ind2, data2, 3.0
-        ) == pytest.approx((1.0 + 27.0 + 8.0) ** (1.0 / 3.0))
-        assert sparse_dist.sparse_cosine(ind1, data1, ind2, data2) == pytest.approx(
-            1.0 - 8.0 / (math.sqrt(5.0) * 5.0)
-        )
-        assert (
-            sparse_dist.sparse_poincare(
-                np.array([0], dtype=np.int64),
-                np.array([0.1], dtype=np.float64),
-                np.array([0], dtype=np.int64),
-                np.array([0.2], dtype=np.float64),
-            )
-            > 0
-        )
-
-    def test_sparse_binary_and_probability_metrics_are_bounded(self):
-        ind1 = np.array([0, 2], dtype=np.int64)
-        data1 = np.array([1.0, 2.0], dtype=np.float64)
-        ind2 = np.array([1, 2], dtype=np.int64)
-        data2 = np.array([3.0, 4.0], dtype=np.float64)
-
-        metrics = [
-            sparse_dist.sparse_hamming(ind1, data1, ind2, data2, 5),
-            sparse_dist.sparse_canberra(ind1, data1, ind2, data2),
-            sparse_dist.sparse_bray_curtis(ind1, data1, ind2, data2),
-            sparse_dist.sparse_jaccard(ind1, data1, ind2, data2),
-            sparse_dist.sparse_matching(ind1, data1, ind2, data2, 5),
-            sparse_dist.sparse_dice(ind1, data1, ind2, data2),
-            sparse_dist.sparse_kulsinski(ind1, data1, ind2, data2, 5),
-            sparse_dist.sparse_rogers_tanimoto(ind1, data1, ind2, data2, 5),
-            sparse_dist.sparse_russellrao(ind1, data1, ind2, data2, 5),
-            sparse_dist.sparse_sokal_michener(ind1, data1, ind2, data2, 5),
-            sparse_dist.sparse_sokal_sneath(ind1, data1, ind2, data2),
-            sparse_dist.sparse_hellinger(ind1, data1, ind2, data2),
-            sparse_dist.sparse_correlation(ind1, data1, ind2, data2, 5),
-            sparse_dist.sparse_ll_dirichlet(ind1, data1, ind2, data2),
-        ]
-        assert np.isfinite(metrics).all()
-
-    def test_general_sset_union_and_intersection_update_result_values(self):
-        mat1 = sparse.csr_matrix([[0.0, 0.5], [0.2, 0.0]])
-        mat2 = sparse.csr_matrix([[0.0, 0.25], [0.4, 0.0]])
-        rows = np.array([0, 1], dtype=np.int64)
-        cols = np.array([1, 0], dtype=np.int64)
-        vals = np.zeros(2, dtype=np.float64)
-
-        sparse_dist.general_sset_union(
-            mat1.indptr,
-            mat1.indices,
-            mat1.data,
-            mat2.indptr,
-            mat2.indices,
-            mat2.data,
-            rows,
-            cols,
-            vals,
-        )
-        np.testing.assert_allclose(vals, [0.625, 0.52])
-
-        vals[:] = 0.0
-        sparse_dist.general_sset_intersection(
-            mat1.indptr,
-            mat1.indices,
-            mat1.data,
-            mat2.indptr,
-            mat2.indices,
-            mat2.data,
-            rows,
-            cols,
-            vals,
-            mix_weight=0.5,
-        )
-        np.testing.assert_allclose(vals, [0.125, 0.08])
 
 
 class TestANNHelpers:

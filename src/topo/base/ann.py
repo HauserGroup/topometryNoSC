@@ -7,8 +7,16 @@
 
 """Approximate nearest-neighbor wrappers.
 
+Backend hierarchy and strategy:
+- sklearn.neighbors: Exact kNN (reference behavior, correctness standard)
+- HNSWlib: Fast approximate ANN for large-scale problems (default advanced backend)
+- NMSlib: Alternative approximate ANN backend (specialized metrics)
+- Fallback: All backends gracefully degrade to sklearn if initialization fails
+
 This module provides small sklearn-style wrappers around NMSlib and HNSWlib,
-plus a convenience `kNN` function that can fall back to sklearn.
+plus a convenience `kNN` function that can fall back to sklearn. Metric name
+translation is centralized via _nmslib_dense_space, _nmslib_sparse_space, and
+_hnswlib_space.
 
 Important conventions
 ---------------------
@@ -17,11 +25,12 @@ Important conventions
   because the sample itself is usually returned as the nearest neighbor.
 - The public estimator state is never mutated during `transform`.
 - Returned sparse graphs have shape `(n_query_samples, n_fit_samples)`.
+- Self-neighbor removal is centralized via _drop_self_and_truncate_neighbors.
 """
 
 import logging
 import time
-from typing import Any, Literal, cast, overload
+from typing import Any, Literal, overload
 from warnings import warn
 
 import numpy as np
@@ -29,7 +38,7 @@ from joblib import cpu_count
 from scipy.sparse import csr_matrix, issparse
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.model_selection import ParameterGrid, train_test_split
-from sklearn.neighbors import NearestNeighbors
+from sklearn.neighbors import NearestNeighbors, kneighbors_graph
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +109,7 @@ def _as_dense_array(data: np.ndarray | csr_matrix | list) -> np.ndarray:
         return data
 
     if issparse(data):
-        return cast(csr_matrix, data).toarray()
+        return csr_matrix(data).toarray()
 
     try:
         import pandas as pd
@@ -119,8 +128,8 @@ def _as_dense_array(data: np.ndarray | csr_matrix | list) -> np.ndarray:
 
 def _as_csr_matrix(data: np.ndarray | csr_matrix | list) -> csr_matrix:
     """Convert supported array-like inputs to CSR sparse matrix."""
-    if issparse(data):
-        return cast(csr_matrix, data).tocsr()
+    if isinstance(data, csr_matrix):
+        return data
 
     try:
         import pandas as pd
@@ -134,14 +143,17 @@ def _as_csr_matrix(data: np.ndarray | csr_matrix | list) -> csr_matrix:
     return csr_matrix(data)
 
 
-def _check_2d_data(data: Any, name: str = "data") -> None:
+def _check_2d_data(data: object, name: str = "data") -> tuple[int, int]:
     """Validate that data has a 2-D shape."""
-    if not hasattr(data, "shape") or len(data.shape) != 2:
+    shape = getattr(data, "shape", None)
+    if shape is None or len(shape) != 2:
         raise ValueError(f"{name} must be a 2-D array-like or sparse matrix.")
-    if data.shape[0] < 1:
+    n_samples, n_features = int(shape[0]), int(shape[1])
+    if n_samples < 1:
         raise ValueError(f"{name} must contain at least one sample.")
-    if data.shape[1] < 1:
+    if n_features < 1:
         raise ValueError(f"{name} must contain at least one feature.")
+    return n_samples, n_features
 
 
 def _build_sparse_knn_graph(
@@ -246,6 +258,31 @@ def _hnswlib_space(metric: str) -> str:
             "Supported metrics are 'sqeuclidean', 'euclidean', 'cosine', "
             "and 'inner_product'."
         ) from exc
+
+
+def _sklearn_knn_graph(
+    X,
+    *,
+    n_neighbors: int,
+    metric: str,
+    n_jobs: int | None,
+    include_self: bool = False,
+) -> csr_matrix:
+    """Build kNN distance graph using sklearn kneighbors_graph."""
+    graph = kneighbors_graph(
+        X,
+        n_neighbors=n_neighbors,
+        mode="distance",
+        metric=metric,
+        include_self=include_self,
+        n_jobs=n_jobs,
+    ).tocsr()
+
+    if not include_self:
+        graph.setdiag(0.0)
+        graph.eliminate_zeros()
+
+    return graph
 
 
 @overload
@@ -361,12 +398,12 @@ def kNN(
     scipy.sparse.csr_matrix
         kNN distance graph.
     """
-    _check_2d_data(X, "X")
+    n_fit_samples, _ = _check_2d_data(X, "X")
     n_neighbors = _validate_n_neighbors(n_neighbors)
     n_jobs = _resolve_n_jobs(n_jobs)
-    if Y is None and n_neighbors >= X.shape[0]:
+    if Y is None and n_neighbors >= n_fit_samples:
         raise ValueError(
-            f"n_neighbors={n_neighbors} must be smaller than n_samples={X.shape[0]} "
+            f"n_neighbors={n_neighbors} must be smaller than n_samples={n_fit_samples} "
             "for self-query kNN graphs."
         )
 
@@ -415,27 +452,42 @@ def kNN(
         # sklearn estimator does not accept.
         _valid = set(NearestNeighbors().get_params())
         sk_kwargs = {k: v for k, v in kwargs.items() if k in _valid}
-        query_k = _query_k(n_neighbors, int(X.shape[0])) if Y is None else n_neighbors
-        nbrs = NearestNeighbors(
-            n_neighbors=query_k,
-            metric=metric,
-            n_jobs=n_jobs,
-            **sk_kwargs,
-        ).fit(X)
-        if Y is None:
-            distances, indices = nbrs.kneighbors(X, return_distance=True)
-            knn = _build_sparse_knn_graph(
-                indices=indices,
-                distances=distances,
-                n_query_samples=int(X.shape[0]),
-                n_fit_samples=int(X.shape[0]),
-                n_neighbors=n_neighbors,
-            )
-        else:
-            knn = nbrs.kneighbors_graph(Y, mode="distance")
 
-    knn_csr = cast(csr_matrix, knn)
+        if Y is None and metric != "precomputed" and not return_instance:
+            knn = _sklearn_knn_graph(
+                X,
+                n_neighbors=n_neighbors,
+                metric=metric,
+                n_jobs=n_jobs,
+            )
+            nbrs = None
+        else:
+            query_k = _query_k(n_neighbors, n_fit_samples) if Y is None else n_neighbors
+            nbrs = NearestNeighbors(
+                n_neighbors=query_k,
+                metric=metric,
+                n_jobs=n_jobs,
+                **sk_kwargs,
+            ).fit(X)
+            if Y is None:
+                distances, indices = nbrs.kneighbors(X, return_distance=True)
+                knn = _build_sparse_knn_graph(
+                    indices=indices,
+                    distances=distances,
+                    n_query_samples=n_fit_samples,
+                    n_fit_samples=n_fit_samples,
+                    n_neighbors=n_neighbors,
+                )
+            else:
+                knn = nbrs.kneighbors_graph(Y, mode="distance")
+
+    knn_csr = knn.tocsr() if issparse(knn) else csr_matrix(knn)
     if return_instance:
+        if nbrs is None:
+            raise ValueError(
+                "Cannot return estimator instance when using _sklearn_knn_graph. "
+                "Pass return_instance=False or use a different backend."
+            )
         return nbrs, knn_csr
     return knn_csr
 
@@ -732,7 +784,7 @@ class NMSlibTransformer(BaseEstimator, TransformerMixin):
         query_data = self._prepare_query_data(data)
 
         _, test = train_test_split(query_data, test_size=data_use)
-        test = cast(Any, test)
+        test = np.asarray(test)
         query_qty = test.shape[0]
         query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
 
@@ -1133,7 +1185,7 @@ class HNSWlibTransformer(TransformerMixin, BaseEstimator):
         _check_2d_data(data)
 
         _, test = train_test_split(data, test_size=percent_use)
-        test = cast(np.ndarray, test)
+        test = np.asarray(test)
         query_qty = test.shape[0]
         query_k = _query_k(self.n_neighbors, self.n_samples_fit_)
 

@@ -111,6 +111,21 @@ def test_cknn_candidate_mode_basic_properties():
     assert set(np.unique(A.data)).issubset({1.0})
 
 
+def test_cknn_sklearn_candidate_mode_uses_direct_neighbors():
+    X = np.random.default_rng(0).normal(size=(50, 3))
+    A = cknn_graph(
+        X,
+        scale_k=5,
+        delta=1.1,
+        candidate_k=20,
+        exact=False,
+        backend="sklearn",
+    )
+    assert (A != A.T).nnz == 0
+    assert np.all(A.diagonal() == 0)
+    assert set(np.unique(A.data)).issubset({1.0})
+
+
 def test_cknn_unnormalized_laplacian_zero_modes_match_components():
     rng = np.random.default_rng(0)
     X1 = rng.normal(loc=-5, scale=0.2, size=(30, 2))

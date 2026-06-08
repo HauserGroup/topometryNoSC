@@ -1,4 +1,5 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/HauserGroup/topometryNoSC/blob/master/notebooks/example.ipynb)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://pre-commit.com/)
 [![Orcid: Jakob](https://img.shields.io/badge/Jakob-bar?style=flat&logo=orcid&labelColor=white&color=grey)](https://orcid.org/0000-0002-2841-7284)
@@ -14,14 +15,14 @@
 > the upstream `topometry` distribution in the same environment. Please cite
 > both this fork and the original work (see `CITATION.cff`).
 
-**topometry-nosc** is a geometry-aware Python toolkit for exploring high-dimensional data via diffusion/Laplacian operators. It learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** and then finds clusters and builds low-dimensional layouts for analysis and visualization.
+**topometry-nosc** is a Python toolkit for **Manifold Learning**, **Dimensionality Reduction**, and **Spectral Clustering**. It explores high-dimensional data by approximating the **Laplace-Beltrami Operator (LBO)** via **Continuous k-Nearest Neighbors (CkNN)** and **Diffusion Maps**. The pipeline learns **neighborhood graphs → Laplace–Beltrami–type operators → spectral scaffolds → refined graphs** to find clusters and build low-dimensional layouts.
 
-- **scikit-learn–style transformers** with a high-level `TopOGraph` orchestrator
-- **Fixed-time & multiscale spectral scaffolds**
+- **scikit-learn–style transformers** compatible with standard machine learning workflows
+- **Diffusion Maps** and **multiscale spectral scaffolds** for geometry preservation
 - **Operator-native metrics** to quantify geometry preservation and **Riemannian diagnostics** to evaluate distortion in visualizations
 - Designed for **large, diverse datasets**
 
-For background, see the preprint: https://doi.org/10.1101/2022.03.14.484134
+For background, see the original paper: https://doi.org/10.7554/eLife.100361.2
 
 ## Geometry-first rationale (short)
 
@@ -172,15 +173,16 @@ Example `TopOGraph` fit:
 ---
 
 ```
-@article {Oliveira2022.03.14.484134,
-	author = {Oliveira, David S and Domingos, Ana I. and Velloso, Licio A},
-	title = {TopoMetry systematically learns and evaluates the latent geometry of single-cell data},
-	elocation-id = {2022.03.14.484134},
-	year = {2025},
-	doi = {10.1101/2022.03.14.484134},
-	publisher = {Cold Spring Harbor Laboratory},
-	URL = {https://www.biorxiv.org/content/early/2025/10/15/2022.03.14.484134},
-	eprint = {https://www.biorxiv.org/content/early/2025/10/15/2022.03.14.484134.full.pdf},
-	journal = {bioRxiv}
+@article{Oliveira_2024,
+	title={TopoMetry systematically learns and evaluates the latent geometry of single-cell data},
+	volume={13},
+	ISSN={2050-084X},
+	url={http://dx.doi.org/10.7554/eLife.100361.2},
+	DOI={10.7554/elife.100361.2},
+	journal={eLife},
+	publisher={eLife Sciences Publications, Ltd},
+	author={Oliveira, David S and Domingos, Ana I and Velloso, Licio A},
+	year={2024},
+	month=aug
 }
 ```

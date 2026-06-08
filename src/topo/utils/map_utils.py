@@ -93,7 +93,9 @@ def create_density_plot(X, Y, embedding):
 
 @numba.njit(fastmath=True)
 def torus_euclidean_grad(x, y, torus_dimensions=(2 * np.pi, 2 * np.pi)):
-    r"""Standard euclidean distance.
+    r"""Compute Euclidean distance and gradient on a torus.
+
+    Distance and gradient for points on a torus with periodic boundary conditions.
 
     ..math::
         D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
@@ -114,7 +116,7 @@ def torus_euclidean_grad(x, y, torus_dimensions=(2 * np.pi, 2 * np.pi)):
 
 @numba.njit(parallel=True)
 def fast_knn_indices(X, n_neighbors):
-    """A fast computation of knn indices.
+    """Compute k-nearest neighbor indices.
 
     Parameters
     ----------
@@ -139,7 +141,7 @@ def fast_knn_indices(X, n_neighbors):
 
 @numba.njit("i4(i8[:])")
 def tau_rand_int(state):
-    """A fast (pseudo)-random number generator.
+    """Generate pseudorandom int32 from tau stream.
 
     Parameters
     ----------
@@ -165,7 +167,7 @@ def tau_rand_int(state):
 
 @numba.njit("f4(i8[:])")
 def tau_rand(state):
-    """A fast (pseudo)-random number generator for floats in the range [0,1]
+    """Generate pseudorandom float32 in [0,1] from tau stream.
 
     Parameters
     ----------
@@ -232,24 +234,28 @@ def ts():
 # I'm not enough of a numba ninja to numba this successfully.
 # np.arrays of lists, which are objects...
 def csr_unique(matrix, return_index=True, return_inverse=True, return_counts=True):
-    """Find the unique elements of a sparse csr matrix.
-    We don't explicitly construct the unique matrix leaving that to the user
-    who may not want to duplicate a massive array in memory.
-    Returns the indices of the input array that give the unique values.
-    Returns the indices of the unique array that reconstructs the input array.
-    Returns the number of times each unique row appears in the input matrix.
-    matrix: a csr matrix
-    return_index = bool, optional
-        If true, return the row indices of 'matrix'
-    return_inverse: bool, optional
-        If true, return the the indices of the unique array that can be
-           used to reconstruct 'matrix'.
-    return_counts = bool, optional
-        If true, returns the number of times each unique item appears in 'matrix'
-    The unique matrix can computed via
-    unique_matrix = matrix[index]
-    and the original matrix reconstructed via
-    unique_matrix[inverse]
+    """Find unique rows in a sparse CSR matrix.
+
+    Returns indices, inverse indices, and counts without materializing the full
+    unique matrix to save memory.
+
+    Parameters
+    ----------
+    matrix : csr_matrix
+        Input sparse CSR matrix.
+    return_index : bool, default=True
+        If True, return row indices in original matrix.
+    return_inverse : bool, default=True
+        If True, return indices to reconstruct original matrix.
+    return_counts : bool, default=True
+        If True, return count of each unique row.
+
+    Returns
+    -------
+    unique_matrix : csr_matrix
+        Can be computed via matrix[index].
+    inverse : ndarray
+        Can reconstruct original via unique_matrix[inverse].
     """
     lil_matrix = matrix.tolil()
     rows = [x + y for x, y in zip(lil_matrix.rows, lil_matrix.data)]

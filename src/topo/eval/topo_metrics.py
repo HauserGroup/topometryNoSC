@@ -450,7 +450,7 @@ def rowwise_js_similarity(
         JS-similarity = 1 - mean_i JS(p_i, q_i)
 
     where JS(·,·) = 0 for identical distributions and ≤ log(2) in nats;
-    we use the standard normalized/base-e version implemented below.
+    we use the standard normalized/base-e version implemented in scipy.
 
     Parameters
     ----------
@@ -481,27 +481,7 @@ def rowwise_js_similarity(
     • Sensitive to **weights** (transition probabilities), unlike set-overlap metrics.
     • If a row is empty in both operators, it is skipped.
     """
-    import numpy as np
-    import scipy.sparse as sp
-
-    def _ensure_csr(P) -> sp.csr_matrix:
-        if not sp.isspmatrix_csr(P):
-            P = sp.csr_matrix(P)
-        P.eliminate_zeros()
-        return P
-
-    def _row_js_divergence(p, q):
-        # p, q are dense 1D arrays over same support; not necessarily normalized
-        p = np.asarray(p, dtype=float) + eps
-        q = np.asarray(q, dtype=float) + eps
-        p /= p.sum()
-        q /= q.sum()
-        m = 0.5 * (p + q)
-        # KL in nats; JS = 0.5*(KL(p||m) + KL(q||m))
-        js = 0.5 * (
-            np.sum(p * (np.log(p) - np.log(m))) + np.sum(q * (np.log(q) - np.log(m)))
-        )
-        return float(js)
+    from scipy.spatial.distance import jensenshannon
 
     def _topk_from_row(data, ind, k):
         if k is None or k >= data.size:
@@ -541,10 +521,15 @@ def rowwise_js_similarity(
             if col in mq:
                 q_vec[t] = q_row[mq[col]]
 
-        js = _row_js_divergence(p_vec, q_vec)
-        # Map divergence → similarity in [0,1]; JS ≤ ln(2); clip for safety
-        js = min(js, np.log(2.0))
-        one_minus_js.append(1.0 - (js / np.log(2.0)))
+        # Normalize with stability epsilon
+        p_vec = p_vec + eps
+        q_vec = q_vec + eps
+        p_vec /= p_vec.sum()
+        q_vec /= q_vec.sum()
+
+        # Use scipy's jensenshannon (returns distance in [0, 1] for base 2)
+        js = float(jensenshannon(p_vec, q_vec, base=2.0))
+        one_minus_js.append(1.0 - js)
 
     sim = float(np.mean(one_minus_js)) if one_minus_js else np.nan
     if return_per_row:

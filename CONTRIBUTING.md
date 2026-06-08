@@ -1,14 +1,19 @@
 # Contributing to TopoMetry
 
-Thanks for your interest in improving TopoMetry! This project uses
-[uv](https://docs.astral.sh/uv/) for environment and dependency management.
+First off, thanks for taking the time to contribute! 🎉
 
-## Development setup
+I appreciate your help and this document provides a guide to help you get started quickly, hopefully.
+
+## 🛠️ Quick Start
+
+We use [uv](https://docs.astral.sh/uv/) to make environment and dependency management fast and painless.
+
+1. **Fork and clone** the repository.
+2. **Install `uv`** if you haven't already (e.g. `curl -LsSf https://astral.sh/uv/install.sh | sh`).
+3. **Set up the environment**:
 
 ```bash
-# clone, then:
-uv sync --all-extras   # creates .venv with the package + all optional deps + dev tools
-uv run pytest -q       # run the test suite
+uv sync --all-extras   # Creates a .venv and installs everything you need
 ```
 
 Or use the Makefile shortcuts:

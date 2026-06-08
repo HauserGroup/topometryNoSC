@@ -7,10 +7,11 @@ Geodesic-distance computation and neighborhood-based correlation scores
 import logging
 
 import numpy as np
-from scipy.sparse import csgraph, csr_matrix
+from scipy.sparse import csr_matrix
 from scipy.spatial.distance import squareform
 from scipy.stats import kendalltau, spearmanr
 
+from topo._compat.scipy_graph import graph_shortest_paths
 from topo.base.ann import kNN
 from topo.utils._utils import get_landmark_indices
 
@@ -77,7 +78,7 @@ def geodesic_distance(
     if indices is not None and np.issubdtype(type(indices), np.integer):
         indices = np.array([indices])
     if n_jobs == 1:
-        G = csgraph.shortest_path(
+        G = graph_shortest_paths(
             A,
             method=method,
             unweighted=unweighted,
@@ -107,12 +108,22 @@ def geodesic_distance(
             indices = np.arange(A.shape[0])
         n = len(indices)
         local_function = partial(
-            csgraph.shortest_path, A, method, directed, False, unweighted, False
+            graph_shortest_paths,
+            A,
+            method=method,
+            directed=directed,
+            unweighted=unweighted,
         )
+        from scipy.sparse import csgraph
+
         if n_jobs == 1 or n == 1:
             try:
-                G = csgraph.shortest_path(
-                    A, method, directed, False, unweighted, False, indices
+                G = graph_shortest_paths(
+                    A,
+                    method=method,
+                    directed=directed,
+                    unweighted=unweighted,
+                    indices=indices,
                 )
             except csgraph.NegativeCycleError as err:
                 raise ValueError(

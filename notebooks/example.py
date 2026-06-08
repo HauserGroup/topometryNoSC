@@ -30,6 +30,27 @@
 # readable.
 
 # %%
+# ## Colab Setup
+# This cell automatically sets up the environment if running in Google Colab.
+import sys
+
+if "google.colab" in sys.modules:
+    import subprocess
+
+    print("Colab detected: installing topometry-nosc and downloading utils...")
+    subprocess.run(["pip", "install", "-q", "topometry-nosc[all]"], check=True)
+    subprocess.run(
+        [
+            "wget",
+            "-q",
+            "https://raw.githubusercontent.com/HauserGroup/topometryNoSC/master/notebooks/_example_utils.py",
+        ],
+        check=True,
+    )
+    subprocess.run(["mkdir", "-p", "../data", "../figures"], check=True)
+    print("Setup complete.")
+
+# %%
 from pathlib import Path
 
 from _example_utils import (

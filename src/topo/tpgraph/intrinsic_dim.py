@@ -11,7 +11,7 @@ from scipy.sparse import csr_matrix
 from sklearn.base import BaseEstimator, TransformerMixin
 
 from topo.base.ann import kNN
-from topo.utils._utils import get_indices_distances_from_sparse_matrix
+from topo.base.graph_matrix import get_indices_distances_from_sparse_matrix
 
 
 class IntrinsicDim(BaseEstimator, TransformerMixin):

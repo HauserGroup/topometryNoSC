@@ -1,4 +1,4 @@
-# Practical FAQ
+# Practical FAQ: Manifold Learning and Dimensionality Reduction
 
 Short answers to common workflow questions that are not tied to one API call.
 
@@ -9,12 +9,10 @@ its assumptions are working well for your data. UMAP is a layout method; it
 learns a neighbor graph and optimizes a low-dimensional embedding from that
 graph.
 
-Use TopoMetry when you want to inspect and control the full geometry pipeline:
-nearest-neighbor graph, kernel, diffusion or Laplacian operator, spectral
-scaffold, refined graph, layout, and diagnostics. This is useful when you care
-about geometry-preserving representations, method comparison, nonuniform
-sampling density, disconnected or weakly connected structure, or quantitative
-operator-native checks rather than a single visualization.
+Use TopoMetry when you want to inspect and control the full **manifold learning** pipeline:
+**Continuous k-nearest-neighbor (CkNN)** graphs, **Laplace-Beltrami** and **diffusion operators**,
+**spectral clustering** scaffolds, refined graphs, and layouts. This is best when you need rigorous
+**dimensionality reduction**, robust **Diffusion Maps**, and density-bias correction.
 
 The two are not mutually exclusive. TopoMetry can use UMAP-style ideas through
 the `fuzzy` kernel and can compute UMAP as one projection option when the

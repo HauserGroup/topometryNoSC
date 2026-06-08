@@ -1,5 +1,11 @@
 """Adapter for UMAP-specific graph and layout internals.
 
+Delegation strategy:
+- Fuzzy simplicial graph construction: delegated to upstream umap-learn
+- Standard UMAP layout: available via umap.UMAP estimator
+- MAP (Manifold Approximation & Projection): custom TopoMetry implementation
+  with checkpoint support (save_every, save_callback, include_init_snapshot)
+
 Only this module imports from :mod:`umap.umap_`. The rest of the package uses
 these wrappers so kNN-array validation and return contracts stay centralized.
 """
@@ -99,7 +105,7 @@ def fuzzy_graph_from_data(
 ):
     """Build a UMAP fuzzy simplicial-set graph directly from data."""
     if metric == "precomputed" and issparse(X):
-        from topo.utils._utils import get_indices_distances_from_sparse_matrix
+        from topo.base.graph_matrix import get_indices_distances_from_sparse_matrix
 
         knn_indices, knn_dists = get_indices_distances_from_sparse_matrix(
             X, n_neighbors

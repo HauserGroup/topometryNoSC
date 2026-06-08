@@ -5,7 +5,7 @@ import pytest
 from scipy import sparse
 
 from topo.spectral import _spectral
-from topo.spectral.umap_layouts import clip, rdist
+from topo.spectral.map_optimizer import clip, rdist
 
 
 def _path_graph():
@@ -78,7 +78,8 @@ class TestGraphOperators:
     def test_diffusion_operator_dense(self):
         W = _path_graph().toarray()
         P = _spectral.diffusion_operator(W, alpha=0.0, symmetric=False)
-        assert isinstance(P, np.ndarray)
+        # Diffusion operator always returns sparse matrices for efficiency
+        assert sparse.issparse(P)
         assert P.shape == (3, 3)
 
         res = _spectral.diffusion_operator(
@@ -86,7 +87,8 @@ class TestGraphOperators:
         )
         assert isinstance(res, tuple)
         P_sym, D_left = res
-        assert isinstance(P_sym, np.ndarray)
+        assert sparse.issparse(P_sym)
+        assert sparse.issparse(D_left)
 
     def test_diffusion_operator_anisotropy(self):
         W = sparse.csr_matrix(np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]], dtype=float))

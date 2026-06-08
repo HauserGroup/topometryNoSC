@@ -1,6 +1,6 @@
-# Mathematical Details
+# Mathematical Details: LBO, Diffusion Maps, and CkNN
 
-TopoMetry is built on a family of geometric operators rooted in differential geometry and spectral theory. This page gives an accessible overview of the core ideas — from why high-dimensional biology lives on a curved surface, to how TopoMetry learns that surface from data and why this is fundamentally better than approaches based on global variance (PCA, scVI, etc.).
+TopoMetry is a **manifold learning** framework built on geometric operators from differential geometry and spectral theory. This page explains the core mathematics — how we approximate the **Laplace-Beltrami Operator (LBO)**, why **Continuous k-Nearest Neighbors (CkNN)** corrects density bias, and how **Diffusion Maps** provide superior **dimensionality reduction** compared to PCA.
 
 No prior knowledge of differential geometry is required. Where equations appear, we explain what they mean in plain language right next to them.
 
@@ -309,4 +309,4 @@ The mathematical foundations are detailed in:
 - Bérard, Besson & Gallot (1994) — The heat kernel isometric embedding theorem.
 - Hein, Audibert & von Luxburg (2007) — Convergence of graph Laplacians to the LBO.
 
-For a self-contained mathematical treatment covering all of the above, see the [preprint](https://github.com/davisidarta/topometry).
+For a self-contained mathematical treatment covering all of the above, see the original [TopOMetry paper](https://doi.org/10.7554/eLife.100361.2).

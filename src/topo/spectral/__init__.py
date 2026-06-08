@@ -27,13 +27,13 @@ _EXPORTS = {
     "LE": ("._spectral", "LE"),
     "degree": ("._spectral", "degree"),
     "optimize_layout_euclidean": (
-        ".umap_layouts",
+        ".map_optimizer",
         "optimize_layout_euclidean",
     ),
-    "optimize_layout_generic": (".umap_layouts", "optimize_layout_generic"),
-    "optimize_layout_inverse": (".umap_layouts", "optimize_layout_inverse"),
+    "optimize_layout_generic": (".map_optimizer", "optimize_layout_generic"),
+    "optimize_layout_inverse": (".map_optimizer", "optimize_layout_inverse"),
     "optimize_layout_aligned_euclidean": (
-        ".umap_layouts",
+        ".map_optimizer",
         "optimize_layout_aligned_euclidean",
     ),
     "EigenDecomposition": (".eigen", "EigenDecomposition"),
@@ -47,12 +47,12 @@ if TYPE_CHECKING:
     from ._spectral import graph_laplacian as graph_laplacian
     from .eigen import EigenDecomposition as EigenDecomposition
     from .eigen import eigendecompose as eigendecompose
-    from .umap_layouts import (
+    from .map_optimizer import (
         optimize_layout_aligned_euclidean as optimize_layout_aligned_euclidean,
     )
-    from .umap_layouts import optimize_layout_euclidean as optimize_layout_euclidean
-    from .umap_layouts import optimize_layout_generic as optimize_layout_generic
-    from .umap_layouts import optimize_layout_inverse as optimize_layout_inverse
+    from .map_optimizer import optimize_layout_euclidean as optimize_layout_euclidean
+    from .map_optimizer import optimize_layout_generic as optimize_layout_generic
+    from .map_optimizer import optimize_layout_inverse as optimize_layout_inverse
 
 
 def __getattr__(name):

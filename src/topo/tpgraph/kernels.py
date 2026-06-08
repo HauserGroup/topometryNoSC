@@ -16,7 +16,7 @@ sparsification and imputation.
 
 import logging
 import warnings
-from typing import Any, cast
+from typing import cast
 
 import numpy as np
 
@@ -31,7 +31,6 @@ from scipy.sparse import (
     issparse,
     tril,
 )
-from scipy.sparse.csgraph import connected_components
 from scipy.spatial import procrustes
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import normalize as _l2_normalize_rows
@@ -40,10 +39,10 @@ from sklearn.utils import check_random_state
 from topo._compat.umap import fuzzy_graph_from_knn
 from topo.base.ann import kNN
 from topo.base.dists import pairwise_distances
+from topo.base.graph_matrix import get_indices_distances_from_sparse_matrix
 from topo.spectral._spectral import degree as compute_degree
 from topo.spectral._spectral import diffusion_operator, graph_laplacian
 from topo.tpgraph.cknn import cknn_graph
-from topo.utils._utils import get_indices_distances_from_sparse_matrix
 
 warnings.simplefilter("ignore", SparseEfficiencyWarning)
 
@@ -52,6 +51,13 @@ logger = logging.getLogger(__name__)
 
 def _as_csr_matrix(X, *, dtype=float) -> csr_matrix:
     """Return X as a CSR matrix."""
+    if issparse(X):
+        return X.tocsr().astype(dtype)
+    return csr_matrix(np.asarray(X, dtype=dtype))
+
+
+def _ensure_csr_matrix(X, *, dtype=float) -> csr_matrix:
+    """Normalize sparse/dense matrix results to CSR without changing semantics."""
     if issparse(X):
         return X.tocsr().astype(dtype)
     return csr_matrix(np.asarray(X, dtype=dtype))
@@ -188,6 +194,181 @@ def _density_ranks(adap_sd, high):
     return np.interp(adap_sd, (lo, hi), (2, high))
 
 
+def _compute_cknn_kernel(
+    X,
+    n_neighbors: int,
+    cknn_delta: float,
+    cknn_candidate_neighbors,
+    cknn_exact: bool,
+    metric: str,
+    backend: str,
+    n_jobs: int,
+    verbose: bool,
+    return_densities: bool,
+    kwargs: dict,
+) -> tuple[csr_matrix, dict]:
+    """Compute continuous k-nearest neighbors kernel (binary unweighted)."""
+    W = cknn_graph(
+        X,
+        scale_k=n_neighbors,
+        delta=cknn_delta,
+        metric=metric,
+        candidate_k=cknn_candidate_neighbors,
+        exact=cknn_exact,
+        include_self=False,
+        symmetrize="or",
+        backend=backend,
+        n_jobs=n_jobs,
+        verbose=verbose,
+        **kwargs,
+    )
+    dens_dict: dict = {}
+    if return_densities:
+        dens_dict["unweighted_adjacency"] = W
+    return W, dens_dict
+
+
+def _prepare_knn_input(X, metric: str, backend: str, pairwise: bool):
+    """Prepare input data for KNN computation (normalize if needed)."""
+    X_for_knn = X
+    if (metric == "cosine") and (not pairwise):
+        if _cosine_knn_requires_unit_vectors(backend):
+            X_for_knn = _maybe_l2_normalize_rows(X)
+    if issparse(X_for_knn):
+        X_for_knn = csr_matrix(X_for_knn)
+    else:
+        X_for_knn = np.asarray(X_for_knn)
+    return X_for_knn
+
+
+def _compute_knn_distance_graph(
+    X_prep,
+    metric: str,
+    n_neighbors: int,
+    pairwise: bool,
+    backend: str,
+    n_jobs: int,
+    kwargs: dict,
+) -> csr_matrix:
+    """Compute KNN or pairwise distance graph."""
+    if pairwise:
+        K_dense = pairwise_distances(X_prep, metric)
+        K = csr_matrix(K_dense)
+    else:
+        K = kNN(
+            X_prep,
+            metric=metric,
+            n_neighbors=n_neighbors,
+            backend=backend,
+            n_jobs=n_jobs,
+            **kwargs,
+        )
+    return K
+
+
+def _compute_fuzzy_kernel_from_knn(
+    K, N: int, n_neighbors: int, random_state, verbose: bool
+):
+    """Compute fuzzy simplicial set kernel from KNN graph."""
+    knn_indices, knn_dists = get_indices_distances_from_sparse_matrix(
+        K, n_neighbors=n_neighbors
+    )
+    result = fuzzy_graph_from_knn(
+        np.zeros((N, 1), dtype=np.float32),
+        knn_indices=knn_indices,
+        knn_dists=knn_dists,
+        n_neighbors=n_neighbors,
+        metric="precomputed",
+        set_op_mix_ratio=1.0,
+        local_connectivity=1.0,
+        random_state=random_state,
+        verbose=verbose,
+    )
+    W, sigmas, rhos = result[:3]  # type: ignore[misc]
+    return W, sigmas, rhos
+
+
+def _compute_adaptive_bandwidth_kernel(
+    K: csr_matrix,
+    metric: str,
+    use_angular: bool,
+    k: int,
+    adaptive_bw: bool,
+    sigma,
+    alpha_decaying: bool,
+    square_distances: bool,
+    expand_nbr_search: bool,
+    new_K,
+    adap_sd,
+    adap_sd_new,
+    pm,
+    pm_new,
+    new_k,
+    N: int,
+    backend: str,
+    n_jobs: int,
+    X,
+    kwargs: dict,
+) -> tuple[csr_matrix, dict]:
+    """Compute adaptive bandwidth kernel and return W and density diagnostics."""
+    dens_dict: dict = {}
+    active_K = new_K if expand_nbr_search and new_K is not None else K
+    x, y, dists = find(active_K)
+
+    # Convert cosine distance to angle if needed
+    if metric == "cosine" and use_angular:
+        dists = _cosine_distance_to_angle_from_sparse_triplets(x, y, dists)
+
+    # Numerical guards for distances
+    if metric == "cosine" and not use_angular:
+        dists = np.clip(dists, 0.0, 2.0)
+    elif metric == "cosine" and use_angular:
+        dists = np.clip(dists, 0.0, np.pi)
+    else:
+        dists = np.maximum(dists, 0.0)
+
+    # Normalize distances
+    if adaptive_bw:
+        assert adap_sd is not None
+        assert pm is not None
+        # Select active bandwidth based on expand_nbr_search
+        if expand_nbr_search:
+            assert adap_sd_new is not None
+            active_adap_sd = adap_sd_new
+            active_pm = pm_new
+            active_k = new_k
+        else:
+            active_adap_sd = adap_sd
+            active_pm = pm
+            active_k = k
+
+        assert active_adap_sd is not None
+        assert active_k is not None
+
+        if alpha_decaying:
+            assert active_pm is not None
+            base = dists / (active_adap_sd[x] + 1e-10)
+            expo = np.power(2, ((active_k - active_pm[x]) / active_pm[x]))
+            d_scaled = np.power(base, expo)
+        else:
+            d_scaled = dists / (active_adap_sd[x] + 1e-10)
+        if square_distances:
+            d_scaled = d_scaled**2
+    else:
+        if sigma is not None:
+            if sigma == 0:
+                sigma = 1e-10
+            d_scaled = np.asarray(dists, dtype=np.float64) / sigma
+            if square_distances:
+                d_scaled = d_scaled**2
+        else:
+            d_scaled = dists
+
+    d_scaled_float = np.asarray(d_scaled, dtype=np.float64)
+    W = csr_matrix((np.exp(-d_scaled_float), (x, y)), shape=[N, N])
+    return W, dens_dict
+
+
 def compute_kernel(
     X,
     metric="cosine",
@@ -310,101 +491,74 @@ def compute_kernel(
                 f"n_neighbors={n_neighbors} must be smaller than n_samples={N}."
             )
 
-    dens_dict = {}
-    # initialize optional variables used only when expand_nbr_search=True
-    new_k = None
-    adap_sd = None
-    pm = None
-    adap_sd_new = None
-    pm_new = None
-    new_K = None
     if n_jobs == -1:
         from joblib import cpu_count
 
         n_jobs = cpu_count()
     k = n_neighbors
 
+    # CkNN is mutually exclusive with fuzzy (CkNN takes precedence)
     if cknn and not fuzzy:
         if cknn_delta <= 0:
             raise ValueError("cknn_delta must be positive.")
-        W = cknn_graph(
+        return _compute_cknn_kernel(
             X,
-            scale_k=n_neighbors,
-            delta=cknn_delta,
-            metric=metric,
-            candidate_k=cknn_candidate_neighbors,
-            exact=cknn_exact,
-            include_self=False,
-            symmetrize="or",
-            backend=backend,
-            n_jobs=n_jobs,
-            verbose=verbose,
-            **kwargs,
+            n_neighbors,
+            cknn_delta,
+            cknn_candidate_neighbors,
+            cknn_exact,
+            metric,
+            backend,
+            n_jobs,
+            verbose,
+            return_densities,
+            kwargs,
         )
-        if return_densities:
-            dens_dict["unweighted_adjacency"] = W
-            return W, dens_dict
-        return W
 
+    # Prepare input (precomputed or KNN-ready)
     if metric == "precomputed":
         K = _as_csr_matrix(X)
         K = _sanitize_sparse_data(K)
         expand_nbr_search = False
+        dens_dict = {}
     else:
-        # If using cosine with an ANN backend that requires unit vectors, normalize rows
-        X_for_knn = X
-        if (metric == "cosine") and (not pairwise):
-            if _cosine_knn_requires_unit_vectors(backend):
-                X_for_knn = _maybe_l2_normalize_rows(X)
-        if issparse(X_for_knn):
-            X_for_knn = csr_matrix(X_for_knn)
-        else:
-            X_for_knn = np.asarray(X_for_knn)
-        if pairwise:
-            K = pairwise_distances(X_for_knn, metric)
-        else:
-            K = kNN(
-                X_for_knn,
-                metric=metric,
-                n_neighbors=k,
-                backend=backend,
-                n_jobs=n_jobs,
-                **kwargs,
-            )
+        X_for_knn = _prepare_knn_input(X, metric, backend, pairwise)
+        K = _compute_knn_distance_graph(
+            X_for_knn, metric, k, pairwise, backend, n_jobs, kwargs
+        )
+        dens_dict = {}
         if return_densities:
             dens_dict["knn"] = K
+
+    # Fuzzy simplicial set path
     if fuzzy:
-        cknn = False
-        knn_indices, knn_dists = get_indices_distances_from_sparse_matrix(
-            K, n_neighbors=n_neighbors
+        W, sigmas, rhos = _compute_fuzzy_kernel_from_knn(
+            K, N, n_neighbors, random_state, verbose
         )
-        result = fuzzy_graph_from_knn(
-            np.zeros((N, 1), dtype=np.float32),
-            knn_indices=knn_indices,
-            knn_dists=knn_dists,
-            n_neighbors=n_neighbors,
-            metric="precomputed",
-            set_op_mix_ratio=1.0,
-            local_connectivity=1.0,
-            random_state=random_state,
-            verbose=verbose,
-        )
-        W, sigmas, rhos = result[:3]  # type: ignore[misc]
         if return_densities:
             dens_dict["sigma"] = sigmas
             dens_dict["rho"] = rhos
     else:
+        # Adaptive bandwidth path: compute bandwidths and optionally expand search
+        new_k = None
+        adap_sd = None
+        pm = None
+        adap_sd_new = None
+        pm_new = None
+        new_K = None
+
         if adaptive_bw:
             adap_sd = _adap_bw(K, k)
             if metric == "cosine" and use_angular:
                 adap_sd = _cosine_distance_to_angle_from_sparse_triplets(
                     None, None, adap_sd
                 )
-            # Get an indirect measure of the local density
             pm = _density_ranks(adap_sd, k)
             if return_densities:
                 dens_dict["omega"] = pm
                 dens_dict["adaptive_bw"] = adap_sd
+
+            # Expand neighborhood search if requested
             if expand_nbr_search:
                 new_k = max(k + 1, int(np.ceil(k + (k - float(pm.max())))))
                 new_k = min(new_k, N - 1)
@@ -425,9 +579,7 @@ def compute_kernel(
                         adap_sd_new = _cosine_distance_to_angle_from_sparse_triplets(
                             None, None, adap_sd_new
                         )
-
                     pm_new = _density_ranks(adap_sd_new, new_k)
-
                     if return_densities:
                         dens_dict["expanded_k_neighbor"] = new_k
                         dens_dict["omega_nbr_expanded"] = pm_new
@@ -435,83 +587,39 @@ def compute_kernel(
                         dens_dict["expanded_neighborhood_graph"] = new_K
                         dens_dict["knn_expanded"] = new_K
 
-        active_K = new_K if expand_nbr_search and new_K is not None else K
-        x, y, dists = find(active_K)
+        # Compute adaptive bandwidth kernel
+        W, _ = _compute_adaptive_bandwidth_kernel(
+            K,
+            metric,
+            use_angular,
+            k,
+            adaptive_bw,
+            sigma,
+            alpha_decaying,
+            square_distances,
+            expand_nbr_search,
+            new_K,
+            adap_sd,
+            adap_sd_new,
+            pm,
+            pm_new,
+            new_k,
+            N,
+            backend,
+            n_jobs,
+            X,
+            kwargs,
+        )
 
-        # If using cosine metric and 'use_angular', convert cosine distance (=1-cos) to angle (radians)
-        if metric == "cosine" and use_angular:
-            dists = _cosine_distance_to_angle_from_sparse_triplets(x, y, dists)
-
-        # Numerical guards for distances (important for arccos and exponent)
-        # For cosine distance we expect [0, 2]; for angles [0, pi]; Euclidean ≥ 0.
-        if metric == "cosine" and not use_angular:
-            dists = np.clip(dists, 0.0, 2.0)
-        elif metric == "cosine" and use_angular:
-            dists = np.clip(dists, 0.0, np.pi)
-        else:
-            dists = np.maximum(dists, 0.0)
-        # Normalize distances
-        if adaptive_bw:
-            assert adap_sd is not None
-            assert pm is not None
-            # Alpha decaying: the kernel adaptively decays depending on neighborhood density
-            if expand_nbr_search:
-                assert adap_sd_new is not None
-                active_adap_sd = adap_sd_new
-                active_pm = pm_new
-                active_k = new_k
-            else:
-                active_adap_sd = adap_sd
-                active_pm = pm
-                active_k = k
-
-            assert active_adap_sd is not None
-            assert active_k is not None
-
-            if alpha_decaying:
-                assert active_pm is not None
-                base = dists / (active_adap_sd[x] + 1e-10)
-                expo = np.power(2, ((active_k - active_pm[x]) / active_pm[x]))
-                d_scaled = np.power(base, expo)
-            else:
-                d_scaled = dists / (active_adap_sd[x] + 1e-10)
-            if square_distances:
-                d_scaled = d_scaled**2
-        else:
-            if sigma is not None:
-                if sigma == 0:
-                    sigma = 1e-10
-                d_scaled = np.asarray(dists, dtype=np.float64) / sigma
-                if square_distances:
-                    d_scaled = d_scaled**2
-            else:
-                # Default scale if sigma is missing; keep distances as-is
-                d_scaled = dists
-
-        # Final kernel weights
-        d_scaled_float = np.asarray(d_scaled, dtype=np.float64)
-        W = csr_matrix((np.exp(-d_scaled_float), (x, y)), shape=[N, N])
-
-    # handle NaN/Inf robustly (set to 0 before symmetrizing)
-    W = cast(csr_matrix, W)
+    # Finalize kernel: handle NaN/Inf, symmetrize
+    W = _ensure_csr_matrix(W)
     W.data = _ensure_nonneg_and_finite(W.data, eps=0.0)
 
     if symmetrize:
         W = (W + W.T) / 2  # type: ignore
 
-    W = cast(csr_matrix, W)
-    # handle NaNs/Infs robustly
+    W = _ensure_csr_matrix(W)
     W.data = np.where(np.isfinite(W.data), W.data, 0.0)
-
-    # --- only attach expanded-neighborhood diagnostics if they exist ---
-    if return_densities:
-        # existing density keys already set above stay as-is
-        if expand_nbr_search and (new_k is not None):
-            dens_dict["expanded_k_neighbor"] = new_k
-            dens_dict["adaptive_bw_nbr_expanded"] = adap_sd_new
-            dens_dict["omega_nbr_expanded"] = pm_new
-            dens_dict["expanded_neighborhood_graph"] = new_K
-            dens_dict["knn_expanded"] = new_K
 
     if not return_densities:
         return W
@@ -835,26 +943,25 @@ class Kernel(BaseEstimator, TransformerMixin):
             )
             self._reset_graph_caches()
         assert self.dens_dict is not None
-        if self.metric != "precomputed" and "knn" in self.dens_dict:
-            self.knn_ = self.dens_dict["knn"]
+        dens_dict = cast(dict, self.dens_dict)
+        if self.metric != "precomputed" and "knn" in dens_dict:
+            self.knn_ = dens_dict["knn"]
         if self.fuzzy:
-            self.sigma_ = self.dens_dict["sigma"]
-            self.rho_ = self.dens_dict["rho"]
+            self.sigma_ = dens_dict["sigma"]
+            self.rho_ = dens_dict["rho"]
             self.umap_sigmas_ = self.sigma_
             self.umap_rhos_ = self.rho_
         elif self.cknn:
-            self._A = self.dens_dict["unweighted_adjacency"]
-            self.adaptive_bw_ = self.dens_dict.get("adaptive_bw")
+            self._A = dens_dict["unweighted_adjacency"]
+            self.adaptive_bw_ = dens_dict.get("adaptive_bw")
         else:
             if self.adaptive_bw:
-                self.adaptive_bw_ = self.dens_dict["adaptive_bw"]
-                self.omega_ = self.dens_dict["omega"]
+                self.adaptive_bw_ = dens_dict["adaptive_bw"]
+                self.omega_ = dens_dict["omega"]
             if self.expand_nbr_search:
-                self.expanded_k_neighbor_ = self.dens_dict["expanded_k_neighbor"]
-                self.adaptive_bw_nbr_expanded_ = self.dens_dict[
-                    "adaptive_bw_nbr_expanded"
-                ]
-                self.omega_nbr_expanded_ = self.dens_dict["omega_nbr_expanded"]
+                self.expanded_k_neighbor_ = dens_dict["expanded_k_neighbor"]
+                self.adaptive_bw_nbr_expanded_ = dens_dict["adaptive_bw_nbr_expanded"]
+                self.omega_nbr_expanded_ = dens_dict["omega_nbr_expanded"]
         return self
 
     def transform(self, X=None):
@@ -897,8 +1004,8 @@ class Kernel(BaseEstimator, TransformerMixin):
         """
         if self._K is None:
             raise ValueError("No kernel matrix has been fitted yet. Call fit() first.")
-        self._A = (self._K > 0).astype(int)
-        self._A = self._A.astype(float)
+        self._A = (self._K > 0).astype(int)  # type: ignore[reportAttributeAccessIssue]
+        self._A = self._A.astype(float)  # type: ignore[reportAttributeAccessIssue]
         return self._A
 
     @property
@@ -1129,16 +1236,14 @@ class Kernel(BaseEstimator, TransformerMixin):
                 raise ValueError(
                     "No kernel matrix has been fitted yet. Call fit() first."
                 )
-            from topo.eval.local_scores import geodesic_distance
+            from topo._compat.scipy_graph import graph_shortest_paths
 
-            SP = geodesic_distance(
+            SP = graph_shortest_paths(
                 self._K,
                 method="D",
                 unweighted=False,
                 directed=False,
                 indices=indices,
-                n_jobs=self.n_jobs,
-                random_state=self.random_state,
             )
             SP = np.asarray(SP, dtype=float)
             if SP.ndim == 1:
@@ -1247,13 +1352,13 @@ class Kernel(BaseEstimator, TransformerMixin):
         Y_arr = Y.toarray() if issparse(Y) else np.asarray(Y)
         Y_imp = Y_arr
         if t is None or t < 0:
-            P_mat = cast(csr_matrix, self._P)
+            P_mat = _ensure_csr_matrix(self._P)
             previous = np.asarray(Y_arr, dtype=float)
             P_power = P_mat.copy()
 
             for i in range(1, int(tmax) + 1):
                 if i > 1:
-                    P_power = cast(csr_matrix, P_power @ P_mat)
+                    P_power = _ensure_csr_matrix(P_power @ P_mat)
                 Y_imp = P_power @ Y_arr
                 error, _ = self._calculate_imputation_error(Y_imp, previous)
 
@@ -1264,13 +1369,13 @@ class Kernel(BaseEstimator, TransformerMixin):
                 previous = np.asarray(Y_imp, dtype=float)
 
         else:
-            P_mat = cast(csr_matrix, self._P)
+            P_mat = _ensure_csr_matrix(self._P)
             t_int = int(t)
             if t_int < 1:
                 return Y_arr
             P_power = P_mat.copy()
             for _ in range(1, t_int):
-                P_power = cast(csr_matrix, P_power @ P_mat)
+                P_power = _ensure_csr_matrix(P_power @ P_mat)
             Y_imp = P_power @ Y_arr
         return Y_imp
 
@@ -1376,11 +1481,11 @@ class Kernel(BaseEstimator, TransformerMixin):
                 _LB = LabelBinarizer()
                 _sample_indicators = _LB.fit_transform(sample_labels)
 
-                if issparse(_sample_indicators):
-                    _sample_indicators_sparse = cast(Any, _sample_indicators)
-                    _sample_indicators_dense = _sample_indicators_sparse.toarray()
-                else:
-                    _sample_indicators_dense = np.asarray(_sample_indicators)
+                _sample_indicators_dense = (
+                    _sample_indicators.toarray()
+                    if issparse(_sample_indicators)
+                    else np.asarray(_sample_indicators)
+                )
 
                 sample_indicators = pd.DataFrame(
                     _sample_indicators_dense,
@@ -1483,10 +1588,12 @@ class Kernel(BaseEstimator, TransformerMixin):
         labels : list of int
             The labels of the connected components.
         """
+        from topo._compat.scipy_graph import graph_connected_components
+
         if target is None:
-            n_components, labels = connected_components(self.K, directed=False)
+            n_components, labels = graph_connected_components(self.K, directed=False)
         else:
-            n_components, labels = connected_components(target, directed=False)
+            n_components, labels = graph_connected_components(target, directed=False)
 
         return n_components, labels
 
@@ -1604,7 +1711,11 @@ class Kernel(BaseEstimator, TransformerMixin):
             degrees = np.asarray(sparserW.sum(axis=1)).ravel()
             sparserL = diags(degrees, 0) - sparserW
 
-            n_sparser_components, _ = connected_components(sparserW, directed=False)
+            from topo._compat.scipy_graph import graph_connected_components
+
+            n_sparser_components, _ = graph_connected_components(
+                sparserW, directed=False
+            )
             if n_sparser_components == 1:
                 break
             elif i == maxiter - 1:

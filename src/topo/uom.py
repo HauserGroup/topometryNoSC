@@ -218,15 +218,16 @@ def find_components(P, random_state=0, consolidate=True, max_passes=100, gamma=0
 
     Returns ``(n_comp, labels)``.
     """
-    from scipy.sparse.csgraph import connected_components
     from scipy.sparse.linalg import eigsh
+
+    from topo._compat.scipy_graph import graph_connected_components
 
     S = _symmetrize_geometric(P)
     n = S.shape[0]
     if S.nnz == 0:
         return 1, np.zeros(n, dtype=int)
 
-    n_cc, cc_labels = connected_components(S, directed=False, return_labels=True)
+    n_cc, cc_labels = graph_connected_components(S, directed=False, return_labels=True)
     if n_cc > 3:
         return n_cc, cc_labels
 
@@ -311,8 +312,9 @@ class UoMMixin:
     # ------------------------------------------------------------------
 
     # Core geometry
-    n: int
+    n: int | None
     verbosity: int
+    random_state: int | np.random.RandomState | None
 
     # kNN / kernel settings
     backend: str
@@ -325,6 +327,7 @@ class UoMMixin:
 
     # Eigendecomposition settings
     n_eigs: int
+    n_eigs_: int | None
     eigensolver: str
     eigen_tol: float
     diff_t: int
@@ -344,10 +347,10 @@ class UoMMixin:
     GraphKernelDict: dict
 
     # Projection
-    projection_methods: list | None
+    projection_methods: list[str]
 
     # Computed state (written by TopOGraph.fit before _fit_uom is called)
-    current_eigenbasis: str
+    current_eigenbasis: str | None
     n_jobs: int
     _knn_Z: Any
     _knn_msZ: Any
@@ -717,6 +720,8 @@ class UoMMixin:
         assert self.uom_knn_msZ_list is not None
         assert self.uom_Kernel_Z_list is not None
         assert self.uom_Kernel_msZ_list is not None
+        if self.n is None:
+            raise ValueError("UoM aggregation requires fitted sample count.")
         n = self.n
 
         total_cols_Z = int(sum(z.shape[1] for z in self.uom_Z_list))

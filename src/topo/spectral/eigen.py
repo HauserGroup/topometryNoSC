@@ -21,6 +21,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import pairwise_distances
 from sklearn.utils import check_random_state
 
+from topo._compat.scipy_graph import graph_connected_components
 from topo.spectral import LE, diffusion_operator, graph_laplacian
 from topo.tpgraph.kernels import Kernel
 
@@ -644,8 +645,8 @@ class EigenDecomposition(BaseEstimator, TransformerMixin, auto_wrap_output_keys=
         else:
             graph = sparse.csr_matrix(np.asarray(X, dtype=float))
 
-        n_components, labels = sparse.csgraph.connected_components(
-            graph, directed=False
+        n_components, labels = graph_connected_components(
+            graph, directed=False, return_labels=True
         )
 
         if n_components > 1:
@@ -718,7 +719,9 @@ def spectral_layout(
     else:
         graph = sparse.csr_matrix(np.asarray(graph, dtype=float))
 
-    n_components, labels = sparse.csgraph.connected_components(graph, directed=False)
+    n_components, labels = graph_connected_components(
+        graph, directed=False, return_labels=True
+    )
 
     if n_components > 1:
         return multi_component_layout(

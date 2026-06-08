@@ -70,7 +70,9 @@ def test_isomap_accepts_precomputed_graph():
         ]
     )
 
-    emb = Isomap(graph, n_components=2, metric="precomputed", n_neighbors=2)
+    emb = Isomap(n_components=2, metric="precomputed", n_neighbors=1).fit_transform(
+        graph
+    )
 
     assert emb.shape[0] == 4
     assert emb.shape[1] <= 2

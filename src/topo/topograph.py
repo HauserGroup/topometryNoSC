@@ -528,15 +528,15 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
                     self.n_eigs_,
                 )
 
-                self.uom_eigenvalues_dm_list, self.uom_eigenvalues_ms_list = [], []
+        self.uom_eigenvalues_dm_list, self.uom_eigenvalues_ms_list = [], []
 
-                if self.uom_enabled:
-                    out = self._fit_uom(X, **kwargs)
-                else:
-                    out = self._fit_global(X, **kwargs)
+        if self.uom_enabled:
+            out = self._fit_uom(X, **kwargs)
+        else:
+            out = self._fit_global(X, **kwargs)
 
-                self._sync_fitted_state_from_caches()
-                return out
+        self._sync_fitted_state_from_caches()
+        return out
 
     # ------------------------------------------------------------------
     # Input validation / setup

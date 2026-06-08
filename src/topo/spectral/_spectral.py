@@ -461,7 +461,7 @@ def LE(
 
 def diffusion_operator(
     W, alpha=1.0, symmetric=False, semi_aniso=False, return_D_inv_sqrt=False
-):
+) -> csr_matrix | tuple[csr_matrix, np.ndarray]:
     """Compute the [diffusion operator](https://doi.org/10.1016/j.acha.2006.04.006).
 
     Parameters

@@ -29,38 +29,6 @@ def _dense_degree(W):
     return np.diag(W.sum(axis=1))
 
 
-def _dense_unnormalized_laplacian(W, return_D=False):
-    D = _dense_degree(W)
-    L = D - W
-    # Return ndarray instead of np.matrix
-    if return_D:
-        return L.A, D
-    else:
-        return L.A
-
-
-def _dense_symmetric_normalized_laplacian(W, return_D=False):
-    D = _dense_degree(W)
-    L = D - W
-    Dinvs = np.diag(1 / np.sqrt(D.diagonal()))
-    # Lsym = D^-1/2 @ L @ D^-1/2 = I - D^-1/2 @ W @ D^-1/2
-    Lsym_norm = Dinvs @ (L @ Dinvs)
-    if return_D:
-        return Lsym_norm, Dinvs
-    else:
-        return Lsym_norm
-
-
-def _dense_normalized_random_walk_laplacian(W, return_D=False):
-    D = _dense_degree(W)
-    # Lr = D^-1@Lr = I - D^-1@W = I - P
-    Lr = np.eye(*W.shape) - (np.diag(1 / D.diagonal()) @ W)
-    if return_D:
-        return Lr, D
-    else:
-        return Lr
-
-
 def _dense_diffusion(W, alpha: float = 0, semi_aniso=False):
     D = _dense_degree(W)
     if alpha > 0:
@@ -119,45 +87,6 @@ def degree(W):
         return _sparse_degree(W)
     else:
         return _dense_degree(W)
-
-
-def _sparse_unnormalized_laplacian(W, return_D=False):
-    D = _sparse_degree(W)
-    L = D - W
-    if return_D:
-        return L, D
-    else:
-        return L
-
-
-def _sparse_symmetrized_normalized_laplacian(W, return_D=False):
-    D = _sparse_degree(W)
-    L = D - W
-    N = np.shape(W)[0]
-    D_tilde = np.ravel(W.sum(axis=1))
-    # D ^-1/2:
-    D_tilde[D_tilde != 0] = 1 / np.sqrt(D_tilde[D_tilde != 0])
-    Dinvs = sparse.csr_matrix((D_tilde, (range(N), range(N))), shape=[N, N])
-    # Lsym = D^-1/2 @ L @ D^-1/2 = I - D^-1/2 @ W @ D^-1/2
-    Lsym_norm = Dinvs.dot(L).dot(Dinvs)
-    if return_D:
-        return Lsym_norm, Dinvs
-    else:
-        return Lsym_norm
-
-
-def _sparse_normalized_random_walk_laplacian(W, return_D=False):
-    N = np.shape(W)[0]
-    D = np.ravel(W.sum(axis=1))
-    # D ^-1:
-    D[D != 0] = 1 / D[D != 0]
-    Dinv = sparse.csr_matrix((D, (range(N), range(N))), shape=[N, N])
-    I = sparse.identity(W.shape[0], dtype="float32")
-    Lr = I - Dinv.dot(W)
-    if return_D:
-        return Lr, Dinv
-    else:
-        return Lr
 
 
 def _sparse_diffusion(W, alpha: float = 0, semi_aniso=False):

@@ -16,13 +16,12 @@ import numba
 import numpy as np
 
 from topo.base import dists as dist
-from topo.utils.umap_utils import tau_rand_int
+from topo.utils.map_utils import tau_rand_int
 
 
 @numba.njit()
 def clip(val):
-    """Standard clamping of a value into a fixed range (in this case -4.0 to
-    4.0)
+    """Clamp a value to fixed range [-4.0, 4.0].
 
     Parameters
     ----------
@@ -31,7 +30,8 @@ def clip(val):
 
     Returns
     -------
-    The clamped value, now fixed to be in the range -4.0 to 4.0.
+    float
+        Clamped value in range [-4.0, 4.0].
     """
     if val > 4.0:
         return 4.0
@@ -251,11 +251,11 @@ def optimize_layout_euclidean(
     densmap=False,
     densmap_kwds={},
 ):
-    """Improve an embedding using stochastic gradient descent to minimize the
-    fuzzy set cross entropy between the 1-skeletons of the high dimensional
-    and low dimensional fuzzy simplicial sets. In practice this is done by
-    sampling edges based on their membership strength (with the (1-p) terms
-    coming from negative sampling similar to word2vec).
+    """Optimize embedding with SGD on fuzzy set cross-entropy.
+
+    Minimizes the fuzzy set cross entropy between the 1-skeletons of the high
+    and low dimensional fuzzy simplicial sets using stochastic gradient descent,
+    with edge sampling based on membership strength and negative sampling.
 
     Parameters
     ----------
@@ -426,11 +426,11 @@ def optimize_layout_generic(
     output_metric_kwds=(),
     verbose=False,
 ):
-    """Improve an embedding using stochastic gradient descent to minimize the
-    fuzzy set cross entropy between the 1-skeletons of the high dimensional
-    and low dimensional fuzzy simplicial sets. In practice this is done by
-    sampling edges based on their membership strength (with the (1-p) terms
-    coming from negative sampling similar to word2vec).
+    """Optimize embedding with SGD on fuzzy set cross-entropy (generic metric).
+
+    Minimizes the fuzzy set cross entropy between the 1-skeletons of the high
+    and low dimensional fuzzy simplicial sets using stochastic gradient descent,
+    with edge sampling based on membership strength and negative sampling.
 
     Parameters
     ----------
@@ -575,11 +575,11 @@ def optimize_layout_inverse(
     output_metric_kwds=(),
     verbose=False,
 ):
-    """Improve an embedding using stochastic gradient descent to minimize the
-    fuzzy set cross entropy between the 1-skeletons of the high dimensional
-    and low dimensional fuzzy simplicial sets. In practice this is done by
-    sampling edges based on their membership strength (with the (1-p) terms
-    coming from negative sampling similar to word2vec).
+    """Optimize embedding with inverse sampling SGD on fuzzy set cross-entropy.
+
+    Minimizes the fuzzy set cross entropy between the 1-skeletons of the high
+    and low dimensional fuzzy simplicial sets using stochastic gradient descent,
+    with edge sampling based on membership strength and negative sampling.
 
     Parameters
     ----------

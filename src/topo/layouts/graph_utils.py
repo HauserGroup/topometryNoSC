@@ -50,7 +50,7 @@ from sklearn.neighbors import KDTree
 from topo._compat.umap import find_umap_ab_params, fuzzy_graph_from_data
 from topo.base import dists as dist
 from topo.spectral.eigen import spectral_layout
-from topo.spectral.umap_layouts import (
+from topo.spectral.map_optimizer import (
     _optimize_layout_euclidean_single_epoch,
     optimize_layout_euclidean,
     optimize_layout_generic,

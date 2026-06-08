@@ -5,7 +5,7 @@ import pytest
 from scipy import sparse
 
 from topo.spectral import _spectral
-from topo.spectral.umap_layouts import clip, rdist
+from topo.spectral.map_optimizer import clip, rdist
 
 
 def _path_graph():

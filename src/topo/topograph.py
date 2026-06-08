@@ -16,9 +16,11 @@ import gc
 import logging
 import warnings
 from collections.abc import Sequence
-from typing import Any
+from os import PathLike
+from typing import Any, cast
 
 import numpy as np
+from numpy.typing import NDArray
 from scipy.sparse import csr_matrix, issparse
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.exceptions import NotFittedError
@@ -47,6 +49,8 @@ VALID_KERNEL_VERSIONS = frozenset(
         "gaussian",
     ]
 )
+
+VALID_LAPLACIAN_TYPES = frozenset(["normalized", "unnormalized", "random_walk"])
 
 # Each entry maps to the Kernel constructor kwargs that *differ* between versions.
 # Common kwargs (metric, n_neighbors, backend, …) are merged at call time.
@@ -110,6 +114,20 @@ _KERNEL_CONFIGS: dict[str, dict[str, Any]] = {
 }
 
 
+def _is_finite_matrix(X) -> bool:
+    """Return True if dense/sparse matrix contains only finite numeric values."""
+    if issparse(X):
+        return bool(np.isfinite(X.data).all())
+    return bool(np.isfinite(np.asarray(X)).all())
+
+
+def _as_csr_or_none(X) -> csr_matrix | None:
+    """Return X as CSR if available, otherwise None."""
+    if X is None:
+        return None
+    return X if isinstance(X, csr_matrix) else csr_matrix(X)
+
+
 # ============================================================================
 # TopOGraph
 # ============================================================================
@@ -138,20 +156,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     * `kNN` = sparse nearest-neighbor distance graph
     * `ID` = intrinsic dimensionality
 
-    **Example**
-    ```python
-    from topo import TopOGraph
-    model = TopOGraph(
-        base_knn=30,
-        graph_knn=30,
-        projection_methods=["MAP", "PaCMAP"],
-        random_state=42,
-    )
-    model.fit(X)
-    Y = model.msTopoMAP
-    Z = model.spectral_scaffold(multiscale=True)
-    ```
-
     Parameters
     ----------
     base_knn : int, default=30
@@ -164,14 +168,14 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         Pre-fitted kernel to reuse; if provided, ``fit`` skips base graph construction.
     laplacian_type : {"normalized", "unnormalized", "random_walk"}, default="normalized"
         Laplacian normalization for spectral computations.
-    base_kernel_version : {"cknn", "fuzzy", "bw_adaptive", "bw_adaptive_alpha_decaying", "bw_adaptive_nbr_expansion", "bw_adaptive_alpha_decaying_nbr_expansion", "gaussian"}, default="bw_adaptive"
+    base_kernel_version : str, default="bw_adaptive"
         Kernel choice for the base graph.
-    graph_kernel_version : {"cknn", "fuzzy", "bw_adaptive", "bw_adaptive_alpha_decaying", "bw_adaptive_nbr_expansion", "bw_adaptive_alpha_decaying_nbr_expansion", "gaussian"}, default="bw_adaptive"
+    graph_kernel_version : str, default="bw_adaptive"
         Kernel choice for scaffold graphs.
     backend : {"hnswlib", "nmslib", "faiss", "annoy", "sklearn"}, default="hnswlib"
         Approximate nearest-neighbor backend.
     base_metric : str, default="cosine"
-        Distance metric for the base kNN graph (e.g., "cosine", "euclidean", or "precomputed").
+        Distance metric for the base kNN graph.
     graph_metric : str, default="euclidean"
         Distance metric for kNN in scaffold space.
     diff_t : int, default=0
@@ -181,8 +185,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     delta : float, default=1.0
         Unitless edge threshold for CkNN kernels.
     cknn_candidate_neighbors : int or None, default=None
-        Number of candidate neighbors tested in approximate CkNN mode. If None,
-        a conservative value larger than the CkNN scale rank is chosen.
+        Number of candidate neighbors tested in approximate CkNN mode.
     cknn_exact : bool, default=False
         If True, threshold all pairwise distances for paper-faithful CkNN
         construction. This is quadratic in samples.
@@ -194,46 +197,31 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         Tolerance for the eigensolver.
     eigensolver : {"arpack", "lobpcg", "amg", "dense"}, default="arpack"
         Solver for eigendecomposition.
-    projection_methods : list of str, default=["MAP", "PaCMAP"]
-        Layouts to compute during ``fit``. Supported strings include "MAP", "PaCMAP", "UMAP", "Isomap", "t-SNE", etc.
+    projection_methods : sequence of str or None, default=None
+        Layouts to compute during ``fit``. If None, uses ["MAP", "PaCMAP"].
     cache : bool, default=True
         Cache kernel / eigen objects in dictionaries for reuse.
     verbosity : int, default=0
-        Logging verbosity (0=silent, 1=major, 2+=layout, 3=debug).
-    random_state : int or RandomState, default 42
+        Logging verbosity.
+    random_state : int, RandomState, or None, default=42
         Random seed.
     id_method : {"fsa", "mle"}, default="fsa"
         Intrinsic-dimensionality estimator for scaffold sizing.
-    id_ks : int or iterable, default 50
+    id_ks : int or iterable, default=50
         Neighborhood sizes for I.D. estimation.
     id_metric : str, default="euclidean"
         Metric for I.D. estimation.
     id_quantile : float, default=0.99
         Quantile of local intrinsic-dimensionality estimates used to choose
-        the scaffold dimensionality. Higher values allocate more eigenvectors.
+        the scaffold dimensionality.
     id_min_components : int, default=128
-        Lower bound on the number of spectral components computed, regardless
-        of the intrinsic-dimensionality estimate.
+        Lower bound on the number of spectral components computed.
     id_max_components : int, default=1024
         Upper bound on the number of spectral components computed.
     id_headroom : float, default=0.5
-        Fractional safety margin added to the intrinsic-dimensionality estimate
-        when selecting the number of spectral components.
-    uom : bool, default False
-        Enable Union-of-Manifolds (block-diagonal scaffolds).
-
-    Fitted Attributes
-    -----------------
-    BaseKernelDict : dict
-        Cached base kernels.
-    EigenbasisDict : dict
-        Cached spectral scaffolds.
-    GraphKernelDict : dict
-        Cached refined graph kernels.
-    ProjectionDict : dict
-        Cached 2-D projections.
-    global_dimensionality : float
-        Global intrinsic dimensionality estimate.
+        Fractional safety margin added to the intrinsic-dimensionality estimate.
+    uom : bool, default=False
+        Enable Union-of-Manifolds block-diagonal scaffolds.
     """
 
     def __init__(
@@ -272,16 +260,16 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         # UoM
         uom: bool = False,
     ):
-        if projection_methods is None:
-            projection_methods = ["MAP", "PaCMAP"]
-
-        # Core config
+        # Keep constructor parameters as attributes for sklearn compatibility.
         self.base_knn = base_knn
         self.graph_knn = graph_knn
         self.min_eigs = min_eigs
-        self.n_eigs = min_eigs
         self.n_jobs = n_jobs
-        self.projection_methods: list[str] = list(projection_methods)
+        self.projection_methods: list[str] = (
+            ["MAP", "PaCMAP"]
+            if projection_methods is None
+            else list(projection_methods)
+        )
         self.base_kernel = base_kernel
         self.base_kernel_version = base_kernel_version
         self.graph_kernel_version = graph_kernel_version
@@ -299,14 +287,8 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.cache = cache
         self.verbosity = verbosity
         self.random_state = random_state
-        uses_cknn = base_kernel_version == "cknn" or graph_kernel_version == "cknn"
-        self.laplacian_type = (
-            "unnormalized"
-            if uses_cknn and laplacian_type == "normalized"
-            else laplacian_type
-        )
+        self.laplacian_type = laplacian_type
 
-        # ID config
         self.id_method = id_method
         self.id_ks = id_ks
         self.id_metric = id_metric
@@ -314,6 +296,20 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.id_min_components = id_min_components
         self.id_max_components = id_max_components
         self.id_headroom = id_headroom
+        self.uom = uom
+
+        # Runtime / derived config.
+        self.n_eigs = min_eigs
+
+        # If CkNN is used with a normalized Laplacian, use unnormalized by
+        # default. This preserves the intended binary graph semantics while
+        # still allowing explicit non-default laplacian_type choices.
+        uses_cknn = base_kernel_version == "cknn" or graph_kernel_version == "cknn"
+        self._effective_laplacian_type = (
+            "unnormalized"
+            if uses_cknn and laplacian_type == "normalized"
+            else laplacian_type
+        )
 
         # Fitted state
         self.n: int | None = None
@@ -333,8 +329,8 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.global_dimensionality: int | float | None = None
         self.local_dimensionality: np.ndarray | None = None
         self._id_details: dict[str, Any] = {"mle": None, "fsa": None}
-        self._scaffold_components_dm = None
-        self._scaffold_components_ms = None
+        self._scaffold_components_dm: int | None = None
+        self._scaffold_components_ms: int | None = None
 
         # Dual-scaffold products
         self._knn_msZ: csr_matrix | None = None
@@ -343,8 +339,8 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self._kernel_Z: Kernel | None = None
 
         # MAP snapshots
-        self.msTopoMAP_snapshots = []
-        self.TopoMAP_snapshots = []
+        self.msTopoMAP_snapshots: list[Any] = []
+        self.TopoMAP_snapshots: list[Any] = []
 
         # Verbosity toggles (derived)
         self.bases_graph_verbose = False
@@ -357,7 +353,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.ProjectionDict: dict[str, np.ndarray] = {}
         self.LocalScoresDict: dict[str, Any] = {}
         self.RiemannMetricDict: dict[str, Any] = {}
-        self.runtimes = {}
+        self.runtimes: dict[str, Any] = {}
 
         # UoM state (from mixin)
         self._init_uom_state()
@@ -366,13 +362,15 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     # Representation
     # ------------------------------------------------------------------
 
-    def __repr__(self, N_CHAR_MAX=700):
+    def __repr__(self, N_CHAR_MAX: int = 700) -> str:
         """Return a short summary of the fitted state and active scaffold."""
         if self.n is None:
             return "TopOGraph (not fitted)"
+
         parts = [f"TopOGraph with {self.n} samples"]
         if self.m is not None:
             parts[0] += f" × {self.m} features"
+
         for label, d in [
             ("Base Kernels", self.BaseKernelDict),
             ("Eigenbases", self.EigenbasisDict),
@@ -380,28 +378,32 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             ("Projections", self.ProjectionDict),
         ]:
             if d:
-                parts.append(f"  {label}: {', '.join(d.keys())}")
-        return "\n".join(parts)
+                parts.append(f"  {label}: {', '.join(map(str, d.keys()))}")
+
+        out = "\n".join(parts)
+        if len(out) > N_CHAR_MAX:
+            return out[: max(0, N_CHAR_MAX - 3)] + "..."
+        return out
 
     # ------------------------------------------------------------------
     # Backend / random-state helpers
     # ------------------------------------------------------------------
 
-    def _parse_backend(self):
+    def _parse_backend(self) -> None:
         from topo._optional import best_ann_backend
 
         self._backend_resolved = best_ann_backend(self.backend)
 
-    def _parse_random_state(self):
+    def _parse_random_state(self) -> None:
         if self.random_state is None:
             self._random_state_resolved = np.random.RandomState()
-        elif isinstance(self.random_state, int):
-            self._random_state_resolved = np.random.RandomState(self.random_state)
+        elif isinstance(self.random_state, (int, np.integer)):
+            self._random_state_resolved = np.random.RandomState(int(self.random_state))
         else:
             self._random_state_resolved = self.random_state
 
     # ------------------------------------------------------------------
-    # Data-driven kernel builder (Phase 3)
+    # Data-driven kernel builder
     # ------------------------------------------------------------------
 
     def _build_kernel(
@@ -416,25 +418,42 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         base=True,
         data_for_expansion=None,
     ) -> tuple[Kernel, dict[str, Kernel]]:
-        """
-        Build a :class:`Kernel` from a kNN graph and a named *kernel_version*.
+        """Build a :class:`Kernel` from a kNN graph and a named kernel version."""
+        if kernel_version not in VALID_KERNEL_VERSIONS:
+            raise ValueError(f"Invalid kernel_version: {kernel_version}")
 
-        Returns ``(kernel, results_dict)``.
-        """
         kernel_key = f"{prefix}{kernel_version}{suffix}"
         if kernel_key in results_dict:
             return results_dict[kernel_key], results_dict
 
+        if knn is None:
+            raise ValueError("knn must not be None.")
+
         cfg = _KERNEL_CONFIGS[kernel_version].copy()
 
-        uses_raw_data = cfg.get("expand_nbr_search") or kernel_version == "cknn"
-        # Expansion versions and CkNN need the original data + correct metric.
+        uses_raw_data = bool(cfg.get("expand_nbr_search")) or kernel_version == "cknn"
+
+        # Expansion versions and CkNN need original data + correct metric, except
+        # when the metric is explicitly precomputed and the kNN graph itself is
+        # the intended input.
         if uses_raw_data:
             metric = self.base_metric if base else self.graph_metric
-            if data_for_expansion is None:
-                raise ValueError(
-                    f"data_for_expansion is required for kernel version '{kernel_version}'."
-                )
+
+            if metric == "precomputed":
+                fit_input = knn
+            else:
+                if data_for_expansion is None:
+                    raise ValueError(
+                        "data_for_expansion is required for kernel version "
+                        f"'{kernel_version}' with metric='{metric}'."
+                    )
+                if data_for_expansion.shape[0] != knn.shape[0]:
+                    raise ValueError(
+                        "data_for_expansion must have the same number of rows "
+                        "as the kNN graph."
+                    )
+                fit_input = data_for_expansion
+
             if cfg.get("expand_nbr_search") and metric == "precomputed":
                 raise ValueError(
                     f"kernel version '{kernel_version}' expands neighbor search and "
@@ -442,21 +461,13 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
                     "metric='precomputed'. Use a non-expansion kernel version or pass "
                     "raw data."
                 )
-            if metric == "precomputed":
-                fit_input = knn
-            elif data_for_expansion.shape[0] != knn.shape[0]:
-                raise ValueError(
-                    "data_for_expansion must have the same number of rows as the kNN graph."
-                )
-            else:
-                fit_input = data_for_expansion
         else:
             metric = "precomputed"
             fit_input = knn
 
-        # Gaussian uses self.sigma
         if kernel_version == "gaussian":
             cfg["sigma"] = self.sigma
+
         if kernel_version == "cknn":
             cfg["cknn_delta"] = self.delta
             cfg["cknn_candidate_neighbors"] = self.cknn_candidate_neighbors
@@ -464,11 +475,11 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
         kernel = Kernel(
             metric=metric,
-            n_neighbors=n_neighbors,
+            n_neighbors=int(n_neighbors),
             pairwise=False,
             backend=self._backend_resolved,
             n_jobs=self._n_jobs_effective,
-            laplacian_type=self.laplacian_type,
+            laplacian_type=self._effective_laplacian_type,
             semi_aniso=False,
             anisotropy=1.0,
             cache_input=False,
@@ -478,12 +489,14 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         ).fit(fit_input)
 
         gc.collect()
+
         if not low_memory:
             results_dict[kernel_key] = kernel
+
         return kernel, results_dict
 
     # ------------------------------------------------------------------
-    # Intrinsic-dimension sizing
+    # Fit orchestration
     # ------------------------------------------------------------------
 
     def fit(self, X=None, **kwargs):
@@ -500,34 +513,76 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self._build_base_kernel(X, **kwargs)
 
         if self.base_metric != "precomputed":
-            sizing_X = X
-            if sizing_X is None:
-                if self.base_kernel is None or self.base_kernel.X is None:
-                    raise ValueError("Input data is required for automated sizing.")
-                sizing_X = self.base_kernel.X
+            sizing_X = self._resolve_sizing_input(X)
             self._automated_sizing(sizing_X)
+
             if self.verbosity >= 1:
                 logger.info(
-                    f"Automated sizing → target components: {self._scaffold_components_ms} "
-                    f"(n_eigs_={self.n_eigs_})"
+                    "Automated sizing → target components: %s (n_eigs_=%s)",
+                    self._scaffold_components_ms,
+                    self.n_eigs_,
                 )
 
-        self.uom_eigenvalues_dm_list, self.uom_eigenvalues_ms_list = [], []
+                self.uom_eigenvalues_dm_list, self.uom_eigenvalues_ms_list = [], []
 
-        if self.uom_enabled:
-            return self._fit_uom(X, **kwargs)
+                if self.uom_enabled:
+                    return self._fit_uom(X, **kwargs)
 
-        return self._fit_global(X, **kwargs)
+                return self._fit_global(X, **kwargs)
 
-    # -- Stage helpers --
+    # ------------------------------------------------------------------
+    # Input validation / setup
+    # ------------------------------------------------------------------
 
-    def _validate_inputs(self, X):
+    def _validate_inputs(self, X) -> None:
         if self.base_kernel_version not in VALID_KERNEL_VERSIONS:
             raise ValueError(f"Invalid base_kernel_version: {self.base_kernel_version}")
         if self.graph_kernel_version not in VALID_KERNEL_VERSIONS:
             raise ValueError(
                 f"Invalid graph_kernel_version: {self.graph_kernel_version}"
             )
+        if self.laplacian_type not in VALID_LAPLACIAN_TYPES:
+            raise ValueError(
+                f"laplacian_type must be one of {sorted(VALID_LAPLACIAN_TYPES)}."
+            )
+
+        for name in (
+            "base_knn",
+            "graph_knn",
+            "min_eigs",
+            "id_min_components",
+            "id_max_components",
+        ):
+            value = int(getattr(self, name))
+            if value < 1:
+                raise ValueError(f"{name} must be >= 1.")
+
+        if int(self.id_min_components) > int(self.id_max_components):
+            raise ValueError("id_min_components must be <= id_max_components.")
+
+        if not (0.0 < float(self.id_quantile) <= 1.0):
+            raise ValueError("id_quantile must be in the interval (0, 1].")
+
+        if float(self.id_headroom) < 0.0:
+            raise ValueError("id_headroom must be non-negative.")
+
+        if int(self.diff_t) < 0:
+            raise ValueError("diff_t must be non-negative.")
+
+        if float(self.sigma) <= 0.0:
+            raise ValueError("sigma must be positive.")
+
+        if float(self.delta) <= 0.0:
+            raise ValueError("delta must be positive for CkNN.")
+
+        if float(self.eigen_tol) < 0.0:
+            raise ValueError("eigen_tol must be non-negative.")
+
+        if (
+            self.cknn_candidate_neighbors is not None
+            and int(self.cknn_candidate_neighbors) < 1
+        ):
+            raise ValueError("cknn_candidate_neighbors must be >= 1.")
 
         if X is None:
             if self.base_kernel is None:
@@ -543,85 +598,67 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         if n_features < 1:
             raise ValueError("X must contain at least 1 feature.")
 
-        if self.base_metric == "precomputed":
-            if n_samples != n_features:
-                raise ValueError(
-                    "When base_metric='precomputed', X must be a square "
-                    "(n_samples, n_samples) sparse or dense graph/distance matrix."
-                )
-        else:
-            if issparse(X):
-                if not np.isfinite(X.data).all():
-                    raise ValueError("Sparse X contains NaN or infinite values.")
-            else:
-                X_arr = np.asarray(X)
-                if not np.isfinite(X_arr).all():
-                    raise ValueError("X contains NaN or infinite values.")
+        if not _is_finite_matrix(X):
+            raise ValueError("X contains NaN or infinite values.")
+
+        if self.base_metric == "precomputed" and n_samples != n_features:
+            raise ValueError(
+                "When base_metric='precomputed', X must be a square "
+                "(n_samples, n_samples) sparse or dense graph/distance matrix."
+            )
 
         for name in ("base_knn", "graph_knn"):
             k = int(getattr(self, name))
-            if k < 1:
-                raise ValueError(f"{name} must be >= 1.")
             if k >= n_samples:
                 raise ValueError(
                     f"{name}={k} must be smaller than n_samples={n_samples}."
                 )
-        if self.delta <= 0:
-            raise ValueError("delta must be positive for CkNN.")
+
         if self.cknn_candidate_neighbors is not None:
             candidate_k = int(self.cknn_candidate_neighbors)
-            if candidate_k < 1:
-                raise ValueError("cknn_candidate_neighbors must be >= 1.")
             if candidate_k >= n_samples:
                 raise ValueError(
                     "cknn_candidate_neighbors must be smaller than n_samples."
                 )
 
         max_eigs = max(1, n_samples - 2)
-        if self.n_eigs > max_eigs:
+        if int(self.n_eigs) > max_eigs:
             self.n_eigs_ = max_eigs
-            warnings.warn(f"Clamped n_eigs to {max_eigs} (n_samples={n_samples})")
+            warnings.warn(
+                f"Clamped n_eigs to {max_eigs} (n_samples={n_samples})",
+                stacklevel=2,
+            )
         else:
             self.n_eigs_ = int(self.n_eigs)
 
-    def _setup_environment(self):
+    def _setup_environment(self) -> None:
         from topo._logging import configure
 
         configure(self.verbosity)
         self._parse_backend()
         self._parse_random_state()
         self._n_jobs_effective = self.n_jobs
+
         if self.n_jobs == -1:
             try:
                 from joblib import cpu_count
 
                 self._n_jobs_effective = cpu_count()
             except Exception:
-                pass
+                logger.debug("Could not resolve cpu_count(); keeping n_jobs=-1.")
+
         if self.n_eigs_ is None:
             self.n_eigs_ = int(self.n_eigs)
+
         self.layout_verbose = self.verbosity >= 2
         self.bases_graph_verbose = self.verbosity >= 3
 
+    # ------------------------------------------------------------------
+    # Scaffold access
+    # ------------------------------------------------------------------
+
     def spectral_scaffold(self, multiscale: bool = True) -> np.ndarray | csr_matrix:
-        """Return spectral scaffold coordinates.
-
-        Parameters
-        ----------
-        multiscale : bool, default=True
-            If True, return the multiscale diffusion-map scaffold. If False,
-            return the fixed-time diffusion-map scaffold.
-
-        Returns
-        -------
-        Z : np.ndarray of shape (n_samples, n_components)
-            Spectral coordinates used to build refined graph operators and layouts.
-
-        Raises
-        ------
-        AttributeError
-            If called before `fit`.
-        """
+        """Return spectral scaffold coordinates."""
         if self.uom_enabled:
             arr = self.msZ_uom if multiscale else self.Z_uom
             if arr is None:
@@ -629,28 +666,19 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
                     "UoM scaffold not available. Call .fit(X, uom=True)."
                 )
             return arr
+
         key = f"{'msDM' if multiscale else 'DM'} with {self.base_kernel_version}"
         if key not in self.EigenbasisDict:
             raise AttributeError("Scaffold not found. Call .fit() first.")
         return self.EigenbasisDict[key].transform(X=None)
 
     # ------------------------------------------------------------------
-    # Properties (public API)
+    # Properties
     # ------------------------------------------------------------------
 
     @property
     def eigenvalues(self) -> np.ndarray | dict[str, Any]:
-        """Eigenvalues of the active spectral scaffold.
-
-        For diffusion maps (DM/msDM), large values (near 1) indicate smooth,
-        globally persistent geometric modes, while values near 0 indicate local noise.
-        In UoM mode, returns a dictionary containing the eigenvalues per component.
-
-        Returns
-        -------
-        evals : ndarray or dict
-            The eigenvalues array, or a dict in UoM mode.
-        """
+        """Eigenvalues of the active spectral scaffold."""
         if getattr(self, "uom_enabled", False) and self.uom_eigenvalues_ms_list:
             mode = getattr(self, "_uom_active_mode", "msDM")
             per_comp = (
@@ -658,24 +686,18 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
                 if mode == "msDM"
                 else self.uom_eigenvalues_dm_list
             )
-            sizes = [int(ix.size) for ix in (self.uom_components_ or [])]
+            comps = getattr(self, "uom_components_", None) or []
+            sizes = [int(ix.size) for ix in comps]
             return {"mode": mode, "per_component": per_comp, "component_sizes": sizes}
+
         if self.current_eigenbasis is None:
             raise AttributeError("Eigenvalues unavailable. Call .fit() first.")
+
         return self.EigenbasisDict[self.current_eigenbasis].eigenvalues
 
     @property
     def knn_msZ(self) -> csr_matrix:
-        """The k-nearest-neighbors graph built in the msDM scaffold space.
-
-        Represents the refined neighborhood structure after multiscale spectral
-        denoising. Used to build the final projection layout.
-
-        Returns
-        -------
-        knn : scipy.sparse.csr_matrix
-            The sparse distance matrix.
-        """
+        """The k-nearest-neighbors graph built in the msDM scaffold space."""
         if self.uom_enabled and self.knn_msZ_uom is not None:
             return csr_matrix(self.knn_msZ_uom)
         if self._knn_msZ is None:
@@ -684,16 +706,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def knn_Z(self) -> csr_matrix:
-        """The k-nearest-neighbors graph built in the fixed-time DM scaffold space.
-
-        Represents the refined neighborhood structure after fixed-time spectral
-        denoising.
-
-        Returns
-        -------
-        knn : scipy.sparse.csr_matrix
-            The sparse distance matrix.
-        """
+        """The k-nearest-neighbors graph built in the fixed-time DM scaffold space."""
         if self.uom_enabled and self.knn_Z_uom is not None:
             return csr_matrix(self.knn_Z_uom)
         if self._knn_Z is None:
@@ -702,26 +715,12 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def P_of_msZ(self) -> csr_matrix:
-        """The diffusion operator (Markov matrix) on the msDM scaffold.
-
-        Captures the random walk transition probabilities on the refined
-        multiscale spectral manifold.
-
-        Returns
-        -------
-        P : scipy.sparse.csr_matrix
-            The sparse Markov transition matrix.
-        """
+        """The diffusion operator on the msDM scaffold."""
         if self.uom_enabled and self.P_of_msZ_uom is not None:
-            return (
-                self.P_of_msZ_uom
-                if isinstance(self.P_of_msZ_uom, csr_matrix)
-                else csr_matrix(self.P_of_msZ_uom)
-            )
+            return csr_matrix(self.P_of_msZ_uom)
         if self._kernel_msZ is None:
             raise AttributeError("P_of_msZ unavailable. Call .fit() first.")
-        P = self._kernel_msZ.P
-        return P if isinstance(P, csr_matrix) else csr_matrix(P)
+        return csr_matrix(self._kernel_msZ.P)
 
     @P_of_msZ.setter
     def P_of_msZ(self, value) -> None:
@@ -729,23 +728,12 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def P_of_Z(self) -> csr_matrix:
-        """The diffusion operator (Markov matrix) on the fixed-time DM scaffold.
-
-        Returns
-        -------
-        P : scipy.sparse.csr_matrix
-            The sparse Markov transition matrix.
-        """
+        """The diffusion operator on the fixed-time DM scaffold."""
         if self.uom_enabled and self.P_of_Z_uom is not None:
-            return (
-                self.P_of_Z_uom
-                if isinstance(self.P_of_Z_uom, csr_matrix)
-                else csr_matrix(self.P_of_Z_uom)
-            )
+            return csr_matrix(self.P_of_Z_uom)
         if self._kernel_Z is None:
             raise AttributeError("P_of_Z unavailable. Call .fit() first.")
-        P = self._kernel_Z.P
-        return P if isinstance(P, csr_matrix) else csr_matrix(P)
+        return csr_matrix(self._kernel_Z.P)
 
     @P_of_Z.setter
     def P_of_Z(self, value) -> None:
@@ -753,16 +741,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def knn_X(self) -> csr_matrix:
-        """The base k-nearest-neighbors graph in the original input space.
-
-        Contains the raw neighbor distances before any density correction
-        or spectral decomposition is applied.
-
-        Returns
-        -------
-        knn : scipy.sparse.csr_matrix
-            The sparse distance matrix.
-        """
+        """The base k-nearest-neighbors graph in the original input space."""
         if self.uom_enabled and self.knn_X_uom is not None:
             return csr_matrix(self.knn_X_uom)
         if self.base_knn_graph is None:
@@ -771,35 +750,16 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def P_of_X(self) -> csr_matrix:
-        """The base diffusion operator on the original input space.
-
-        The density-corrected Markov transition matrix from which the
-        spectral scaffolds (eigenbases) are initially decomposed.
-
-        Returns
-        -------
-        P : scipy.sparse.csr_matrix
-            The sparse Markov transition matrix.
-        """
+        """The base diffusion operator on the original input space."""
         if self.uom_enabled and self.P_of_X_uom is not None:
             return csr_matrix(self.P_of_X_uom)
         if self.base_kernel is None:
             raise AttributeError("P_of_X unavailable. Call .fit() first.")
-        return self.base_kernel.P
+        return csr_matrix(self.base_kernel.P)
 
     @property
     def global_id(self) -> float:
-        """The estimated global intrinsic dimensionality of the dataset.
-
-        A scalar value representing the effective number of continuous dimensions
-        required to represent the data manifold, computed using the specified
-        `id_method` (e.g., MLE or FSA).
-
-        Returns
-        -------
-        dim : float
-            The global intrinsic dimensionality estimate.
-        """
+        """The estimated global intrinsic dimensionality of the dataset."""
         if self.global_dimensionality is None:
             raise NotFittedError(
                 "Global intrinsic dimensionality is unavailable. Call fit(X) first "
@@ -809,21 +769,12 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def intrinsic_dim(self) -> dict[str, Any]:
-        """Structured intrinsic-dimensionality information.
-
-        Returns a dictionary containing the method used, the global ID estimate,
-        and per-sample local ID estimates. Useful for identifying regions of
-        varying geometric complexity.
-
-        Returns
-        -------
-        info : dict
-            Dictionary with keys 'method', 'global', 'local', and 'details'.
-        """
+        """Structured intrinsic-dimensionality information."""
         if self.global_dimensionality is None and self.local_dimensionality is None:
             raise NotFittedError(
                 "Intrinsic-dimensionality estimates are unavailable. Call fit(X) first."
             )
+
         det = (self._id_details or {}).get(self.id_method)
         return {
             "method": self.id_method,
@@ -837,73 +788,36 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @property
     def TopoMAP(self) -> np.ndarray:
-        """2-D MAP layout optimized on the fixed-time DM refined graph.
-
-        A low-dimensional visualization preserving the fuzzy simplicial set
-        cross-entropy of the DM spectral scaffold.
-
-        Returns
-        -------
-        Y : np.ndarray of shape (n_samples, 2)
-            The fitted two-dimensional embedding.
-        """
+        """2-D MAP layout optimized on the fixed-time DM refined graph."""
         return self._get_projection("MAP", multiscale=False)
 
     @property
     def msTopoMAP(self) -> np.ndarray:
-        """2-D MAP layout optimized on the msDM refined graph.
-
-        A low-dimensional visualization preserving the fuzzy simplicial set
-        cross-entropy of the multiscale spectral scaffold. This is typically
-        the default and most robust representation.
-
-        Returns
-        -------
-        Y : np.ndarray of shape (n_samples, 2)
-            The fitted two-dimensional embedding.
-        """
+        """2-D MAP layout optimized on the msDM refined graph."""
         return self._get_projection("MAP", multiscale=True)
 
     @property
     def TopoPaCMAP(self) -> np.ndarray:
-        """2-D PaCMAP layout optimized on the fixed-time DM refined graph.
-
-        A low-dimensional visualization preserving the pairwise relationships
-        of the DM spectral scaffold.
-
-        Returns
-        -------
-        Y : np.ndarray of shape (n_samples, 2)
-            The fitted two-dimensional embedding.
-        """
+        """2-D PaCMAP layout optimized on the fixed-time DM refined graph."""
         return self._get_projection("PaCMAP", multiscale=False)
 
     @property
     def msTopoPaCMAP(self) -> np.ndarray:
-        """2-D PaCMAP layout optimized on the msDM refined graph.
-
-        A low-dimensional visualization preserving the pairwise relationships
-        of the multiscale spectral scaffold.
-
-        Returns
-        -------
-        Y : np.ndarray of shape (n_samples, 2)
-            The fitted two-dimensional embedding.
-        """
+        """2-D PaCMAP layout optimized on the msDM refined graph."""
         return self._get_projection("PaCMAP", multiscale=True)
 
     # ------------------------------------------------------------------
-    # Analysis convenience wrappers (delegate to topo.analysis)
+    # Analysis convenience wrappers
     # ------------------------------------------------------------------
 
-    def _select_P_operator(self, which: str = "msZ"):
+    def _select_P_operator(self, which: str = "msZ") -> csr_matrix:
         """Resolve a fitted diffusion operator by name."""
-        which = str(which).lower()
-        if which == "x":
+        which_norm = str(which).lower()
+        if which_norm == "x":
             P = self.P_of_X
-        elif which == "z":
+        elif which_norm == "z":
             P = self.P_of_Z
-        elif which == "msz":
+        elif which_norm == "msz":
             P = self.P_of_msZ
         else:
             raise ValueError("`which` must be one of {'X', 'Z', 'msZ'}.")
@@ -913,88 +827,98 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
                 f"Diffusion operator '{which}' is not available. "
                 "Call fit() first, or choose an operator that was computed."
             )
-        return P
+        return csr_matrix(P)
+
+    def _resolve_sizing_input(self, X) -> NDArray[Any] | csr_matrix:
+        """Resolve input data used for automated scaffold sizing."""
+        if X is not None:
+            return cast(NDArray[Any] | csr_matrix, X)
+
+        if self.base_kernel is None:
+            raise ValueError("Input data is required for automated sizing.")
+
+        kernel_X = getattr(self.base_kernel, "X", None)
+        if kernel_X is None:
+            raise ValueError("Input data is required for automated sizing.")
+
+        return cast(NDArray[Any] | csr_matrix, kernel_X)
+
+    def _resolve_optional_operator(self, op, *, default_name: str | None = None):
+        """Resolve None/string/operator inputs used by analysis wrappers."""
+        if op is None:
+            return None
+        if isinstance(op, str):
+            return self._select_P_operator(op)
+        return op
 
     def spectral_selectivity(
         self,
         Z=None,
         evals=None,
-        multiscale=True,
-        use_scaffold_components=True,
+        multiscale: bool = True,
+        use_scaffold_components: bool = True,
         smooth_P=None,
-        smooth_t=0,
-        out_prefix="spectral",
-        return_dict=True,
+        smooth_t: int = 0,
+        out_prefix: str = "spectral",
+        return_dict: bool = True,
         **kwargs,
     ):
-        """Per-sample spectral selectivity (delegates to ``topo.analysis``).
-
-        Returns
-        -------
-        result : dict or None
-            Dictionary containing selectivity scores.
-        """
+        """Per-sample spectral selectivity delegated to ``topo.analysis``."""
         if Z is None:
             Z = self.spectral_scaffold(multiscale=multiscale)
-        Z = np.asarray(Z)
-        if use_scaffold_components and self._scaffold_components_ms is not None:
-            Z = Z[:, : int(self._scaffold_components_ms)]
+
+        Z_arr = np.asarray(Z)
+        if Z_arr.ndim != 2:
+            raise ValueError("Z must be a 2-D scaffold matrix.")
+
+        if use_scaffold_components:
+            n_keep = (
+                self._scaffold_components_ms
+                if multiscale
+                else self._scaffold_components_dm
+            )
+            if n_keep is not None:
+                Z_arr = Z_arr[:, : min(int(n_keep), Z_arr.shape[1])]
+
         if evals is None:
             key = f"{'msDM' if multiscale else 'DM'} with {self.base_kernel_version}"
+            if key not in self.EigenbasisDict:
+                raise AttributeError("Eigenbasis unavailable. Call .fit() first.")
             eigenbasis = self.EigenbasisDict[key]
             ev = np.asarray(eigenbasis.eigenvalues)
+
+            # eigenvalues often include the trivial first mode; if present, drop it.
             evals = (
-                ev[1 : Z.shape[1] + 1]
-                if ev.shape[0] >= Z.shape[1] + 1
-                else ev[: Z.shape[1]]
+                ev[1 : Z_arr.shape[1] + 1]
+                if ev.shape[0] >= Z_arr.shape[1] + 1
+                else ev[: Z_arr.shape[1]]
             )
 
-        P = self._select_P_operator(smooth_P) if smooth_P else None
+        P = self._resolve_optional_operator(smooth_P)
+
         result = _analysis.spectral_selectivity(
-            Z,
+            Z_arr,
             evals,
             P=P,
             smooth_t=smooth_t,
-            **kwargs,  # type: ignore
+            **kwargs,
         )
 
         for k, v in result.items():
             self.LocalScoresDict[f"{out_prefix}_{k}"] = v
+
         return result if return_dict else None
 
     def filter_signal(self, signal, t: int = 8, which: str = "msZ"):
-        """Diffusion-filter a 1-D signal.
-
-        Returns
-        -------
-        filtered_signal : ndarray
-            The smoothed signal.
-        """
+        """Diffusion-filter a one-dimensional signal."""
         return _analysis.filter_signal(signal, self._select_P_operator(which), t)
 
     def impute(self, X, t: int = 8, which: str = "msZ", **kwargs):
-        """Diffusion-based imputation.
-
-        Returns
-        -------
-        imputed_X : ndarray
-            The imputed matrix.
-        """
+        """Diffusion-based imputation."""
         return _analysis.impute(X, self._select_P_operator(which), t, **kwargs)
 
     def riemann_diagnostics(self, Y=None, L=None, diffusion_op=None, **kwargs):
-        """Riemann metric + deformation scalars.
-
-        Notes
-        -----
-        This method may require O(n_samples^2) memory if all-pairs distances are
-        materialized internally. For large datasets, use landmark mode or avoid.
-
-        Returns
-        -------
-        metrics : dict
-            Dictionary of computed Riemannian metrics and deformation fields.
-        """
+        """Riemann metric + deformation scalars."""
         if Y is None:
             for prop in ("TopoMAP", "msTopoMAP", "TopoPaCMAP", "msTopoPaCMAP"):
                 try:
@@ -1002,15 +926,19 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
                     break
                 except AttributeError:
                     continue
+
             if Y is None:
                 Y = self.project(projection_method="MAP", multiscale=False)
+
         if L is None:
             if self.base_kernel is None:
                 raise ValueError(
                     "No base kernel available. Call fit() before riemann_diagnostics()."
                 )
             L = self.base_kernel.L
-        P = self._select_P_operator(diffusion_op) if diffusion_op else None
+
+        P = self._resolve_optional_operator(diffusion_op)
+
         result = _analysis.riemann_diagnostics(Y, L, diffusion_op=P, **kwargs)
         self.RiemannMetricDict["last"] = result
         return result
@@ -1019,18 +947,16 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     # I/O
     # ------------------------------------------------------------------
 
-    def save(self, filename: str = "topograph.pkl", remove_base_class: bool = True):
+    def save(
+        self,
+        filename: str | PathLike[str] = "topograph.pkl",
+        remove_base_class: bool = True,
+    ) -> None:
         """Save this TopOGraph to a pickle file."""
         save_topograph(self, filename, remove_base_class)
 
     def spectral_layout(self, *args: Any, **kwargs: Any) -> Any:
-        """Disambiguate inherited ``spectral_layout`` implementations.
-
-        Multiple base classes expose an attribute with this name. We delegate
-        explicitly to :class:`LayoutBuildMixin` to preserve the current MRO
-        behavior while removing ambiguity for static analysis and future
-        maintenance.
-        """
+        """Disambiguate inherited ``spectral_layout`` implementations."""
         return LayoutBuildMixin.spectral_layout(self, *args, **kwargs)
 
 
@@ -1040,8 +966,10 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
 
 def save_topograph(
-    tg: TopOGraph, filename: str = "topograph.pkl", remove_base_class: bool = True
-):
+    tg: TopOGraph,
+    filename: str | PathLike[str] = "topograph.pkl",
+    remove_base_class: bool = True,
+) -> None:
     """Save a TopOGraph object to a pickle file without mutating the live object."""
     import pickle
 
@@ -1049,6 +977,7 @@ def save_topograph(
         raise TypeError("`tg` must be a TopOGraph instance.")
 
     obj = copy.copy(tg)
+
     if remove_base_class:
         obj.base_nbrs_class = None
 
@@ -1056,10 +985,10 @@ def save_topograph(
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
 
     if getattr(tg, "verbosity", 0) >= 1:
-        logger.info(f"TopOGraph saved at {filename}")
+        logger.info("TopOGraph saved at %s", filename)
 
 
-def load_topograph(filename: str) -> TopOGraph:
+def load_topograph(filename: str | PathLike[str]) -> TopOGraph:
     """Load a TopOGraph from a trusted pickle file.
 
     Pickle can execute arbitrary code while loading. Only load files from a
@@ -1069,6 +998,8 @@ def load_topograph(filename: str) -> TopOGraph:
 
     with open(filename, "rb") as f:
         obj = pickle.load(f)
+
     if not isinstance(obj, TopOGraph):
         raise TypeError(f"Pickle did not contain a TopOGraph: {type(obj)!r}")
+
     return obj

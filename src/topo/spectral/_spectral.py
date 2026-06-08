@@ -14,7 +14,6 @@ Laplacian-eigenmaps (``LE``) layout that the rest of the package builds on.
 
 import logging
 from typing import Any, cast
-from warnings import warn
 
 import numpy as np
 from scipy import sparse
@@ -318,7 +317,7 @@ def graph_laplacian(W, laplacian_type="normalized", return_D=False):
         The graph adjacency or affinity matrix. Assumed to be symmetric and with zero diagonal.
         No further symmetrization is performed, so make sure to symmetrize W if necessary (usually done additively with W = (W + W.T)/2 ).
 
-    laplacian_type : str, default='random_walk'
+    laplacian_type : str, default='normalized'
         The type of laplacian to use. Can be 'unnormalized', 'normalized' or 'random_walk'.
 
     return_D : bool, default=False
@@ -436,8 +435,8 @@ def LE(
                 tol=1e-8,
             )
     except sparse.linalg.ArpackError:
-        warn(
-            "WARNING: spectral decomposition FAILED! This is likely due to too small an eigengap. Consider\n"
+        logger.warning(
+            "Spectral decomposition FAILED! This is likely due to too small an eigengap. Consider "
             "adding some noise or jitter to your data."
         )
         return None
@@ -474,7 +473,7 @@ def diffusion_operator(
     alpha : float, default=1.0
         Anisotropy to apply. 'Alpha' in the diffusion maps literature.
 
-    symmetric : bool, default=True
+    symmetric : bool, default=False
         Whether to use a symmetric version of the diffusion operator. This is particularly useful to yield a symmetric operator
         when using anisotropy (alpha > 0), as the diffusion operator P would be assymetric otherwise, which can be problematic
         during matrix decomposition. Eigenvalues are the same of the assymetric version, and the eigenvectors of the original assymetric
@@ -544,9 +543,9 @@ def spectral_clustering(
     ----------
     init : array-like of shape (n_samples, n_clusters)
         The embedding space of the samples.
-    max_svd_restarts : int, default=30
+    max_svd_restarts : int, default=50
         Maximum number of attempts to restart SVD if convergence fails
-    n_iter_max : int, default=30
+    n_iter_max : int, default=50
         Maximum number of iterations to attempt in rotation and partition
         matrix search if machine precision convergence is not reached
     random_state : int, RandomState instance, default=None

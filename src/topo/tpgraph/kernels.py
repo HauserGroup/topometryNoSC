@@ -463,6 +463,15 @@ def compute_kernel(
     verbose : bool, default=False
         Whether to print progress messages.
 
+    use_angular : bool, default=True
+        Whether to convert cosine distances to angles (radians). Used only if `metric` is 'cosine'.
+
+    square_distances : bool, default=True
+        Whether to square the normalized distances before computing the affinities.
+
+    random_state : int, RandomState instance or None, default=None
+        Determines random number generation.
+
     **kwargs : dict, optional
         Additional arguments to be passed to the nearest-neighbors backend.
 
@@ -670,6 +679,16 @@ class Kernel(BaseEstimator, TransformerMixin):
         Whether to build the binary, unweighted continuous k-nearest-neighbors graph.
         If set to `True`, the `pairwise`, `sigma`, `adaptive_bw`, `expand_nbr_search` and `alpha_decaying` parameters are ignored.
 
+    cknn_delta : float, default=1.0
+        Unitless CkNN edge threshold. Ignored if `cknn` is ``False``.
+
+    cknn_candidate_neighbors : int or None, default=None
+        Number of candidate neighbors tested in approximate CkNN mode. Ignored
+        when ``cknn_exact=True``.
+
+    cknn_exact : bool, default=False
+        If True, threshold all pairwise distances for CkNN construction.
+
     pairwise : bool, default=False
         Whether to compute the kernel using dense pairwise distances.
         If set to `True`, the `n_neighbors` and `backend` parameters are ignored.
@@ -696,16 +715,31 @@ class Kernel(BaseEstimator, TransformerMixin):
     symmetrize : bool, default=True
         Whether to symmetrize the kernel matrix after normalizations.
 
-    backend : {"hnswlib", "nmslib", "faiss", "annoy", "sklearn"}, default="hnswlib"
-        Which backend to use for k-nearest-neighbor computations. Defaults to 'nmslib'.
-        Options are 'nmslib', 'hnswlib', 'faiss', 'annoy' and 'sklearn'.
+    backend : str, default="hnswlib"
+        Which backend to use for k-nearest-neighbor computations. Defaults to 'hnswlib'.
+        Options are 'nmslib', 'hnswlib', and 'sklearn'.
 
-    n_jobs : int, default=-1
-        The number of jobs to use for parallel computations. If -1, all CPUs are used.
+    n_jobs : int, default=1
+        The number of jobs to use for parallel computations. If -1, all available CPUs are used.
         Parallellization (multiprocessing) is ***highly*** recommended whenever possible.
 
     laplacian_type : {"normalized", "unnormalized", "random_walk"}, default="normalized"
         The type of laplacian to use.
+
+    n_landmarks : int or None, default=None
+        Number of landmark points to use for sparse computations. (Placeholder for future use).
+
+    cache_input : bool, default=False
+        Whether to cache the input data `X` for operations like imputation.
+
+    verbose : bool, default=False
+        Whether to print progress messages.
+
+    random_state : int, RandomState instance or None, default=None
+        Determines random number generation.
+
+    use_angular : bool, default=True
+        Whether to convert cosine distances to angles (radians). Used only if `metric` is 'cosine'.
 
     Fitted Attributes
     -----------------
@@ -1092,6 +1126,9 @@ class Kernel(BaseEstimator, TransformerMixin):
             The type of laplacian to use. Can be 'unnormalized', 'normalized', or 'random_walk'.
             If not provided, uses the default `laplacian_type` specified in the constructor.
 
+        recompute : bool, default=False
+            Whether to force recomputation of the graph Laplacian even if it is cached.
+
         Returns
         -------
         L : scipy.sparse.csr_matrix, shape (n_samples, n_samples)
@@ -1138,6 +1175,9 @@ class Kernel(BaseEstimator, TransformerMixin):
             when using anisotropy (alpha > 0), as the diffusion operator P would be asymmetric otherwise, which can be problematic
             during matrix decomposition. Eigenvalues are the same as the asymmetric version, and the right eigenvectors of the original asymmetric
             operator can be recovered by left multiplying by `Kernel.D_inv_sqrt_`.
+
+        recompute : bool, default=False
+            Whether to force recomputation of the diffusion operator even if it is cached.
 
         Returns
         -------
@@ -1219,6 +1259,9 @@ class Kernel(BaseEstimator, TransformerMixin):
         indices : list of int, default=None
             If None, the shortest paths are computed between all pairs of nodes. Else,
             the shortest paths are computed between all pairs of nodes and nodes with specified indices.
+
+        recompute : bool, default=False
+            Whether to force recomputation of the shortest paths matrix even if it is cached.
 
         Returns
         -------

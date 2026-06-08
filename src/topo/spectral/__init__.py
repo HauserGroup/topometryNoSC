@@ -13,12 +13,12 @@ __all__ = [
     "diffusion_operator",
     "LE",
     "degree",
+    "EigenDecomposition",
+    "eigendecompose",
     "optimize_layout_euclidean",
     "optimize_layout_generic",
     "optimize_layout_inverse",
     "optimize_layout_aligned_euclidean",
-    "EigenDecomposition",
-    "eigendecompose",
 ]
 
 _EXPORTS = {
@@ -41,10 +41,10 @@ _EXPORTS = {
 }
 
 if TYPE_CHECKING:
-    from ._spectral import LE as LE
-    from ._spectral import degree as degree
     from ._spectral import diffusion_operator as diffusion_operator
     from ._spectral import graph_laplacian as graph_laplacian
+    from ._spectral import LE as LE
+    from ._spectral import degree as degree
     from .eigen import EigenDecomposition as EigenDecomposition
     from .eigen import eigendecompose as eigendecompose
     from .map_optimizer import (

@@ -4,6 +4,9 @@
 #
 # For more information on the original UMAP implementation, please see: https://umap-learn.readthedocs.io/
 #
+# Note: Some code in this module may be adapted from or bear similarity to 2-MAP
+# (https://github.com/GWUvision/2-MAP), which currently has an unknown license. Use with caution.
+#
 # BSD 3-Clause License
 #
 # Copyright (c) 2017, Leland McInnes
@@ -89,7 +92,7 @@ def fuzzy_embedding(
         (weighted) adjacency matrix.
     n_components : int
         The dimensionality of the euclidean space into which to embed the data.
-    initial_alpha : float
+    initial_alpha : float, default=1.0
         Initial learning rate for the SGD.
     min_dist : float, default=0.3
         The effective minimum distance between embedded points. Smaller values will result in a more
@@ -99,44 +102,43 @@ def fuzzy_embedding(
     spread : float, default=1.0
         The effective scale of embedded points. In combination with min_dist this determines
         how clustered/clumped the embedded points are.
-    gamma : float
+    gamma : float, default=1.0
         Weight to apply to negative samples.
     negative_sample_rate : int, default=5
         The number of negative samples to select per positive sample
         in the optimization process. Increasing this value will result
         in greater repulsive force being applied, greater optimization
         cost, but slightly more accuracy.
-    n_epochs : int, default=0
+    n_epochs : int, default=600
         The number of training epochs to be used in optimizing the
         low dimensional embedding. Larger values result in more accurate
-        embeddings. If 0 is specified a value will be selected based on
-        the size of the input dataset (200 for large datasets, 500 for small).
-    init : string
+        embeddings.
+    init : string, default='spectral'
         How to initialize the low dimensional embedding. Options are:
             * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
             * 'random': assign initial embedding positions at random.
             * A numpy array of initial embedding positions.
     random_state : numpy RandomState or equivalent
         A state capable being used as a numpy random state.
-    metric : string or callable
+    metric : string or callable, default='cosine'
         The metric used to measure distance in high dimensional space; used if
         multiple connected components need to be layed out.
     metric_kwds : dict
         Key word arguments to be passed to the metric function; used if
         multiple connected components need to be layed out.
-    densmap : bool
+    densmap : bool, default=False
         Whether to use the density-augmented objective function to optimize
         the embedding according to the densMAP algorithm.
     densmap_kwds : dict
         Key word arguments to be used by the densMAP optimization.
-    output_dens : bool
+    output_dens : bool, default=False
         Whether to output local radii in the original data and the embedding.
     output_metric : function
         Function returning the distance between two points in embedding space and
         the gradient of the distance wrt the first argument.
     output_metric_kwds : dict
         Key word arguments to be passed to the output_metric function.
-    euclidean_output : bool
+    euclidean_output : bool, default=True
         Whether to use the faster code specialised for euclidean output metrics
     save_every : int or None, optional
         If provided and >0, store the embedding every `save_every` epochs into

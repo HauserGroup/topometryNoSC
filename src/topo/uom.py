@@ -26,18 +26,21 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _to_float32_csr(A) -> sp.csr_matrix:
-    """Return ``A`` as CSR float32."""
+def _to_float32_csr(A: Any) -> sp.csr_matrix:
+    """Return A as a CSR sparse matrix with float32 dtype."""
     if A is None:
         raise ValueError("Sparse matrix input must not be None.")
-    if not sp.issparse(A):
-        A = sp.csr_matrix(A)
-    elif not sp.isspmatrix_csr(A):
-        A = A.tocsr()
-    if A.dtype != np.float32:
-        A = A.astype(np.float32, copy=False)
-    A.eliminate_zeros()
-    return A
+
+    if sp.issparse(A):
+        out = A.tocsr()
+    else:
+        out = sp.csr_matrix(A)
+
+    if out.dtype != np.float32:
+        out = out.astype(np.float32, copy=False)
+
+    out.eliminate_zeros()
+    return sp.csr_matrix(out)
 
 
 def _as_1d_labels(labels, n: int | None = None) -> np.ndarray:
@@ -48,51 +51,69 @@ def _as_1d_labels(labels, n: int | None = None) -> np.ndarray:
     return out
 
 
-def _symmetrize_geometric(P) -> sp.csr_matrix:
-    """Return geometric symmetrization on overlapping support.
+def _sparse_identity(n: int) -> sp.csr_matrix:
+    """Return an n-by-n CSR identity matrix with float32 dtype."""
+    diag = np.ones(int(n), dtype=np.float32)
+    return sp.csr_matrix(
+        sp.diags(diag, offsets=0, shape=(int(n), int(n)), format="csr")
+    )
 
-    Computes ``S_ij = sqrt(P_ij * P_ji)``. Edges that occur in only one
-    direction are dropped. This is conservative and appropriate when the goal is
-    to identify robust bidirectional manifold connectivity.
-    """
-    P = _to_float32_csr(P)
-    if P.shape[0] != P.shape[1]:
+
+def _symmetrize_geometric(P: Any) -> sp.csr_matrix:
+    """Return geometric symmetrization on overlapping support."""
+    P_csr = _to_float32_csr(P)
+
+    shape = P_csr.shape
+    if shape is None or len(shape) != 2:
+        raise ValueError("P must be a 2-D sparse matrix.")
+
+    n_rows = int(shape[0])
+    n_cols = int(shape[1])
+    if n_rows != n_cols:
         raise ValueError("P must be square.")
 
-    S = P.multiply(P.T)
+    S = sp.csr_matrix(P_csr.multiply(P_csr.T))
     if S.nnz == 0:
-        return S.tocsr()
+        return S
 
     S.data = np.sqrt(S.data.astype(np.float64)).astype(np.float32, copy=False)
     S.eliminate_zeros()
-    return S.tocsr()
+    return sp.csr_matrix(S)
 
 
 def _symmetrize_sum(A) -> sp.csr_matrix:
     """Return additive undirected symmetrization with zero diagonal."""
     A = _to_float32_csr(A)
-    S = (A + A.T).tocsr()
+    S = sp.csr_matrix(A + A.T)
     S.setdiag(0)
     S.eliminate_zeros()
     return S
 
 
-def _normalized_laplacian(A) -> sp.csr_matrix:
+def _normalized_laplacian(A: Any) -> sp.csr_matrix:
     """Compute zero-degree-safe symmetric normalized graph Laplacian."""
-    A = _to_float32_csr(A)
-    if A.shape[0] != A.shape[1]:
+    A_csr = _to_float32_csr(A)
+
+    shape = A_csr.shape
+    if shape is None or len(shape) != 2:
+        raise ValueError("A must be a 2-D sparse matrix.")
+
+    n_rows = int(shape[0])
+    n_cols = int(shape[1])
+    if n_rows != n_cols:
         raise ValueError("A must be square.")
 
-    n = A.shape[0]
-    d = np.asarray(A.sum(axis=1)).ravel().astype(np.float64)
+    d = np.asarray(A_csr.sum(axis=1)).ravel().astype(np.float64)
     inv_sqrt = np.zeros_like(d, dtype=np.float64)
     positive = d > 0
     inv_sqrt[positive] = 1.0 / np.sqrt(d[positive])
 
-    Dmh = sp.eye(n, dtype="float32", format="csr")
-    L = sp.eye(n, dtype="float32", format="csr") - (Dmh @ A @ Dmh)
+    Dmh = sp.diags(inv_sqrt.astype(np.float32), format="csr")
+    I = _sparse_identity(n_rows)
+    L = I - (Dmh @ A_csr @ Dmh)
+    L = sp.csr_matrix(L)
     L.eliminate_zeros()
-    return L.tocsr()
+    return L
 
 
 def _eigengap_k(vals, k_max: int, k_min: int = 2) -> int:
@@ -154,7 +175,18 @@ def consolidate_macros(W, labels, max_iters: int = 100) -> np.ndarray:
     strongest total edge weight.
     """
     W = _symmetrize_sum(W)
-    labels = _as_1d_labels(labels, W.shape[0]).copy()
+
+    shape = W.shape
+    if shape is None or len(shape) != 2:
+        raise ValueError("A must be a 2-D sparse matrix.")
+
+    n_rows = int(shape[0])
+    n_cols = int(shape[1])
+
+    if n_rows != n_cols:
+        raise ValueError("A must be square.")
+
+    labels = _as_1d_labels(labels, n_rows).copy()
 
     max_iters = int(max_iters)
     if max_iters < 1:
@@ -260,8 +292,11 @@ def louvain_micro(
     not implement the full multilevel Louvain aggregation cycle.
     """
     rng = np.random.RandomState(int(random_state))
-    S = _symmetrize_sum(S)
-    n = S.shape[0]
+    # S = _symmetrize_sum(S)
+    n_rows, n_cols = S.shape
+    if n_rows != n_cols:
+        raise ValueError("S must be square.")
+    n = int(n_rows)
 
     if n <= 2 or S.nnz == 0:
         return np.zeros(n, dtype=int)
@@ -364,12 +399,19 @@ def find_components(
     from topo._compat.scipy_graph import graph_connected_components
 
     S = _symmetrize_geometric(P)
-    n = S.shape[0]
+    shape = S.shape
+    if shape is None or len(shape) != 2:
+        raise ValueError("A must be a 2-D sparse matrix.")
 
-    if n == 0:
+    n_rows = int(shape[0])
+    n_cols = int(shape[1])
+    if n_rows != n_cols:
+        raise ValueError("A must be square.")
+
+    if n_rows == 0:
         raise ValueError("P must contain at least one sample.")
     if S.nnz == 0:
-        return 1, np.zeros(n, dtype=int)
+        return 1, np.zeros(n_rows, dtype=int)
 
     n_cc, cc_labels = graph_connected_components(S, directed=False, return_labels=True)
     cc_labels = np.asarray(cc_labels, dtype=int)
@@ -392,7 +434,7 @@ def find_components(
     k = int(micro_labels.max() + 1)
 
     if k <= 1:
-        return 1, np.zeros(n, dtype=int)
+        return 1, np.zeros(n_rows, dtype=int)
 
     # Aggregate micro-clusters into a weighted macro graph.
     S_coo = S.tocoo()
@@ -421,7 +463,7 @@ def find_components(
     k_max = int(min(8, max(3, np.floor(np.sqrt(k) + 1))))
     k_max = int(min(k_max, k))
     if k_max < 2:
-        return 1, np.zeros(n, dtype=int)
+        return 1, np.zeros(n_rows, dtype=int)
 
     # eigsh requires k < N. For tiny macro graphs, use dense eigh.
     if k <= 3:
@@ -530,9 +572,17 @@ class UoMMixin:
     _knn_msZ: Any
 
     # Methods provided by the host class
-    def _build_kernel(self, *args: Any, **kwargs: Any) -> Any: ...
-    def spectral_layout(self, *args: Any, **kwargs: Any) -> Any: ...
-    def project(self, *args: Any, **kwargs: Any) -> Any: ...
+    def _build_kernel(self, *args: Any, **kwargs: Any) -> Any:
+        """Build kernel (provided by host class)."""
+        ...
+
+    def spectral_layout(self, *args: Any, **kwargs: Any) -> Any:
+        """Compute spectral layout (provided by host class)."""
+        ...
+
+    def project(self, *args: Any, **kwargs: Any) -> Any:
+        """Project data (provided by host class)."""
+        ...
 
     def _init_uom_state(self) -> None:
         """Initialize all UoM-specific attributes."""
@@ -649,7 +699,7 @@ class UoMMixin:
         self.uom_Kernel_Z_list, self.uom_Kernel_msZ_list = [], []
         self.uom_eigenvalues_dm_list, self.uom_eigenvalues_ms_list = [], []
 
-        for idx in self.uom_components_:
+        for comp_id, idx in enumerate(self.uom_components_):
             n_i = int(idx.size)
 
             if n_i < 3:
@@ -681,7 +731,7 @@ class UoMMixin:
                 k_neighbors_i,
                 self.base_kernel_version,
                 {} if self.low_memory else self.BaseKernelDict,
-                suffix=f"_uom_X[{n_i}]",
+                suffix=f"_uom_X[c{comp_id}_n{n_i}]",
                 low_memory=self.low_memory,
                 data_for_expansion=Xi,
                 base=True,
@@ -784,7 +834,7 @@ class UoMMixin:
                 k_graph_i,
                 self.graph_kernel_version,
                 {} if self.low_memory else self.GraphKernelDict,
-                suffix=f"_uom_Z[{n_i}]",
+                suffix=f"_uom_Z[c{comp_id}_n{n_i}]",
                 low_memory=self.low_memory,
                 data_for_expansion=Zi,
                 base=False,
@@ -794,7 +844,7 @@ class UoMMixin:
                 k_graph_i,
                 self.graph_kernel_version,
                 {} if self.low_memory else self.GraphKernelDict,
-                suffix=f"_uom_msZ[{n_i}]",
+                suffix=f"_uom_msZ[c{comp_id}_n{n_i}]",
                 low_memory=self.low_memory,
                 data_for_expansion=msZi,
                 base=False,
@@ -876,38 +926,55 @@ class UoMMixin:
         if n_i < 1:
             raise ValueError("Tiny UoM component must contain at least one sample.")
 
-        assert self.uom_Z_list is not None
-        assert self.uom_msZ_list is not None
-        assert self.uom_knn_Z_list is not None
-        assert self.uom_knn_msZ_list is not None
-        assert self.uom_Kernel_Z_list is not None
-        assert self.uom_Kernel_msZ_list is not None
-        assert self.uom_BaseKernel_list is not None
-        assert self.uom_knn_X_list is not None
-        assert self.uom_DMEig_list is not None
-        assert self.uom_msDMEig_list is not None
-        assert self.uom_eigenvalues_dm_list is not None
-        assert self.uom_eigenvalues_ms_list is not None
+        uom_Z_list = self.uom_Z_list
+        uom_msZ_list = self.uom_msZ_list
+        uom_knn_Z_list = self.uom_knn_Z_list
+        uom_knn_msZ_list = self.uom_knn_msZ_list
+        uom_Kernel_Z_list = self.uom_Kernel_Z_list
+        uom_Kernel_msZ_list = self.uom_Kernel_msZ_list
+        uom_BaseKernel_list = self.uom_BaseKernel_list
+        uom_knn_X_list = self.uom_knn_X_list
+        uom_DMEig_list = self.uom_DMEig_list
+        uom_msDMEig_list = self.uom_msDMEig_list
+        uom_eigenvalues_dm_list = self.uom_eigenvalues_dm_list
+        uom_eigenvalues_ms_list = self.uom_eigenvalues_ms_list
 
-        Zi = np.zeros((n_i, 1), dtype="float32")
-        P_block = sp.eye(n_i, format="csr", dtype="float32")
+        if (
+            uom_Z_list is None
+            or uom_msZ_list is None
+            or uom_knn_Z_list is None
+            or uom_knn_msZ_list is None
+            or uom_Kernel_Z_list is None
+            or uom_Kernel_msZ_list is None
+            or uom_BaseKernel_list is None
+            or uom_knn_X_list is None
+            or uom_DMEig_list is None
+            or uom_msDMEig_list is None
+            or uom_eigenvalues_dm_list is None
+            or uom_eigenvalues_ms_list is None
+        ):
+            raise RuntimeError(
+                "UoM component lists must be initialized before fitting."
+            )
 
-        self.uom_Z_list.append(Zi)
-        self.uom_msZ_list.append(Zi.copy())
+        Zi = np.zeros((n_i, 1), dtype=np.float32)
+        P_block = _sparse_identity(n_i)
 
-        self.uom_knn_Z_list.append(P_block.copy())
-        self.uom_knn_msZ_list.append(P_block.copy())
-        self.uom_Kernel_Z_list.append(_ProxyKernel(P_block))
-        self.uom_Kernel_msZ_list.append(_ProxyKernel(P_block))
-        self.uom_BaseKernel_list.append(_ProxyKernel(P_block))
-        self.uom_knn_X_list.append(P_block.copy())
+        uom_Z_list.append(Zi)
+        uom_msZ_list.append(Zi.copy())
 
-        self.uom_DMEig_list.append(None)
-        self.uom_msDMEig_list.append(None)
+        uom_knn_Z_list.append(P_block.copy())
+        uom_knn_msZ_list.append(P_block.copy())
+        uom_Kernel_Z_list.append(_ProxyKernel(P_block))
+        uom_Kernel_msZ_list.append(_ProxyKernel(P_block))
+        uom_BaseKernel_list.append(_ProxyKernel(P_block))
+        uom_knn_X_list.append(P_block.copy())
 
-        # Keep eigenvalue lists aligned with components.
-        self.uom_eigenvalues_dm_list.append(np.ones(1, dtype=float))
-        self.uom_eigenvalues_ms_list.append(np.ones(1, dtype=float))
+        uom_DMEig_list.append(None)
+        uom_msDMEig_list.append(None)
+
+        uom_eigenvalues_dm_list.append(np.ones(1, dtype=float))
+        uom_eigenvalues_ms_list.append(np.ones(1, dtype=float))
 
     def _get_component_data(self, X, idx):
         """Slice input data for a UoM component."""
@@ -950,11 +1017,12 @@ class UoMMixin:
 
     def _block_diag_to_original_order(self, blocks) -> sp.csr_matrix:
         """Build block diagonal matrix and permute rows/cols to original order."""
-        if self.n is None:
+        n = self.n
+        if n is None:
             raise ValueError("UoM aggregation requires fitted sample count.")
 
         csr_blocks = [_to_float32_csr(B) for B in blocks]
-        B_cat = sp.block_diag(csr_blocks, format="csr", dtype=np.float32)
+        B_cat = sp.block_diag(csr_blocks, format="csr", dtype="float32")
 
         order = self._component_order()
         if B_cat.shape != (order.size, order.size):
@@ -976,18 +1044,20 @@ class UoMMixin:
         Each component occupies its own column block. Rows outside a component
         are zero in that component's axis block.
         """
-        if self.n is None:
+        n = self.n
+        if n is None:
             raise ValueError("UoM aggregation requires fitted sample count.")
-        if self.uom_components_ is None:
+
+        components = self.uom_components_
+        if components is None:
             raise ValueError("UoM components are unavailable.")
 
-        n = int(self.n)
         total_cols = int(sum(np.asarray(B).shape[1] for B in blocks))
-        out = np.zeros((n, total_cols), dtype=np.float32)
+        out = np.zeros((int(n), total_cols), dtype=np.float32)
         slices: list[tuple[int, int]] = []
 
         c0 = 0
-        for idx, B in zip(self.uom_components_, blocks, strict=True):
+        for idx, B in zip(components, blocks, strict=True):
             B = np.asarray(B, dtype=np.float32)
             if B.ndim != 2:
                 raise ValueError("Each scaffold block must be a 2-D array.")
@@ -1003,29 +1073,45 @@ class UoMMixin:
 
     def _aggregate_uom_blocks(self) -> None:
         """Assemble per-component results into original-order aggregates."""
-        assert self.uom_Z_list is not None
-        assert self.uom_msZ_list is not None
-        assert self.uom_components_ is not None
-        assert self.uom_knn_X_list is not None
-        assert self.uom_BaseKernel_list is not None
-        assert self.uom_knn_Z_list is not None
-        assert self.uom_knn_msZ_list is not None
-        assert self.uom_Kernel_Z_list is not None
-        assert self.uom_Kernel_msZ_list is not None
+        uom_Z_list = self.uom_Z_list
+        uom_msZ_list = self.uom_msZ_list
+        components = self.uom_components_
+        uom_knn_X_list = self.uom_knn_X_list
+        uom_BaseKernel_list = self.uom_BaseKernel_list
+        uom_knn_Z_list = self.uom_knn_Z_list
+        uom_knn_msZ_list = self.uom_knn_msZ_list
+        uom_Kernel_Z_list = self.uom_Kernel_Z_list
+        uom_Kernel_msZ_list = self.uom_Kernel_msZ_list
 
-        if self.n is None:
+        if (
+            uom_Z_list is None
+            or uom_msZ_list is None
+            or components is None
+            or uom_knn_X_list is None
+            or uom_BaseKernel_list is None
+            or uom_knn_Z_list is None
+            or uom_knn_msZ_list is None
+            or uom_Kernel_Z_list is None
+            or uom_Kernel_msZ_list is None
+        ):
+            raise RuntimeError(
+                "UoM component lists must be initialized before aggregation."
+            )
+
+        n = self.n
+        if n is None:
             raise ValueError("UoM aggregation requires fitted sample count.")
 
-        n_comp = len(self.uom_components_)
+        n_comp = len(components)
         expected_lists = [
-            self.uom_Z_list,
-            self.uom_msZ_list,
-            self.uom_knn_X_list,
-            self.uom_BaseKernel_list,
-            self.uom_knn_Z_list,
-            self.uom_knn_msZ_list,
-            self.uom_Kernel_Z_list,
-            self.uom_Kernel_msZ_list,
+            uom_Z_list,
+            uom_msZ_list,
+            uom_knn_X_list,
+            uom_BaseKernel_list,
+            uom_knn_Z_list,
+            uom_knn_msZ_list,
+            uom_Kernel_Z_list,
+            uom_Kernel_msZ_list,
         ]
         for lst in expected_lists:
             if len(lst) != n_comp:
@@ -1035,23 +1121,23 @@ class UoMMixin:
                 )
 
         self.Z_uom, self._uom_axis_slices = self._aggregate_scaffold_to_original_order(
-            self.uom_Z_list
+            uom_Z_list
         )
         self.msZ_uom, _ms_slices = self._aggregate_scaffold_to_original_order(
-            self.uom_msZ_list
+            uom_msZ_list
         )
 
-        self.knn_X_uom = self._block_diag_to_original_order(self.uom_knn_X_list)
+        self.knn_X_uom = self._block_diag_to_original_order(uom_knn_X_list)
         self.P_of_X_uom = self._block_diag_to_original_order(
-            [K.P for K in self.uom_BaseKernel_list]
+            [K.P for K in uom_BaseKernel_list]
         )
-        self.knn_Z_uom = self._block_diag_to_original_order(self.uom_knn_Z_list)
-        self.knn_msZ_uom = self._block_diag_to_original_order(self.uom_knn_msZ_list)
+        self.knn_Z_uom = self._block_diag_to_original_order(uom_knn_Z_list)
+        self.knn_msZ_uom = self._block_diag_to_original_order(uom_knn_msZ_list)
         self.P_of_Z_uom = self._block_diag_to_original_order(
-            [K.P for K in self.uom_Kernel_Z_list]
+            [K.P for K in uom_Kernel_Z_list]
         )
         self.P_of_msZ_uom = self._block_diag_to_original_order(
-            [K.P for K in self.uom_Kernel_msZ_list]
+            [K.P for K in uom_Kernel_msZ_list]
         )
 
         self.current_eigenbasis = f"UoM_{self._uom_active_mode}"

@@ -154,7 +154,9 @@ class LayoutBuildMixin:
             ).astype(np.float32)
         except Exception:
             spt = np.asarray(
-                EigenDecomposition(n_components=n_components).fit_transform(graph)
+                EigenDecomposition(n_components=n_components).fit_transform(
+                    cast(csr_matrix, graph)
+                )
             )
         self.runtimes["Spectral"] = time.time() - t0
         self.SpecLayout = spt

@@ -23,7 +23,7 @@ __all__ = [
 
 _EXTRA_FOR: dict[str, str] = {
     "pyamg": "amg",
-    "hnswlib": "ann",
+    "hnswlib": "hnswlib",
     "pacmap": "layouts",
     "pymde": "layouts",
     "trimap": "layouts",

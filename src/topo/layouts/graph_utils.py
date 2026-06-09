@@ -49,7 +49,7 @@ from sklearn.neighbors import KDTree
 
 from topo._compat.umap import find_umap_ab_params, fuzzy_graph_from_data
 from topo.base import dists as dist
-from topo.spectral.eigen import spectral_layout
+from topo.spectral import LE
 from topo.spectral.map_optimizer import (
     _optimize_layout_euclidean_single_epoch,
     optimize_layout_euclidean,
@@ -62,6 +62,36 @@ logger = logging.getLogger(__name__)
 
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
+
+
+def _spectral_initialization(graph, n_components: int, random_state):
+    """Return a spectral initialization for MAP/UMAP-style layout optimization.
+
+    This replaces the old ``topo.spectral.eigen.spectral_layout`` helper. The
+    initialization is intentionally local to this module because disconnected
+    graph layout policy belongs with layout optimization, not with the generic
+    eigendecomposition transformer.
+    """
+    try:
+        init = LE(
+            graph,
+            n_eigs=int(n_components),
+            laplacian_type="normalized",
+            drop_first=True,
+            return_evals=False,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Spectral initialization failed; falling back to random initialization: %s",
+            exc,
+        )
+        return random_state.uniform(
+            low=-10.0,
+            high=10.0,
+            size=(graph.shape[0], int(n_components)),
+        ).astype(np.float32)
+
+    return np.asarray(init, dtype=np.float32)
 
 
 def make_epochs_per_sample(weights, n_epochs):
@@ -193,8 +223,10 @@ def simplicial_set_embedding(
         ).astype(np.float32)
         initialisation = embedding
     elif isinstance(init, str) and init == "spectral":
-        initialisation = spectral_layout(
-            graph, dim=n_components, random_state=random_state
+        initialisation = _spectral_initialization(
+            graph,
+            n_components=n_components,
+            random_state=random_state,
         )
         expansion = 10.0 / np.abs(initialisation).max()
         embedding = (initialisation * expansion).astype(

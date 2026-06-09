@@ -780,11 +780,9 @@ class TopOGraph(
     @property
     def P_of_X(self) -> csr_matrix:
         """The base diffusion operator on the original input space."""
-        if self.uom_enabled and self.P_of_X_uom is not None:
-            return csr_matrix(self.P_of_X_uom)
-        if self.base_kernel is None:
+        if self.P_X_ is None:
             raise AttributeError("P_of_X unavailable. Call .fit() first.")
-        return csr_matrix(self.base_kernel.P)
+        return self.P_X_
 
     @property
     def global_id(self) -> float:

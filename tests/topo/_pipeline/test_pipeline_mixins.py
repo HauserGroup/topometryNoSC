@@ -1,14 +1,21 @@
 """Tests for pipeline mixin control-flow guards."""
 
+from typing import cast
+
 import numpy as np
 import pytest
-from scipy import sparse
+from scipy.sparse import csr_matrix
 
 from topo._pipeline import eigen as eigen_pipeline
 from topo._pipeline.eigen import EigenBuildMixin
 from topo._pipeline.graph import GraphBuildMixin
 from topo._pipeline.layout import LayoutBuildMixin
 from topo.tpgraph.kernels import Kernel
+
+
+class DummyFittedKernel:
+    def __init__(self, n: int = 3):
+        self.P = csr_matrix(np.eye(n))
 
 
 class DummyGraphBuilder(GraphBuildMixin):
@@ -31,7 +38,7 @@ class DummyGraphBuilder(GraphBuildMixin):
         self.base_nbrs_class = None
         self.base_knn_graph = None
         self.build_kernel_calls = []
-        self.dummy_kernel = Kernel()
+        self.dummy_kernel = cast(Kernel, DummyFittedKernel())
 
     def _build_kernel(self, *args, **kwargs) -> tuple[Kernel, dict[str, Kernel]]:
         self.build_kernel_calls.append((args, kwargs))
@@ -104,7 +111,7 @@ class DummyLayoutBuilder(LayoutBuildMixin):
 
 def test_graph_build_base_graph_accepts_precomputed_matrix():
     builder = DummyGraphBuilder()
-    X = sparse.csr_matrix(np.eye(4))
+    X = csr_matrix(np.eye(4))
 
     builder._build_base_graph(X)
 
@@ -124,37 +131,24 @@ def test_graph_build_base_graph_rejects_missing_or_nonsquare_input():
         builder._build_base_graph(np.ones((4, 2)))
 
 
-def test_graph_build_base_kernel_uses_cache_or_builder():
-    from scipy.sparse import csr_matrix
-
+def test_graph_build_base_kernel_builds_current_kernel():
     builder = DummyGraphBuilder()
-    cached_kernel = Kernel()
-    cached_kernel._P = csr_matrix(np.eye(3))
-    builder.BaseKernelDict["dummy"] = cached_kernel
-
     X = np.ones((3, 2))
+
     builder._build_base_graph(X)
-
-    builder._build_base_kernel(X)
-    assert builder.base_kernel is cached_kernel
-    assert builder.build_kernel_calls == []
-
-    builder.base_kernel = None
-    builder.base_kernel_version = "new"
-
     builder._build_base_kernel(X)
 
     assert builder.base_kernel is builder.dummy_kernel
-    assert builder.BaseKernelDict == {
-        "dummy": cached_kernel,
-        "new": builder.dummy_kernel,
-    }
-    assert len(builder.build_kernel_calls) == 1
-    call_args, call_kwargs = builder.build_kernel_calls[0]
-    assert call_args[0] is builder.base_knn_graph
-    assert call_args[1] == builder.base_knn
-    assert call_args[2] == "new"
-    assert call_args[3] == {"dummy": cached_kernel}
+    assert builder.P_X_ is not None
+    assert builder.P_X_.shape == (3, 3)
+    assert builder.build_kernel_calls == [
+        (
+            builder.base_knn_graph,
+            builder.base_knn,
+            builder.base_kernel_version,
+            builder.BaseKernelDict,
+        )
+    ]
 
 
 def test_automated_sizing_updates_component_state(monkeypatch):

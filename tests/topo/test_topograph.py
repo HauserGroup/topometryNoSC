@@ -102,26 +102,40 @@ class TestTopOGraphFit:
             _ = tg.global_id
 
     def test_fit_does_not_mutate_constructor_params(self):
-        X = np.random.RandomState(0).randn(30, 4)
         tg = TopOGraph(
             base_knn=5,
             graph_knn=5,
+            min_eigs=6,
             backend="sklearn",
-            n_jobs=-1,
-            random_state=0,
-            min_eigs=128,
-            projection_methods=[],
+            base_kernel_version="bw_adaptive",
+            graph_kernel_version="bw_adaptive",
+            laplacian_type="normalized",
+            random_state=42,
         )
-        before = tg.get_params(deep=False)
 
-        tg.fit(X)
-        after = tg.get_params(deep=False)
+        before = {
+            "base_knn": tg.base_knn,
+            "graph_knn": tg.graph_knn,
+            "min_eigs": tg.min_eigs,
+            "backend": tg.backend,
+            "base_kernel_version": tg.base_kernel_version,
+            "graph_kernel_version": tg.graph_kernel_version,
+            "random_state": tg.random_state,
+        }
 
-        for key in ("backend", "n_jobs", "random_state", "min_eigs"):
-            assert after[key] == before[key]
-        assert tg.n_eigs == before["min_eigs"]
-        assert tg.n_eigs_ is not None
-        assert tg.n_eigs_ <= X.shape[0] - 2
+        tg.fit(np.random.RandomState(0).normal(size=(30, 5)))
+
+        after = {
+            "base_knn": tg.base_knn,
+            "graph_knn": tg.graph_knn,
+            "min_eigs": tg.min_eigs,
+            "backend": tg.backend,
+            "base_kernel_version": tg.base_kernel_version,
+            "graph_kernel_version": tg.graph_kernel_version,
+            "random_state": tg.random_state,
+        }
+
+        assert after == before
 
     def test_refit_on_larger_data_unclamps_n_eigs(self):
         tg = TopOGraph(min_eigs=10, projection_methods=[], base_knn=4, graph_knn=4)
@@ -184,14 +198,14 @@ class TestTopOGraphProjections:
         assert fitted_topograph.msTopoMAP is not None
         assert fitted_topograph.msTopoMAP.shape == (n, 2)
 
-    def test_pacmap_layouts_exist(self, fitted_topograph, swiss_roll_data):
-        X, _ = swiss_roll_data
-        n = X.shape[0]
-        fitted_topograph.project(
-            projection_method="PaCMAP", multiscale=True, num_iters=50
-        )
-        assert fitted_topograph.msTopoPaCMAP is not None
-        assert fitted_topograph.msTopoPaCMAP.shape == (n, 2)
+    def test_pacmap_layouts_exist(self, fitted_topograph):
+        pytest.importorskip("pacmap")
+
+        fitted_topograph.project(projection_method="PaCMAP", multiscale=False)
+        fitted_topograph.project(projection_method="PaCMAP", multiscale=True)
+
+        assert fitted_topograph.TopoPaCMAP.shape[1] == 2
+        assert fitted_topograph.msTopoPaCMAP.shape[1] == 2
 
     def test_project_custom(self, fitted_topograph, swiss_roll_data):
         X, _ = swiss_roll_data

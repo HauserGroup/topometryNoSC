@@ -552,6 +552,8 @@ class UoMMixin:
     # Computed state
     current_eigenbasis: str | None
     n_jobs: int
+    _backend_resolved: str
+    _random_state_resolved: Any
     _n_jobs_effective: int
     _knn_Z: Any
     _knn_msZ: Any
@@ -632,7 +634,7 @@ class UoMMixin:
     # Per-component fit pipeline
     # -----------------------------------------------------------------
 
-    def _fit_uom(self, X, **kwargs):
+    def _fit_uom(self, X):
         """Run the UoM branch of ``fit()``.
 
         Detects components and builds per-component scaffolds, refined graphs
@@ -703,10 +705,9 @@ class UoMMixin:
                 n_neighbors=k_neighbors_i,
                 metric=self.base_metric,
                 n_jobs=self._n_jobs_effective,
-                backend=getattr(self, "_backend_resolved", self.backend),
+                backend=self._backend_resolved,
                 return_instance=False,
                 verbose=False,
-                **kwargs,
             )
             knn_i = as_float32_csr(knn_i, "knn_i")
             self.uom_knn_X_list.append(knn_i)
@@ -748,7 +749,7 @@ class UoMMixin:
                 drop_first=True,
                 weight=True,
                 t=self.diff_t,
-                random_state=getattr(self, "_random_state_resolved", self.random_state),
+                random_state=self._random_state_resolved,
                 verbose=False,
             ).fit(Ki)
 
@@ -792,10 +793,9 @@ class UoMMixin:
                     n_neighbors=k_graph_i,
                     metric=self.graph_metric,
                     n_jobs=self._n_jobs_effective,
-                    backend=getattr(self, "_backend_resolved", self.backend),
+                    backend=self._backend_resolved,
                     return_instance=False,
                     verbose=False,
-                    **kwargs,
                 )
             )
             knn_msZ_i = as_float32_csr(
@@ -804,10 +804,9 @@ class UoMMixin:
                     n_neighbors=k_graph_i,
                     metric=self.graph_metric,
                     n_jobs=self._n_jobs_effective,
-                    backend=getattr(self, "_backend_resolved", self.backend),
+                    backend=self._backend_resolved,
                     return_instance=False,
                     verbose=False,
-                    **kwargs,
                 )
             )
 
@@ -889,14 +888,14 @@ class UoMMixin:
             Xi_or_knn,
             method=self.id_method,
             ks=self.id_ks,
-            backend=getattr(self, "_backend_resolved", self.backend),
+            backend=self._backend_resolved,
             metric=self.id_metric,
             n_jobs=self._n_jobs_effective,
             quantile=self.id_quantile,
             min_components=max(1, min_components),
             max_components=max(1, max_components),
             headroom=float(self.id_headroom),
-            random_state=getattr(self, "_random_state_resolved", self.random_state),
+            random_state=self._random_state_resolved,
             return_details=False,
         )
 

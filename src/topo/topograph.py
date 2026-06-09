@@ -388,18 +388,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         return out
 
     # ------------------------------------------------------------------
-    # Backend / random-state helpers
-    # ------------------------------------------------------------------
-
-    def _parse_random_state(self) -> None:
-        if self.random_state is None:
-            self._random_state_resolved = np.random.RandomState()
-        elif isinstance(self.random_state, (int, np.integer)):
-            self._random_state_resolved = np.random.RandomState(int(self.random_state))
-        else:
-            self._random_state_resolved = self.random_state
-
-    # ------------------------------------------------------------------
     # Data-driven kernel builder
     # ------------------------------------------------------------------
 
@@ -415,32 +403,31 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         base=True,
         data_for_expansion=None,
     ) -> tuple[Kernel, dict[str, Kernel]]:
-        """Build a :class:`Kernel` from a kNN graph and a named kernel version."""
+        """Build a :class:`Kernel` from a kNN graph and a named kernel version.
+
+        This is an internal pipeline helper. It assumes ``_setup_environment()`` has
+        already run and therefore uses resolved runtime attributes directly.
+        """
         if kernel_version not in VALID_KERNEL_VERSIONS:
             raise ValueError(f"Invalid kernel_version: {kernel_version}")
-
-        kernel_key = f"{prefix}{kernel_version}{suffix}"
-        if kernel_key in results_dict:
-            return results_dict[kernel_key], results_dict
 
         if knn is None:
             raise ValueError("knn must not be None.")
 
         if not hasattr(knn, "shape") or len(knn.shape) != 2:
             raise ValueError("knn must be a 2-D sparse/dense matrix.")
-        if knn.shape[0] != knn.shape[1]:
+
+        if int(knn.shape[0]) != int(knn.shape[1]):
             raise ValueError("knn must be a square graph.")
 
-        if self._backend_resolved not in {"sklearn", "hnswlib"}:
-            raise ValueError("backend must be one of {'sklearn', 'hnswlib'}.")
+        if int(n_neighbors) < 1:
+            raise ValueError("n_neighbors must be >= 1.")
 
-        cfg = _KERNEL_CONFIGS[kernel_version].copy()
+        kernel_key = f"{prefix}{kernel_version}{suffix}"
+        cfg = _KERNEL_CONFIGS[str(kernel_version)].copy()
 
         uses_raw_data = bool(cfg.get("expand_nbr_search")) or kernel_version == "cknn"
 
-        # Expansion versions and CkNN need original data + correct metric, except
-        # when the metric is explicitly precomputed and the kNN graph itself is
-        # the intended input.
         if uses_raw_data:
             metric = self.base_metric if base else self.graph_metric
 
@@ -450,8 +437,9 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
                 if data_for_expansion is None:
                     raise ValueError(
                         "data_for_expansion is required for kernel version "
-                        f"'{kernel_version}' with metric='{metric}'."
+                        f"{kernel_version!r} with metric={metric!r}."
                     )
+
                 if (
                     not hasattr(data_for_expansion, "shape")
                     or len(data_for_expansion.shape) != 2
@@ -465,11 +453,12 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
                         "data_for_expansion must have the same number of rows "
                         "as the kNN graph."
                     )
+
                 fit_input = data_for_expansion
 
             if cfg.get("expand_nbr_search") and metric == "precomputed":
                 raise ValueError(
-                    f"kernel version '{kernel_version}' expands neighbor search and "
+                    f"kernel version {kernel_version!r} expands neighbor search and "
                     "therefore requires raw feature data; it cannot be used with "
                     "metric='precomputed'. Use a non-expansion kernel version or pass "
                     "raw data."
@@ -479,12 +468,12 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             fit_input = knn
 
         if kernel_version == "gaussian":
-            cfg["sigma"] = self.sigma
+            cfg["sigma"] = float(self.sigma)
 
         if kernel_version == "cknn":
-            cfg["cknn_delta"] = self.delta
+            cfg["cknn_delta"] = float(self.delta)
             cfg["cknn_candidate_neighbors"] = self.cknn_candidate_neighbors
-            cfg["cknn_exact"] = self.cknn_exact
+            cfg["cknn_exact"] = bool(self.cknn_exact)
 
         kernel = Kernel(
             metric=metric,
@@ -512,7 +501,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     # Fit orchestration
     # ------------------------------------------------------------------
 
-    def fit(self, X=None, **kwargs):
+    def fit(self, X=None):
         """Run the full pipeline on ``X``.
 
         Builds base kNN → base kernel P(X) → dual eigenbases (DM + msDM) →
@@ -522,8 +511,8 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         """
         self._validate_inputs(X)
         self._setup_environment()
-        self._build_base_graph(X, **kwargs)
-        self._build_base_kernel(X, **kwargs)
+        self._build_base_graph(X)
+        self._build_base_kernel(X)
 
         if self.base_metric != "precomputed":
             sizing_X = self._resolve_sizing_input(X)
@@ -539,9 +528,9 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.uom_eigenvalues_dm_list, self.uom_eigenvalues_ms_list = [], []
 
         if self.uom_enabled:
-            out = self._fit_uom(X, **kwargs)
+            out = self._fit_uom(X)
         else:
-            out = self._fit_global(X, **kwargs)
+            out = self._fit_global(X)
 
         self._sync_fitted_state_from_caches()
         self._check_fitted_pipeline_state()
@@ -609,17 +598,21 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             if self.base_kernel is None:
                 raise ValueError("X was not passed and no base_kernel was provided.")
 
-            if not hasattr(self.base_kernel, "P"):
+            if not isinstance(self.base_kernel, Kernel):
+                raise ValueError("base_kernel must be a topo.tpgraph.Kernel instance.")
+
+            if getattr(self.base_kernel, "P", None) is None:
                 raise ValueError(
                     "base_kernel must expose a fitted diffusion operator `P`."
                 )
 
-            kernel_X = getattr(self.base_kernel, "X", None)
-            if self.base_metric != "precomputed" and kernel_X is None:
-                raise ValueError(
-                    "base_kernel must expose original input data as `X` when automated "
-                    "sizing is required."
-                )
+            if self.base_metric != "precomputed":
+                kernel_X = getattr(self.base_kernel, "X", None)
+                if kernel_X is None:
+                    raise ValueError(
+                        "base_kernel must expose original input data as `X` when automated "
+                        "sizing is required."
+                    )
 
             return
 
@@ -666,10 +659,11 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             self.n_eigs_ = int(self.n_eigs)
 
     def _sync_fitted_state_from_caches(self) -> None:
-        """Synchronize canonical fitted attributes from legacy cache dictionaries.
+        """Best-effort compatibility sync from legacy result dictionaries.
 
-        Older pipeline mixins may populate EigenbasisDict / GraphKernelDict without
-        also setting the newer private attributes used by public properties.
+        This is transitional glue for older pipeline paths and tests that populate
+        EigenbasisDict / GraphKernelDict directly. New fit paths should set the
+        canonical attributes explicitly instead of relying on this method.
         """
         if self.current_eigenbasis is None and self.EigenbasisDict:
             keys = list(self.EigenbasisDict)
@@ -705,13 +699,16 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             self.graph_kernel = self._kernel_msZ or self._kernel_Z
 
     def _setup_environment(self) -> None:
+        """Resolve runtime configuration used by internal pipeline phases."""
         from topo._logging import configure
         from topo.base.ann import _resolve_n_jobs
 
         configure(self.verbosity)
-        self._parse_random_state()
 
-        self._n_jobs_effective = _resolve_n_jobs(int(self.n_jobs))
+        if self.backend not in {"sklearn", "hnswlib"}:
+            raise ValueError("backend must be one of {'sklearn', 'hnswlib'}.")
+
+        self._n_jobs_effective = _resolve_n_jobs(self.n_jobs)
         self._backend_resolved = self.backend
         self._random_state_resolved = check_random_state(self.random_state)
         self.uom_enabled = bool(self.uom)
@@ -730,6 +727,8 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         if self.uom_enabled:
             if self.P_of_msZ_uom is None:
                 raise RuntimeError("fit() completed without fitted UoM msDM operator.")
+            if self.P_of_Z_uom is None:
+                raise RuntimeError("fit() completed without fitted UoM DM operator.")
             return
 
         if self.current_eigenbasis is None or self.eigenbasis is None:
@@ -737,6 +736,9 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
         if self._kernel_msZ is None:
             raise RuntimeError("fit() completed without an msDM scaffold kernel.")
+
+        if self._kernel_Z is None:
+            raise RuntimeError("fit() completed without a DM scaffold kernel.")
 
         if self.graph_kernel is None:
             raise RuntimeError("fit() completed without an active graph_kernel.")
@@ -746,7 +748,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
     # ------------------------------------------------------------------
 
     def spectral_scaffold(self, multiscale: bool = True) -> np.ndarray | csr_matrix:
-        """Return spectral scaffold coordinates."""
+        """Return fitted spectral scaffold coordinates."""
         if self.uom_enabled:
             arr = self.msZ_uom if multiscale else self.Z_uom
             if arr is None:
@@ -758,7 +760,20 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         key = f"{'msDM' if multiscale else 'DM'} with {self.base_kernel_version}"
         if key not in self.EigenbasisDict:
             raise AttributeError("Scaffold not found. Call .fit() first.")
-        return self.EigenbasisDict[key].transform(X=None)
+
+        Z = self.EigenbasisDict[key].transform(X=None)
+        if Z is None:
+            raise RuntimeError(f"Eigenbasis {key!r} returned no scaffold coordinates.")
+        if isinstance(Z, tuple):
+            raise RuntimeError(
+                f"Eigenbasis {key!r} returned a tuple, expected a matrix."
+            )
+
+        Z_arr = np.asarray(Z)
+        if Z_arr.ndim != 2:
+            raise RuntimeError(f"Eigenbasis {key!r} returned a non-2-D scaffold.")
+
+        return Z_arr
 
     # ------------------------------------------------------------------
     # Properties
@@ -910,20 +925,13 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         """Resolve a fitted diffusion operator by name."""
         which_norm = str(which).lower()
         if which_norm == "x":
-            P = self.P_of_X
-        elif which_norm == "z":
-            P = self.P_of_Z
-        elif which_norm == "msz":
-            P = self.P_of_msZ
-        else:
-            raise ValueError("`which` must be one of {'X', 'Z', 'msZ'}.")
+            return csr_matrix(self.P_of_X)
+        if which_norm == "z":
+            return csr_matrix(self.P_of_Z)
+        if which_norm == "msz":
+            return csr_matrix(self.P_of_msZ)
 
-        if P is None:
-            raise ValueError(
-                f"Diffusion operator '{which}' is not available. "
-                "Call fit() first, or choose an operator that was computed."
-            )
-        return csr_matrix(P)
+        raise ValueError("`which` must be one of {'X', 'Z', 'msZ'}.")
 
     def _resolve_sizing_input(self, X) -> NDArray[Any] | csr_matrix:
         """Resolve input data used for automated scaffold sizing."""
@@ -933,11 +941,10 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         if self.base_kernel is None:
             raise ValueError("Input data is required for automated sizing.")
 
-        kernel_X = getattr(self.base_kernel, "X", None)
-        if kernel_X is None:
+        if self.base_kernel.X is None:
             raise ValueError("Input data is required for automated sizing.")
 
-        return cast(NDArray[Any] | csr_matrix, kernel_X)
+        return cast(NDArray[Any] | csr_matrix, self.base_kernel.X)
 
     def _resolve_optional_operator(self, op, *, default_name: str | None = None):
         """Resolve None/string/operator inputs used by analysis wrappers."""

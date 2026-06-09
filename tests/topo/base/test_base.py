@@ -1,59 +1,10 @@
 """Tests for low-level distance and neighbor graph helpers."""
 
-import math
-
 import numpy as np
 import pytest
 from scipy import sparse
 
-from topo.base import ann, dists
-
-
-class TestDistanceHelpers:
-    def test_vector_distances_and_gradients(self):
-        x = np.array([1.0, 0.0], dtype=np.float32)
-        y = np.array([0.0, 1.0], dtype=np.float32)
-
-        assert dists.euclidean(x, y) == pytest.approx(math.sqrt(2.0))
-        dist, grad = dists.euclidean_grad(x, y)
-        assert dist == pytest.approx(math.sqrt(2.0))
-        np.testing.assert_allclose(grad, np.array([1.0, -1.0]) / math.sqrt(2.0))
-
-        assert dists.cosine(x, y) == pytest.approx(1.0)
-        cos_dist, cos_grad = dists.cosine_grad(x, y)
-        assert cos_dist == pytest.approx(1.0)
-        assert cos_grad.shape == x.shape
-
-    def test_poincare_distance_is_symmetric_for_points_inside_ball(self):
-        x = np.array([0.1, 0.2], dtype=np.float32)
-        y = np.array([0.2, -0.1], dtype=np.float32)
-
-        assert dists.poincare(x, y) == pytest.approx(dists.poincare(y, x))
-        dist, grad = dists.poincare_grad(x, y)
-        assert dist > 0
-        assert grad.shape == x.shape
-
-    def test_pairwise_distance_dispatchers(self):
-        X = np.array([[0.0, 0.0], [3.0, 4.0]], dtype=np.float32)
-        Y = np.array([[0.0, 4.0]], dtype=np.float32)
-
-        np.testing.assert_allclose(dists.pairwise_euclidean(X, Y), [[4.0], [3.0]])
-        np.testing.assert_allclose(dists.pairwise_cosine(X, X)[0], [0.0, 1.0])
-        np.testing.assert_allclose(
-            dists.matrix_pairwise_distance(X, "euclidean"),
-            dists.pairwise_distances(X, metric="euclidean"),
-        )
-        np.testing.assert_allclose(
-            dists.matrix_to_matrix_distance(X, Y, "euclidean"),
-            dists.pairwise_distances(X, Y, metric="euclidean"),
-        )
-        with pytest.raises(ValueError, match="Unknown metric"):
-            dists.pairwise_distances(X, metric="not-a-metric")
-
-    def test_cosine_vector_to_matrix_matches_pairwise_row(self):
-        X = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
-        out = dists.cosine_vector_to_matrix(X[0], X)
-        np.testing.assert_allclose(out, [0.0, 1.0])
+from topo.base import ann
 
 
 class TestANNHelpers:

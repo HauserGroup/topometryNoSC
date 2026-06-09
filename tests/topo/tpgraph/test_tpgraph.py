@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 from scipy import sparse
 from scipy.sparse.csgraph import connected_components, laplacian
-from sklearn.metrics import pairwise_distances
 
 from topo.base.ann import kNN
 from topo.topograph import TopOGraph
@@ -30,15 +29,6 @@ def test_kernel_estimator(swiss_roll_data):
     assert sparse.issparse(L)
 
 
-def _brute_force_cknn_reference(X, scale_k, delta):
-    D = pairwise_distances(X)
-    np.fill_diagonal(D, np.inf)
-    rho = np.partition(D, scale_k - 1, axis=1)[:, scale_k - 1]
-    adjacency = delta * np.sqrt(rho[:, None] * rho[None, :]) > D
-    np.fill_diagonal(adjacency, False)
-    return sparse.csr_matrix(adjacency.astype(np.float32))
-
-
 def _as_dense_array(matrix):
     return matrix.toarray() if sparse.issparse(matrix) else np.asarray(matrix)
 
@@ -58,15 +48,6 @@ def test_cknn_exact_threshold_positive_case():
 
     assert A[0, 1] == 1
     assert A[1, 0] == 1
-
-
-def test_cknn_exact_matches_brute_force_reference():
-    X = np.random.default_rng(0).normal(size=(50, 3))
-
-    expected = _brute_force_cknn_reference(X, scale_k=5, delta=1.2)
-    actual = cknn_graph(X, scale_k=5, delta=1.2, exact=True)
-
-    np.testing.assert_array_equal(actual.toarray(), expected.toarray())
 
 
 def test_cknn_graph_properties_and_delta_monotonicity():

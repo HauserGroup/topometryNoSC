@@ -308,7 +308,6 @@ class TopOGraph(
         self.selected_scaffold_components_: int | None = None
         self._n_jobs_effective = n_jobs
         self._random_state_resolved: RandomState
-        self.base_nbrs_class: Any | None = None
         self.base_knn_graph: csr_matrix | None = None
         self.knn_X_: csr_matrix | None = None
         self.knn_Z_: csr_matrix | None = None
@@ -330,10 +329,10 @@ class TopOGraph(
         # Dual-scaffold products
         self.Z_: np.ndarray | csr_matrix | None = None
         self.msZ_: np.ndarray | csr_matrix | None = None
+        self.evals_Z_: np.ndarray | None = None
+        self.evals_msZ_: np.ndarray | None = None
         self._knn_msZ: csr_matrix | None = None
         self._knn_Z: csr_matrix | None = None
-        self._kernel_msZ: Kernel | None = None
-        self._kernel_Z: Kernel | None = None
 
         # MAP snapshots
         self.msTopoMAP_snapshots: list[Any] = []
@@ -344,7 +343,6 @@ class TopOGraph(
         self.layout_verbose = False
 
         # Legacy / benchmarking dictionaries
-        self.EigenbasisDict: dict[str, Any] = {}
         self.ProjectionDict: dict[str, np.ndarray] = {}
         self.LocalScoresDict: dict[str, Any] = {}
         self.RiemannMetricDict: dict[str, Any] = {}
@@ -367,7 +365,6 @@ class TopOGraph(
             parts[0] += f" × {self.m} features"
 
         for label, d in [
-            ("Eigenbases", self.EigenbasisDict),
             ("Projections", self.ProjectionDict),
         ]:
             if d:
@@ -890,13 +887,16 @@ class TopOGraph(
                 Z_arr = Z_arr[:, : min(int(n_keep), Z_arr.shape[1])]
 
         if evals is None:
-            key = f"{'msDM' if multiscale else 'DM'} with {self.base_kernel_version}"
-            if key not in self.EigenbasisDict:
-                raise AttributeError("Eigenbasis unavailable. Call .fit() first.")
-            eigenbasis = self.EigenbasisDict[key]
-            ev = np.asarray(eigenbasis.eigenvalues)
+            evals = self.evals_msZ_ if multiscale else self.evals_Z_
+            if evals is None:
+                raise AttributeError(
+                    "Eigenvalues unavailable for spectral_selectivity. "
+                    "Pass `evals` explicitly or call .fit() in global mode."
+                )
 
-            # eigenvalues often include the trivial first mode; if present, drop it.
+            ev = np.asarray(evals, dtype=float)
+
+            # Eigenvalues often include the trivial first mode; if present, drop it.
             evals = (
                 ev[1 : Z_arr.shape[1] + 1]
                 if ev.shape[0] >= Z_arr.shape[1] + 1
@@ -958,9 +958,9 @@ class TopOGraph(
         """Save this TopOGraph to a pickle file."""
         save_topograph(self, filename)
 
-        def spectral_layout(self, *args: Any, **kwargs: Any) -> Any:
-            """Disambiguate inherited ``spectral_layout`` implementations."""
-            return LayoutBuildMixin.spectral_layout(self, *args, **kwargs)
+    def spectral_layout(self, *args: Any, **kwargs: Any) -> Any:
+        """Disambiguate inherited ``spectral_layout`` implementations."""
+        return LayoutBuildMixin.spectral_layout(self, *args, **kwargs)
 
 
 # =========================================================================

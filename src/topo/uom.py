@@ -823,10 +823,10 @@ class UoMMixin:
 
         self._aggregate_uom_blocks()
 
-        if self._kernel_msZ is None:
-            raise RuntimeError("UoM msDM scaffold kernel was not built.")
+        if self.K_msZ_ is None:
+            raise RuntimeError("UoM msDM scaffold affinity was not built.")
 
-        _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
+        _ = self.spectral_layout(graph=self.K_msZ_, n_components=2)
 
         for proj in self.projection_methods:
             for ms in (True, False):
@@ -1108,6 +1108,8 @@ class UoMMixin:
         # Canonical fitted outputs used by TopOGraph public properties.
         self.Z_ = self.Z_uom
         self.msZ_ = self.msZ_uom
+        self.evals_Z_ = None
+        self.evals_msZ_ = None
         self.knn_X_ = self.knn_X_uom
         self.knn_Z_ = self.knn_Z_uom
         self.knn_msZ_ = self.knn_msZ_uom
@@ -1119,5 +1121,3 @@ class UoMMixin:
         self.eigenbasis = None
         self._knn_Z = self.knn_Z_uom
         self._knn_msZ = self.knn_msZ_uom
-        self._kernel_Z = _ProxyKernel(self.P_of_Z_uom)
-        self._kernel_msZ = _ProxyKernel(self.P_of_msZ_uom)

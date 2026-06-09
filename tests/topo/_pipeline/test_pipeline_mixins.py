@@ -33,7 +33,6 @@ class DummyGraphBuilder(GraphBuildMixin):
         self.runtimes = {}
         self.base_kernel_version = "dummy"
         self.base_kernel = None
-        self.base_nbrs_class = None
         self.base_knn_graph = None
         self.build_kernel_calls = []
         self.dummy_kernel = cast(Kernel, DummyFittedKernel())
@@ -72,8 +71,6 @@ class DummyLayoutBuilder(LayoutBuildMixin):
         self.graph_kernel_version = "gk"
         self.base_kernel_version = "bk"
         self.ProjectionDict = {}
-        self._kernel_msZ = None
-        self._kernel_Z = None
         self.random_state = 0
         self.laplacian_type = "normalized"
         self.eigen_tol = 0
@@ -86,7 +83,6 @@ class DummyLayoutBuilder(LayoutBuildMixin):
         self.uom_enabled = False
         self.msZ_uom = None
         self.Z_uom = None
-        self.EigenbasisDict = {}
         self.n_jobs = 1
         self.backend = "sklearn"
         self.layout_verbose = False

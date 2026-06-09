@@ -281,15 +281,11 @@ class TestTopOGraphSaveLoad:
             assert loaded.n == fitted_topograph.n
 
     def test_save_does_not_mutate_live_neighbor_index(self, fitted_topograph):
-        assert fitted_topograph.base_nbrs_class is not None
 
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "tg3.pkl")
             save_topograph(fitted_topograph, path)
-            loaded = load_topograph(path)
-
-        assert fitted_topograph.base_nbrs_class is not None
-        assert loaded.base_nbrs_class is None
+            load_topograph(path)
 
     def test_load_rejects_non_topograph_pickle(self):
         import pickle

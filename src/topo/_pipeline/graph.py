@@ -11,7 +11,6 @@ from typing import cast
 
 import numpy as np
 from scipy.sparse import csr_matrix
-from sklearn.base import BaseEstimator
 
 from topo.base.ann import kNN
 from topo.base.graph_matrix import as_csr_matrix
@@ -37,7 +36,6 @@ class GraphBuildMixin:
     base_kernel_version: str
     low_memory: bool
     base_kernel: Kernel | None
-    base_nbrs_class: BaseEstimator | None
     base_knn_graph: csr_matrix | None
     knn_X_: csr_matrix | None
     P_X_: csr_matrix | None
@@ -100,13 +98,13 @@ class GraphBuildMixin:
             logger.info("Computing neighborhood graph (X space)...")
 
         t0 = time.time()
-        self.base_nbrs_class, self.base_knn_graph = kNN(
+        self.base_knn_graph = kNN(
             X,
             n_neighbors=self.base_knn,
             metric=self.base_metric,
             n_jobs=self._n_jobs_effective,
             backend=self._backend_resolved,
-            return_instance=True,
+            return_instance=False,
             verbose=self.bases_graph_verbose,
         )
         self.runtimes["kNN_X"] = time.time() - t0

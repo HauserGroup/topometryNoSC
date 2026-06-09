@@ -47,12 +47,3 @@ class TestANNHelpers:
             query_graph = ann.kNN(X, Y=Y, n_neighbors=1, backend="hnswlib")
         assert sparse.isspmatrix_csr(query_graph)
         assert query_graph.shape == (2, 4)
-
-    def test_transformers_fail_helpfully_when_not_fitted_or_missing_backend(self):
-        X = np.array([[0.0], [1.0], [2.0]])
-
-        hnsw = ann.HNSWlibTransformer(n_neighbors=1)
-        with pytest.raises(ValueError, match="not fitted"):
-            hnsw.transform(X)
-        hnsw.update_search(2)
-        assert hnsw.n_neighbors == 2

@@ -166,6 +166,11 @@ def get_P(Y, **kwargs_for_kernel):
       to 'precomputed' (assuming Y is an affinity/kernel). If Y is a *distance*
       matrix, convert it to an affinity first or pass the raw data.
     """
+    if Y is None:
+        raise ValueError(
+            "Input data `Y` cannot be None. Please provide a valid array-like, sparse matrix, or fitted Kernel."
+        )
+
     # 1) If user already passed a fitted Kernel, just return its P
 
     if isinstance(Y, Kernel):

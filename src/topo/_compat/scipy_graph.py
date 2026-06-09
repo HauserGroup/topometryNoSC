@@ -6,7 +6,7 @@ package.
 """
 
 import numpy as np
-from scipy.sparse import csr_matrix, diags, identity, issparse
+from scipy.sparse import csr_matrix, diags, identity
 from scipy.sparse.csgraph import (
     connected_components as scipy_connected_components,
 )
@@ -17,12 +17,12 @@ from scipy.sparse.csgraph import (
     shortest_path as scipy_shortest_path,
 )
 
+from topo.base.graph_matrix import as_csr_matrix
+
 
 def as_csr_graph(graph) -> csr_matrix:
     """Return graph as CSR sparse matrix."""
-    if issparse(graph):
-        return graph.tocsr()
-    return csr_matrix(graph)
+    return as_csr_matrix(graph, "graph")
 
 
 def graph_connected_components(

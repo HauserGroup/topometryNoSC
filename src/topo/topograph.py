@@ -23,7 +23,7 @@ import numpy as np
 from numpy.random import RandomState
 from numpy.typing import NDArray
 from scipy.sparse import csr_matrix, issparse
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator
 from sklearn.exceptions import NotFittedError
 from sklearn.utils import check_random_state
 
@@ -128,13 +128,11 @@ def _is_finite_matrix(X) -> bool:
 # ============================================================================
 
 
-class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
+class TopOGraph(
     GraphBuildMixin,
     EigenBuildMixin,
     LayoutBuildMixin,
     UoMMixin,
-    BaseEstimator,
-    TransformerMixin,
 ):
     """Geometry-aware estimator for spectral scaffolds, operators and layouts.
 
@@ -241,7 +239,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         eigen_tol: float = 1e-8,
         eigensolver: str = "arpack",
         backend: str = "sklearn",
-        cache: bool = True,
         verbosity: int = 0,
         random_state=42,
         laplacian_type: str = "normalized",
@@ -280,7 +277,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.eigen_tol = eigen_tol
         self.eigensolver = eigensolver
         self.backend = backend
-        self.cache = cache
         self.verbosity = verbosity
         self.random_state = random_state
         self.laplacian_type = laplacian_type
@@ -302,8 +298,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         # If CkNN is used with a normalized Laplacian, use unnormalized by
         # default. This preserves the intended binary graph semantics while
         # still allowing explicit non-default laplacian_type choices.
-        self.requested_laplacian_type = laplacian_type
-
         uses_cknn = base_kernel_version == "cknn" or graph_kernel_version == "cknn"
 
         self.laplacian_type = (
@@ -311,8 +305,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             if uses_cknn and laplacian_type == "normalized"
             else laplacian_type
         )
-
-        self._effective_laplacian_type = self.laplacian_type
 
         # Fitted state
         self.n: int | None = None
@@ -323,9 +315,13 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self._random_state_resolved: RandomState
         self.base_nbrs_class: BaseEstimator | None = None
         self.base_knn_graph: csr_matrix | None = None
+        self.knn_X_: csr_matrix | None = None
+        self.knn_Z_: csr_matrix | None = None
+        self.knn_msZ_: csr_matrix | None = None
+        self.P_X_: csr_matrix | None = None
+        self.P_Z_: csr_matrix | None = None
+        self.P_msZ_: csr_matrix | None = None
         self.eigenbasis: Any = None
-        self.current_eigenbasis: str | None = None
-        self.current_graphkernel: str | None = None
         self.graph_kernel: Kernel | None = None
         self.SpecLayout: np.ndarray | None = None
         self.global_dimensionality: int | float | None = None
@@ -335,6 +331,8 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self._scaffold_components_ms: int | None = None
 
         # Dual-scaffold products
+        self.Z_: np.ndarray | csr_matrix | None = None
+        self.msZ_: np.ndarray | csr_matrix | None = None
         self._knn_msZ: csr_matrix | None = None
         self._knn_Z: csr_matrix | None = None
         self._kernel_msZ: Kernel | None = None
@@ -481,7 +479,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             pairwise=False,
             backend=self._backend_resolved,
             n_jobs=self._n_jobs_effective,
-            laplacian_type=self._effective_laplacian_type,
+            laplacian_type=self.laplacian_type,
             semi_aniso=False,
             anisotropy=1.0,
             cache_input=False,
@@ -532,7 +530,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         else:
             out = self._fit_global(X)
 
-        self._sync_fitted_state_from_caches()
         self._check_fitted_pipeline_state()
         return out
 
@@ -549,7 +546,7 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             )
         if self.backend not in {"sklearn", "hnswlib"}:
             raise ValueError("backend must be one of {'sklearn', 'hnswlib'}.")
-        if self.requested_laplacian_type not in VALID_LAPLACIAN_TYPES:
+        if self.laplacian_type not in VALID_LAPLACIAN_TYPES:
             raise ValueError(
                 f"laplacian_type must be one of {sorted(VALID_LAPLACIAN_TYPES)}."
             )
@@ -658,46 +655,6 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         else:
             self.n_eigs_ = int(self.n_eigs)
 
-    def _sync_fitted_state_from_caches(self) -> None:
-        """Best-effort compatibility sync from legacy result dictionaries.
-
-        This is transitional glue for older pipeline paths and tests that populate
-        EigenbasisDict / GraphKernelDict directly. New fit paths should set the
-        canonical attributes explicitly instead of relying on this method.
-        """
-        if self.current_eigenbasis is None and self.EigenbasisDict:
-            keys = list(self.EigenbasisDict)
-            preferred = (
-                [k for k in keys if str(k).startswith("msDM")]
-                or [k for k in keys if "ms" in str(k).lower()]
-                or keys
-            )
-            self.current_eigenbasis = preferred[0]
-
-        if self.eigenbasis is None and self.current_eigenbasis is not None:
-            self.eigenbasis = self.EigenbasisDict.get(self.current_eigenbasis)
-
-        if self._kernel_msZ is None and self.GraphKernelDict:
-            for key, value in self.GraphKernelDict.items():
-                key_l = str(key).lower()
-                if "msz" in key_l or "msdm" in key_l or "multiscale" in key_l:
-                    self._kernel_msZ = value
-                    break
-
-        if self._kernel_Z is None and self.GraphKernelDict:
-            for key, value in self.GraphKernelDict.items():
-                key_l = str(key).lower()
-                if (
-                    ("_z" in key_l or " dm" in key_l or key_l.startswith("dm"))
-                    and "ms" not in key_l
-                    and "multiscale" not in key_l
-                ):
-                    self._kernel_Z = value
-                    break
-
-        if self.graph_kernel is None:
-            self.graph_kernel = self._kernel_msZ or self._kernel_Z
-
     def _setup_environment(self) -> None:
         """Resolve runtime configuration used by internal pipeline phases."""
         from topo._logging import configure
@@ -720,27 +677,33 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
         self.bases_graph_verbose = self.verbosity >= 3
 
     def _check_fitted_pipeline_state(self) -> None:
-        """Validate that core fitted pipeline state is internally consistent."""
-        if self.base_kernel is None:
-            raise RuntimeError("fit() completed without a fitted base_kernel.")
+        """Validate that canonical fitted pipeline state is available."""
+        if self.P_X_ is None:
+            raise RuntimeError("fit() completed without fitted input-space operator.")
 
-        if self.uom_enabled:
-            if self.P_of_msZ_uom is None:
-                raise RuntimeError("fit() completed without fitted UoM msDM operator.")
-            if self.P_of_Z_uom is None:
-                raise RuntimeError("fit() completed without fitted UoM DM operator.")
-            return
+        if self.Z_ is None:
+            raise RuntimeError("fit() completed without fitted DM scaffold.")
+        if self.msZ_ is None:
+            raise RuntimeError("fit() completed without fitted msDM scaffold.")
 
-        if self.current_eigenbasis is None or self.eigenbasis is None:
+        if self.P_Z_ is None:
+            raise RuntimeError("fit() completed without fitted DM scaffold operator.")
+        if self.P_msZ_ is None:
+            raise RuntimeError("fit() completed without fitted msDM scaffold operator.")
+
+        if self.knn_X_ is None:
+            raise RuntimeError("fit() completed without fitted input-space kNN graph.")
+        if self.knn_Z_ is None:
+            raise RuntimeError("fit() completed without fitted DM scaffold kNN graph.")
+        if self.knn_msZ_ is None:
+            raise RuntimeError(
+                "fit() completed without fitted msDM scaffold kNN graph."
+            )
+
+        if self.eigenbasis is None and not self.uom_enabled:
             raise RuntimeError("fit() completed without an active eigenbasis.")
 
-        if self._kernel_msZ is None:
-            raise RuntimeError("fit() completed without an msDM scaffold kernel.")
-
-        if self._kernel_Z is None:
-            raise RuntimeError("fit() completed without a DM scaffold kernel.")
-
-        if self.graph_kernel is None:
+        if self.graph_kernel is None and not self.uom_enabled:
             raise RuntimeError("fit() completed without an active graph_kernel.")
 
     # ------------------------------------------------------------------
@@ -749,31 +712,12 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     def spectral_scaffold(self, multiscale: bool = True) -> np.ndarray | csr_matrix:
         """Return fitted spectral scaffold coordinates."""
-        if self.uom_enabled:
-            arr = self.msZ_uom if multiscale else self.Z_uom
-            if arr is None:
-                raise AttributeError(
-                    "UoM scaffold not available. Call .fit(X, uom=True)."
-                )
-            return arr
+        arr = self.msZ_ if multiscale else self.Z_
 
-        key = f"{'msDM' if multiscale else 'DM'} with {self.base_kernel_version}"
-        if key not in self.EigenbasisDict:
-            raise AttributeError("Scaffold not found. Call .fit() first.")
+        if arr is None:
+            raise AttributeError("Scaffold unavailable. Call .fit() first.")
 
-        Z = self.EigenbasisDict[key].transform(X=None)
-        if Z is None:
-            raise RuntimeError(f"Eigenbasis {key!r} returned no scaffold coordinates.")
-        if isinstance(Z, tuple):
-            raise RuntimeError(
-                f"Eigenbasis {key!r} returned a tuple, expected a matrix."
-            )
-
-        Z_arr = np.asarray(Z)
-        if Z_arr.ndim != 2:
-            raise RuntimeError(f"Eigenbasis {key!r} returned a non-2-D scaffold.")
-
-        return Z_arr
+        return arr
 
     # ------------------------------------------------------------------
     # Properties
@@ -793,71 +737,45 @@ class TopOGraph(  # pyright: ignore[reportIncompatibleVariableOverride]
             sizes = [int(ix.size) for ix in comps]
             return {"mode": mode, "per_component": per_comp, "component_sizes": sizes}
 
-        if self.current_eigenbasis is None:
-            self._sync_fitted_state_from_caches()
-
-        if self.current_eigenbasis is None:
+        if self.eigenbasis is None:
             raise AttributeError("Eigenvalues unavailable. Call .fit() first.")
 
-        return self.EigenbasisDict[self.current_eigenbasis].eigenvalues
+        return self.eigenbasis.eigenvalues
 
     @property
     def knn_msZ(self) -> csr_matrix:
         """The k-nearest-neighbors graph built in the msDM scaffold space."""
-        if self.uom_enabled and self.knn_msZ_uom is not None:
-            return csr_matrix(self.knn_msZ_uom)
-        if self._knn_msZ is None:
+        if self.knn_msZ_ is None:
             raise AttributeError("knn_msZ unavailable. Call .fit() first.")
-        return self._knn_msZ
+        return self.knn_msZ_
 
     @property
     def knn_Z(self) -> csr_matrix:
         """The k-nearest-neighbors graph built in the fixed-time DM scaffold space."""
-        if self.uom_enabled and self.knn_Z_uom is not None:
-            return csr_matrix(self.knn_Z_uom)
-        if self._knn_Z is None:
+        if self.knn_Z_ is None:
             raise AttributeError("knn_Z unavailable. Call .fit() first.")
-        return self._knn_Z
+        return self.knn_Z_
 
     @property
     def P_of_msZ(self) -> csr_matrix:
         """The diffusion operator on the msDM scaffold."""
-        if self.uom_enabled and self.P_of_msZ_uom is not None:
-            return csr_matrix(self.P_of_msZ_uom)
-        if self._kernel_msZ is None:
+        if self.P_msZ_ is None:
             raise AttributeError("P_of_msZ unavailable. Call .fit() first.")
-        return csr_matrix(self._kernel_msZ.P)
-
-    @P_of_msZ.setter
-    def P_of_msZ(self, value) -> None:
-        raise AttributeError("P_of_msZ is a read-only fitted property.")
+        return self.P_msZ_
 
     @property
     def P_of_Z(self) -> csr_matrix:
         """The diffusion operator on the fixed-time DM scaffold."""
-        if self.uom_enabled and self.P_of_Z_uom is not None:
-            return csr_matrix(self.P_of_Z_uom)
-
-        if self._kernel_Z is None:
-            self._sync_fitted_state_from_caches()
-
-        if self._kernel_Z is None:
+        if self.P_Z_ is None:
             raise AttributeError("P_of_Z unavailable. Call .fit() first.")
-
-        return csr_matrix(self._kernel_Z.P)
-
-    @P_of_Z.setter
-    def P_of_Z(self, value) -> None:
-        raise AttributeError("P_of_Z is a read-only fitted property.")
+        return self.P_Z_
 
     @property
     def knn_X(self) -> csr_matrix:
         """The base k-nearest-neighbors graph in the original input space."""
-        if self.uom_enabled and self.knn_X_uom is not None:
-            return csr_matrix(self.knn_X_uom)
-        if self.base_knn_graph is None:
+        if self.knn_X_ is None:
             raise AttributeError("knn_X unavailable. Call .fit() first.")
-        return self.base_knn_graph
+        return self.knn_X_
 
     @property
     def P_of_X(self) -> csr_matrix:

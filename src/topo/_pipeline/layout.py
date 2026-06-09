@@ -46,7 +46,6 @@ class LayoutBuildMixin:
     ProjectionDict: dict[str, np.ndarray]
     _kernel_msZ: Kernel | None
     _kernel_Z: Kernel | None
-    random_state: int | np.random.RandomState | None
     laplacian_type: str
     eigen_tol: float
     runtimes: dict[str, float]
@@ -61,6 +60,7 @@ class LayoutBuildMixin:
     _n_jobs_effective: int
     backend: str
     _backend_resolved: str
+    _random_state_resolved: np.random.RandomState
     layout_verbose: bool
     verbosity: int
     msTopoMAP_snapshots: list[dict[str, Any]]

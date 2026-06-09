@@ -12,12 +12,11 @@ import warnings
 from typing import Any, cast
 
 import numpy as np
-from scipy.sparse import csr_matrix, issparse
+from scipy.sparse import csr_matrix
 
 from topo.base.graph_matrix import as_csr_matrix
 from topo.layouts.projector import Projector
 from topo.spectral.eigen import EigenDecomposition, spectral_layout
-from topo.tpgraph.kernels import Kernel
 
 logger = logging.getLogger(__name__)
 
@@ -41,39 +40,37 @@ class LayoutBuildMixin:
 
     # Interface contract — attributes supplied by TopOGraph
     projection_methods: list[str]
-    graph_kernel_version: str
-    base_kernel_version: str
     ProjectionDict: dict[str, np.ndarray]
-    _kernel_msZ: Kernel | None
-    _kernel_Z: Kernel | None
+
+    Z_: np.ndarray | csr_matrix | None
+    msZ_: np.ndarray | csr_matrix | None
+    P_Z_: csr_matrix | None
+    P_msZ_: csr_matrix | None
+    K_Z_: csr_matrix | None
+    K_msZ_: csr_matrix | None
+
     laplacian_type: str
     eigen_tol: float
     runtimes: dict[str, float]
     SpecLayout: np.ndarray | None
+
     graph_knn: int
     graph_metric: str
-    uom_enabled: bool
-    msZ_uom: csr_matrix | None
-    Z_uom: csr_matrix | None
-    EigenbasisDict: dict[str, EigenDecomposition]
-    n_jobs: int
     _n_jobs_effective: int
-    backend: str
     _backend_resolved: str
     _random_state_resolved: np.random.RandomState
+
     layout_verbose: bool
     verbosity: int
     msTopoMAP_snapshots: list[dict[str, Any]]
     TopoMAP_snapshots: list[dict[str, Any]]
+
     uom_eigenvalues_ms_list: list[np.ndarray]
-    _uom_active_mode: str
     uom_eigenvalues_dm_list: list[np.ndarray]
     uom_components_: list[np.ndarray] | None
+    _uom_active_mode: str
+    uom_enabled: bool
     eigenbasis: EigenDecomposition | None
-    base_kernel: Kernel | None
-    _random_state_resolved: np.random.RandomState
-    P_of_msZ_uom: csr_matrix | None
-    P_of_Z_uom: csr_matrix | None
 
     def _run_projections(self) -> None:
         """Compute requested projections on both DM and msDM scaffold graphs."""
@@ -103,44 +100,43 @@ class LayoutBuildMixin:
 
     def _get_projection(self, method: str, multiscale: bool):
         """Look up a stored projection from ProjectionDict."""
-        method = str(method)
         tag = "msDM" if multiscale else "DM"
+        key = f"{str(method)} of {tag}"
 
-        if method in ("MAP", "Isomap", "IsomorphicMDE", "IsometricMDE"):
-            key = (
-                f"{method} of {self.graph_kernel_version} from {tag} "
-                f"with {self.base_kernel_version}"
+        if key not in self.ProjectionDict:
+            raise AttributeError(
+                f"{method} ({tag}) embedding unavailable. Call .fit() or .project() first."
             )
-        else:
-            key = f"{method} of {tag} with {self.base_kernel_version}"
 
-        if key in self.ProjectionDict:
-            return self.ProjectionDict[key]
-
-        uom_key = f"{method} of UoM {tag} with {self.base_kernel_version}"
-        if uom_key in self.ProjectionDict:
-            return self.ProjectionDict[uom_key]
-
-        raise AttributeError(
-            f"{method} ({tag}) embedding unavailable. Call .fit() or .project() first."
-        )
+        return self.ProjectionDict[key]
 
     # ------------------------------------------------------------------
     # Spectral layout
     # ------------------------------------------------------------------
 
-    def spectral_layout(self, graph=None, n_components: int = 2):
+    def _resolve_refined_kernel_graph(self, multiscale: bool) -> csr_matrix:
+        """Return the fitted scaffold affinity used for spectral initialization."""
+        K = self.K_msZ_ if multiscale else self.K_Z_
+        if K is None:
+            tag = "msDM" if multiscale else "DM"
+            raise AttributeError(
+                f"{tag} refined affinity unavailable. Call .fit() first."
+            )
+        return K
+
+    def spectral_layout(
+        self,
+        graph=None,
+        n_components: int = 2,
+        *,
+        multiscale: bool = True,
+    ):
         """Compute a spectral initialization for layout optimization."""
         if int(n_components) < 1:
             raise ValueError("n_components must be >= 1.")
 
         if graph is None:
-            if self._kernel_msZ is not None:
-                graph = self._kernel_msZ.K
-            elif self._kernel_Z is not None:
-                graph = self._kernel_Z.K
-            else:
-                raise ValueError("No graph kernel available. Call .fit() first.")
+            graph = self._resolve_refined_kernel_graph(multiscale)
 
         shape = getattr(graph, "shape", None)
         if shape is None or len(shape) != 2:
@@ -233,28 +229,12 @@ class LayoutBuildMixin:
         if projection_method in ("MAP", "IsomorphicMDE", "IsometricMDE", "Isomap"):
             metric = "precomputed"
             input_mat = self._resolve_projection_operator(multiscale)
-            key = (
-                f"{self.graph_kernel_version} from {tag} "
-                f"with {self.base_kernel_version}"
-            )
         else:
             metric = self.graph_metric
-            if self.uom_enabled:
-                uom_input = self.msZ_uom if multiscale else self.Z_uom
-                if uom_input is None:
-                    raise AttributeError(
-                        f"UoM {tag} scaffold unavailable. Call .fit(X, uom=True)."
-                    )
-                input_mat = uom_input
-            else:
-                eig_key = f"{tag} with {self.base_kernel_version}"
-                if eig_key not in self.EigenbasisDict:
-                    raise AttributeError(f"Eigenbasis {eig_key!r} unavailable.")
-                input_mat = _as_2d_array(
-                    self.EigenbasisDict[eig_key].transform(X=None),
-                    eig_key,
-                )
-            key = f"{tag} with {self.base_kernel_version}"
+            scaffold = self.msZ_ if multiscale else self.Z_
+            if scaffold is None:
+                raise AttributeError(f"{tag} scaffold unavailable. Call .fit() first.")
+            input_mat = _as_2d_array(scaffold, tag)
 
         input_shape = getattr(input_mat, "shape", None)
         if input_shape is None or len(input_shape) != 2:
@@ -268,14 +248,12 @@ class LayoutBuildMixin:
             else:
                 raise ValueError(f"Invalid init: {init}")
         else:
-            graph = (
-                self._kernel_msZ.K
-                if (multiscale and self._kernel_msZ is not None)
-                else (self._kernel_Z.K if self._kernel_Z is not None else None)
+            graph = self._resolve_refined_kernel_graph(multiscale)
+            init_Y = self.spectral_layout(
+                graph=graph,
+                n_components=int(n_components),
+                multiscale=multiscale,
             )
-            if graph is None:
-                raise ValueError("No refined kernel for spectral initialization.")
-            init_Y = self.spectral_layout(graph=graph, n_components=int(n_components))
 
         init_Y = np.asarray(init_Y)
         if init_Y.ndim != 2 or init_Y.shape[1] != int(n_components):
@@ -285,7 +263,7 @@ class LayoutBuildMixin:
         if init_Y.shape[0] != int(input_shape[0]):
             raise ValueError("init and projection input must have the same row count.")
 
-        projection_key = f"{projection_method} of {key}"
+        projection_key = f"{projection_method} of {tag}"
         t0 = time.time()
 
         proj = Projector(
@@ -320,12 +298,10 @@ class LayoutBuildMixin:
 
         self.runtimes[projection_key] = time.time() - t0
         if self.verbosity >= 1:
-            uom_tag = " [UoM]" if self.uom_enabled else ""
             logger.info(
-                "  %s (%s%s) in %.3fs",
+                "  %s (%s) in %.3fs",
                 projection_method,
                 "msZ" if multiscale else "Z/DM",
-                uom_tag,
                 self.runtimes[projection_key],
             )
 
@@ -341,276 +317,11 @@ class LayoutBuildMixin:
         return Y
 
     def _resolve_projection_operator(self, multiscale: bool) -> csr_matrix:
-        """Resolve the fitted diffusion operator used as precomputed projection input."""
-        if self.uom_enabled:
-            P = self.P_of_msZ_uom if multiscale else self.P_of_Z_uom
-            if P is None:
-                tag = "msDM" if multiscale else "DM"
-                raise AttributeError(
-                    f"UoM {tag} diffusion operator unavailable. Call .fit(X, uom=True)."
-                )
-            return as_csr_matrix(P, "UoM projection operator")
-
-        if multiscale:
-            if self._kernel_msZ is None:
-                raise AttributeError("P_of_msZ unavailable. Call .fit() first.")
-            return as_csr_matrix(self._kernel_msZ.P, "P_of_msZ")
-
-        if self._kernel_Z is None:
-            raise AttributeError("P_of_Z unavailable. Call .fit() first.")
-        return as_csr_matrix(self._kernel_Z.P, "P_of_Z")
-
-    # ------------------------------------------------------------------
-    # Eigenspectrum plot
-    # ------------------------------------------------------------------
-
-    def eigenspectrum(self, eigenbasis_key=None, **kwargs):
-        """Scree plot (calls ``topo.plot.decay_plot``)."""
-        from topo._optional import require
-
-        require("matplotlib", purpose="eigenspectrum plotting")
-        from topo.plot import decay_plot
-
-        if getattr(self, "uom_enabled", False) and self.uom_eigenvalues_ms_list:
-            mode = getattr(self, "_uom_active_mode", "msDM")
-            ev_lists = (
-                self.uom_eigenvalues_ms_list
-                if mode == "msDM"
-                else self.uom_eigenvalues_dm_list
+        """Return the fitted scaffold diffusion operator for projection."""
+        P = self.P_msZ_ if multiscale else self.P_Z_
+        if P is None:
+            tag = "msDM" if multiscale else "DM"
+            raise AttributeError(
+                f"{tag} diffusion operator unavailable. Call .fit() first."
             )
-            sizes = [int(ix.size) for ix in (self.uom_components_ or [])]
-            figs = []
-            for j, ev in enumerate(ev_lists):
-                figs.append(
-                    decay_plot(
-                        evals=ev,
-                        title=f"Component {j} (n={sizes[j]}) · {mode}",
-                        **kwargs,
-                    )
-                )
-            return figs
-
-        eb = (
-            self.EigenbasisDict.get(eigenbasis_key)
-            if eigenbasis_key
-            else self.eigenbasis
-        )
-        if eb is None:
-            raise AttributeError("No eigenbasis available.")
-        return decay_plot(evals=eb.eigenvalues, title=eigenbasis_key, **kwargs)
-
-    # ------------------------------------------------------------------
-    # find_ideal_projection (grid-search MAP hyperparameters)
-    # ------------------------------------------------------------------
-
-    def find_ideal_projection(
-        self,
-        min_dist_grid=None,
-        spread_grid=None,
-        initial_alpha_grid=None,
-        *,
-        multiscale: bool = True,
-        num_iters: int = 600,
-        save_every: int = 10,
-        metric: str = "euclidean",
-        n_neighbors: int = 30,
-        backend: str | None = None,
-        n_jobs: int | None = None,
-        times=(1, 2, 4),
-        r: int = 32,
-        k_for_pf1=None,
-        symmetric_hint: bool = True,
-        verbosity: int = 1,
-    ):
-        """Grid-search MAP hyperparameters and select the best projection."""
-        from topo.eval.topo_metrics import get_P, topo_preserve_score
-
-        if min_dist_grid is None:
-            min_dist_grid = [0.2, 0.6, 1.0]
-        if spread_grid is None:
-            spread_grid = [0.8, 1.2, 1.6]
-        if initial_alpha_grid is None:
-            initial_alpha_grid = [0.4, 1.0, 1.6]
-
-        effective_backend = self._backend_resolved if backend is None else str(backend)
-        if effective_backend not in {"sklearn", "hnswlib"}:
-            raise ValueError("backend must be one of {'sklearn', 'hnswlib'}.")
-
-        effective_n_jobs = self._n_jobs_effective if n_jobs is None else int(n_jobs)
-        if effective_n_jobs < -1 or effective_n_jobs == 0:
-            raise ValueError("n_jobs must be -1 or a positive integer.")
-
-        if int(n_neighbors) < 1:
-            raise ValueError("n_neighbors must be >= 1.")
-
-        if self.base_kernel is None:
-            raise ValueError("No base kernel available. Call fit() first.")
-
-        PX_ref = self.base_kernel.P
-        if not issparse(PX_ref):
-            PX_ref = csr_matrix(PX_ref)
-
-        combos = [
-            (md, sp_, ia)
-            for md in min_dist_grid
-            for sp_ in spread_grid
-            for ia in initial_alpha_grid
-        ]
-
-        best_score = float("-inf")
-        best_params: dict[str, float] | None = None
-        best_snapshots: list[dict] | None = None
-        all_scores = []
-        snap_attr = "msTopoMAP_snapshots" if multiscale else "TopoMAP_snapshots"
-
-        for md, sp_, ia in combos:
-            if verbosity >= 1:
-                logger.info(
-                    "[Grid] MAP: min_dist=%s, spread=%s, initial_alpha=%s",
-                    md,
-                    sp_,
-                    ia,
-                )
-
-            self.project(
-                projection_method="MAP",
-                multiscale=bool(multiscale),
-                num_iters=int(num_iters),
-                save_every=int(save_every),
-                include_init_snapshot=True,
-                min_dist=float(md),
-                spread=float(sp_),
-                initial_alpha=float(ia),
-            )
-
-            snapshots = getattr(self, snap_attr, None) or []
-            scores_this = []
-
-            for snap in snapshots:
-                Ysnap = snap["embedding"]
-                PY = get_P(
-                    Ysnap,
-                    metric=metric,
-                    n_neighbors=int(n_neighbors),
-                    backend=effective_backend,
-                    n_jobs=effective_n_jobs,
-                )
-                if not issparse(PY):
-                    PY = csr_matrix(PY)
-
-                score, parts = topo_preserve_score(
-                    PX_ref,
-                    PY,
-                    times=times,
-                    r=r,
-                    symmetric_hint=symmetric_hint,
-                    k_for_pf1=k_for_pf1,
-                )
-
-                snap["metrics"] = {
-                    "TP": float(score),
-                    "PF1": float(parts.get("PF1", np.nan)),
-                    "PJS": float(parts.get("PJS", np.nan)),
-                    "SP": float(parts.get("SP", np.nan)),
-                }
-                snap["hyperparams"] = {
-                    "min_dist": float(md),
-                    "spread": float(sp_),
-                    "initial_alpha": float(ia),
-                }
-                scores_this.append(float(score))
-
-            final_score = scores_this[-1] if scores_this else float("-inf")
-            all_scores.append(
-                {
-                    "min_dist": float(md),
-                    "spread": float(sp_),
-                    "initial_alpha": float(ia),
-                    "final_score": final_score,
-                }
-            )
-
-            if final_score > best_score:
-                best_score = final_score
-                best_params = {
-                    "min_dist": float(md),
-                    "spread": float(sp_),
-                    "initial_alpha": float(ia),
-                }
-                best_snapshots = [dict(s) for s in snapshots]
-
-        if best_params is not None:
-            self.project(
-                projection_method="MAP",
-                multiscale=bool(multiscale),
-                num_iters=int(num_iters),
-                save_every=int(save_every),
-                include_init_snapshot=True,
-                min_dist=best_params["min_dist"],
-                spread=best_params["spread"],
-                initial_alpha=best_params["initial_alpha"],
-            )
-
-        if best_snapshots is not None:
-            setattr(self, snap_attr, best_snapshots)
-
-        return {
-            "best_params": best_params,
-            "best_score": best_score,
-            "scores": all_scores,
-            "best_snapshots": best_snapshots,
-        }
-
-    # ------------------------------------------------------------------
-    # Visualization (delegates to topo.plot)
-    # ------------------------------------------------------------------
-
-    def visualize_optimization(
-        self,
-        num_iters: int = 600,
-        save_every: int = 10,
-        dpi: int = 120,
-        color=None,
-        *,
-        multiscale: bool = True,
-        filename: str | None = None,
-        point_size: float = 3.0,
-        fps: int = 20,
-        include_init_snapshot: bool = True,
-        overlay_metrics: bool = False,
-    ):
-        """Produce an animated GIF of MAP training snapshots."""
-        from topo.plot import visualize_optimization as _viz
-
-        snap_attr = "msTopoMAP_snapshots" if multiscale else "TopoMAP_snapshots"
-        snapshots = getattr(self, snap_attr, None)
-
-        if not snapshots or len(snapshots) < 2:
-            self.project(
-                projection_method="MAP",
-                num_iters=max(int(num_iters), int(save_every)),
-                save_every=int(save_every),
-                include_init_snapshot=bool(include_init_snapshot),
-                multiscale=bool(multiscale),
-            )
-            snapshots = getattr(self, snap_attr, None)
-
-        if not snapshots:
-            raise RuntimeError("No snapshots available.")
-
-        tag = "msTopoMAP" if multiscale else "TopoMAP"
-        path = _viz(
-            snapshots,
-            dpi=dpi,
-            color=color,
-            filename=filename,
-            point_size=point_size,
-            fps=fps,
-            tag=tag,
-            overlay_metrics=overlay_metrics,
-        )
-
-        if self.verbosity >= 1:
-            logger.info("Wrote %s with %d frames.", path, len(snapshots))
-
-        return path
+        return P

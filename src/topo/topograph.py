@@ -7,11 +7,10 @@
 The user-facing entry point that ties the pipeline together: base graph and
 kernel construction, the dual (DM / msDM) spectral scaffold, refined graphs and
 2-D projections. Composes the mixins in :mod:`topo._pipeline` and
-:mod:`topo.uom`, exposing scikit-learn-style ``fit``/``transform`` plus
-``save``/``load`` helpers.
+:mod:`topo.uom`, exposing ``fit`` plus analysis, projection, and persistence
+helpers.
 """
 
-import copy
 import gc
 import logging
 import warnings
@@ -23,7 +22,6 @@ import numpy as np
 from numpy.random import RandomState
 from numpy.typing import NDArray
 from scipy.sparse import csr_matrix, issparse
-from sklearn.base import BaseEstimator
 from sklearn.exceptions import NotFittedError
 from sklearn.utils import check_random_state
 
@@ -193,8 +191,6 @@ class TopOGraph(
         Solver for eigendecomposition.
     projection_methods : sequence of str or None, default=None
         Layouts to compute during ``fit``. If None, uses ["MAP", "PaCMAP"].
-    cache : bool, default=True
-        Cache kernel / eigen objects in dictionaries for reuse.
     verbosity : int, default=0
         Logging verbosity.
     random_state : int, RandomState, or None, default=42
@@ -253,7 +249,6 @@ class TopOGraph(
         # UoM
         uom: bool = False,
     ):
-        # Keep constructor parameters as attributes for sklearn compatibility.
         self.base_knn = base_knn
         self.graph_knn = graph_knn
         self.min_eigs = min_eigs
@@ -313,7 +308,7 @@ class TopOGraph(
         self.selected_scaffold_components_: int | None = None
         self._n_jobs_effective = n_jobs
         self._random_state_resolved: RandomState
-        self.base_nbrs_class: BaseEstimator | None = None
+        self.base_nbrs_class: Any | None = None
         self.base_knn_graph: csr_matrix | None = None
         self.knn_X_: csr_matrix | None = None
         self.knn_Z_: csr_matrix | None = None
@@ -321,6 +316,8 @@ class TopOGraph(
         self.P_X_: csr_matrix | None = None
         self.P_Z_: csr_matrix | None = None
         self.P_msZ_: csr_matrix | None = None
+        self.K_Z_: csr_matrix | None = None
+        self.K_msZ_: csr_matrix | None = None
         self.eigenbasis: Any = None
         self.graph_kernel: Kernel | None = None
         self.SpecLayout: np.ndarray | None = None
@@ -347,9 +344,7 @@ class TopOGraph(
         self.layout_verbose = False
 
         # Legacy / benchmarking dictionaries
-        self.BaseKernelDict: dict[str, Kernel] = {}
         self.EigenbasisDict: dict[str, Any] = {}
-        self.GraphKernelDict: dict[str, Kernel] = {}
         self.ProjectionDict: dict[str, np.ndarray] = {}
         self.LocalScoresDict: dict[str, Any] = {}
         self.RiemannMetricDict: dict[str, Any] = {}
@@ -372,9 +367,7 @@ class TopOGraph(
             parts[0] += f" × {self.m} features"
 
         for label, d in [
-            ("Base Kernels", self.BaseKernelDict),
             ("Eigenbases", self.EigenbasisDict),
-            ("Graph Kernels", self.GraphKernelDict),
             ("Projections", self.ProjectionDict),
         ]:
             if d:
@@ -394,17 +387,13 @@ class TopOGraph(
         knn,
         n_neighbors,
         kernel_version,
-        results_dict,
-        prefix="",
-        suffix="",
-        low_memory=False,
-        base=True,
+        *,
+        base: bool = True,
         data_for_expansion=None,
-    ) -> tuple[Kernel, dict[str, Kernel]]:
+    ) -> Kernel:
         """Build a :class:`Kernel` from a kNN graph and a named kernel version.
 
-        This is an internal pipeline helper. It assumes ``_setup_environment()`` has
-        already run and therefore uses resolved runtime attributes directly.
+        This internal helper assumes ``_setup_environment()`` has already run.
         """
         if kernel_version not in VALID_KERNEL_VERSIONS:
             raise ValueError(f"Invalid kernel_version: {kernel_version}")
@@ -421,7 +410,6 @@ class TopOGraph(
         if int(n_neighbors) < 1:
             raise ValueError("n_neighbors must be >= 1.")
 
-        kernel_key = f"{prefix}{kernel_version}{suffix}"
         cfg = _KERNEL_CONFIGS[str(kernel_version)].copy()
 
         uses_raw_data = bool(cfg.get("expand_nbr_search")) or kernel_version == "cknn"
@@ -489,11 +477,7 @@ class TopOGraph(
         ).fit(fit_input)
 
         gc.collect()
-
-        if not low_memory:
-            results_dict[kernel_key] = kernel
-
-        return kernel, results_dict
+        return kernel
 
     # ------------------------------------------------------------------
     # Fit orchestration
@@ -691,6 +675,11 @@ class TopOGraph(
         if self.P_msZ_ is None:
             raise RuntimeError("fit() completed without fitted msDM scaffold operator.")
 
+        if self.K_Z_ is None:
+            raise RuntimeError("fit() completed without fitted DM scaffold affinity.")
+        if self.K_msZ_ is None:
+            raise RuntimeError("fit() completed without fitted msDM scaffold affinity.")
+
         if self.knn_X_ is None:
             raise RuntimeError("fit() completed without fitted input-space kNN graph.")
         if self.knn_Z_ is None:
@@ -840,12 +829,13 @@ class TopOGraph(
     def _select_P_operator(self, which: str = "msZ") -> csr_matrix:
         """Resolve a fitted diffusion operator by name."""
         which_norm = str(which).lower()
+
         if which_norm == "x":
-            return csr_matrix(self.P_of_X)
+            return self.P_of_X
         if which_norm == "z":
-            return csr_matrix(self.P_of_Z)
+            return self.P_of_Z
         if which_norm == "msz":
-            return csr_matrix(self.P_of_msZ)
+            return self.P_of_msZ
 
         raise ValueError("`which` must be one of {'X', 'Z', 'msZ'}.")
 
@@ -862,7 +852,7 @@ class TopOGraph(
 
         return cast(NDArray[Any] | csr_matrix, self.base_kernel.X)
 
-    def _resolve_optional_operator(self, op, *, default_name: str | None = None):
+    def _resolve_optional_operator(self, op):
         """Resolve None/string/operator inputs used by analysis wrappers."""
         if op is None:
             return None
@@ -951,9 +941,7 @@ class TopOGraph(
 
         if L is None:
             if self.base_kernel is None:
-                raise ValueError(
-                    "No base kernel available. Call fit() before riemann_diagnostics()."
-                )
+                raise ValueError("No base kernel available. Call fit() first.")
             L = self.base_kernel.L
 
         P = self._resolve_optional_operator(diffusion_op)
@@ -966,17 +954,13 @@ class TopOGraph(
     # I/O
     # ------------------------------------------------------------------
 
-    def save(
-        self,
-        filename: str | PathLike[str] = "topograph.pkl",
-        remove_base_class: bool = True,
-    ) -> None:
+    def save(self, filename: str | PathLike[str] = "topograph.pkl") -> None:
         """Save this TopOGraph to a pickle file."""
-        save_topograph(self, filename, remove_base_class)
+        save_topograph(self, filename)
 
-    def spectral_layout(self, *args: Any, **kwargs: Any) -> Any:
-        """Disambiguate inherited ``spectral_layout`` implementations."""
-        return LayoutBuildMixin.spectral_layout(self, *args, **kwargs)
+        def spectral_layout(self, *args: Any, **kwargs: Any) -> Any:
+            """Disambiguate inherited ``spectral_layout`` implementations."""
+            return LayoutBuildMixin.spectral_layout(self, *args, **kwargs)
 
 
 # =========================================================================
@@ -987,23 +971,17 @@ class TopOGraph(
 def save_topograph(
     tg: TopOGraph,
     filename: str | PathLike[str] = "topograph.pkl",
-    remove_base_class: bool = True,
 ) -> None:
-    """Save a TopOGraph object to a pickle file without mutating the live object."""
+    """Save a TopOGraph object to a pickle file."""
     import pickle
 
     if not isinstance(tg, TopOGraph):
         raise TypeError("`tg` must be a TopOGraph instance.")
 
-    obj = copy.copy(tg)
-
-    if remove_base_class:
-        obj.base_nbrs_class = None
-
     with open(filename, "wb") as f:
-        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(tg, f, pickle.HIGHEST_PROTOCOL)
 
-    if getattr(tg, "verbosity", 0) >= 1:
+    if tg.verbosity >= 1:
         logger.info("TopOGraph saved at %s", filename)
 
 

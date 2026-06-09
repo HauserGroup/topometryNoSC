@@ -514,7 +514,6 @@ class UoMMixin:
     verbosity: int
 
     # kNN / kernel settings
-    backend: str
     base_knn: int
     base_metric: str
     base_kernel_version: str
@@ -540,14 +539,11 @@ class UoMMixin:
 
     # Memory / caching
     low_memory: bool
-    BaseKernelDict: dict
-    GraphKernelDict: dict
 
     # Projection
     projection_methods: list[str]
 
     # Computed state
-    n_jobs: int
     _backend_resolved: str
     _random_state_resolved: np.random.RandomState
     _n_jobs_effective: int
@@ -708,16 +704,14 @@ class UoMMixin:
             knn_i = as_float32_csr(knn_i, "knn_i")
             self.uom_knn_X_list.append(knn_i)
 
-            Ki, _ = self._build_kernel(
+            Ki = self._build_kernel(
                 knn_i,
                 k_neighbors_i,
                 self.base_kernel_version,
-                {} if self.low_memory else self.BaseKernelDict,
-                suffix=f"_uom_X[c{comp_id}_n{n_i}]",
-                low_memory=self.low_memory,
                 data_for_expansion=Xi,
                 base=True,
             )
+
             self.uom_BaseKernel_list.append(Ki)
 
             Ki_mat = getattr(Ki, "K", None)
@@ -809,23 +803,17 @@ class UoMMixin:
             self.uom_knn_Z_list.append(knn_Z_i)
             self.uom_knn_msZ_list.append(knn_msZ_i)
 
-            KZ_i, _ = self._build_kernel(
+            KZ_i = self._build_kernel(
                 knn_Z_i,
                 k_graph_i,
                 self.graph_kernel_version,
-                {} if self.low_memory else self.GraphKernelDict,
-                suffix=f"_uom_Z[c{comp_id}_n{n_i}]",
-                low_memory=self.low_memory,
                 data_for_expansion=Zi,
                 base=False,
             )
-            KmsZ_i, _ = self._build_kernel(
+            KmsZ_i = self._build_kernel(
                 knn_msZ_i,
                 k_graph_i,
                 self.graph_kernel_version,
-                {} if self.low_memory else self.GraphKernelDict,
-                suffix=f"_uom_msZ[c{comp_id}_n{n_i}]",
-                low_memory=self.low_memory,
                 data_for_expansion=msZi,
                 base=False,
             )
@@ -1124,10 +1112,10 @@ class UoMMixin:
         self.knn_Z_ = self.knn_Z_uom
         self.knn_msZ_ = self.knn_msZ_uom
         self.P_X_ = csr_matrix(self.P_of_X_uom)
-        self.P_Z_ = csr_matrix(self.P_of_Z_uom)
-        self.P_msZ_ = csr_matrix(self.P_of_msZ_uom)
+        self.K_Z_ = csr_matrix(self.P_of_Z_uom)
+        self.K_msZ_ = csr_matrix(self.P_of_msZ_uom)
 
-        # Legacy/internal compatibility state while UoM internals still use these names.
+        # Internal kernel-like wrappers for downstream layout code.
         self.eigenbasis = None
         self._knn_Z = self.knn_Z_uom
         self._knn_msZ = self.knn_msZ_uom

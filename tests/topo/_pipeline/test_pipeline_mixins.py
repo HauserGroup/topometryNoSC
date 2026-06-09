@@ -32,19 +32,11 @@ class DummyGraphBuilder(GraphBuildMixin):
         self.bases_graph_verbose = False
         self.runtimes = {}
         self.base_kernel_version = "dummy"
-        self.low_memory = True
-        self.BaseKernelDict: dict[str, Kernel] = {}
         self.base_kernel = None
         self.base_nbrs_class = None
         self.base_knn_graph = None
         self.build_kernel_calls = []
         self.dummy_kernel = cast(Kernel, DummyFittedKernel())
-
-    def _build_kernel(self, *args, **kwargs) -> tuple[Kernel, dict[str, Kernel]]:
-        self.build_kernel_calls.append((args, kwargs))
-        updated = dict(args[3])
-        updated[args[2]] = self.dummy_kernel
-        return self.dummy_kernel, updated
 
 
 class DummyEigenBuilder(EigenBuildMixin):
@@ -146,7 +138,7 @@ def test_graph_build_base_kernel_builds_current_kernel():
             builder.base_knn_graph,
             builder.base_knn,
             builder.base_kernel_version,
-            builder.BaseKernelDict,
+            {},
         )
     ]
 

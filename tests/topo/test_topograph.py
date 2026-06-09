@@ -285,7 +285,7 @@ class TestTopOGraphSaveLoad:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "tg3.pkl")
-            save_topograph(fitted_topograph, path, remove_base_class=True)
+            save_topograph(fitted_topograph, path)
             loaded = load_topograph(path)
 
         assert fitted_topograph.base_nbrs_class is not None
@@ -335,7 +335,6 @@ def test_expanded_kernel_fits_on_expansion_data(monkeypatch):
         knn,
         2,
         "bw_adaptive_nbr_expansion",
-        {},
         data_for_expansion=raw,
         base=False,
     )

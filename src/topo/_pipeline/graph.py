@@ -36,14 +36,13 @@ class GraphBuildMixin:
     runtimes: dict[str, float]
     base_kernel_version: str
     low_memory: bool
-    BaseKernelDict: dict[str, Kernel]
     base_kernel: Kernel | None
     base_nbrs_class: BaseEstimator | None
     base_knn_graph: csr_matrix | None
     knn_X_: csr_matrix | None
     P_X_: csr_matrix | None
 
-    def _build_kernel(self, *args, **kwargs) -> tuple[Kernel, dict[str, Kernel]]:
+    def _build_kernel(self, *args, **kwargs) -> Kernel:
         raise NotImplementedError
 
     def _build_base_graph(self, X: np.ndarray | csr_matrix | None) -> None:
@@ -117,37 +116,24 @@ class GraphBuildMixin:
             logger.info("  Base kNN computed in %.3fs", self.runtimes["kNN_X"])
 
     def _build_base_kernel(self, X) -> None:
-        """Build or reuse the base diffusion/kernel operator on input space."""
+        """Build the base diffusion/kernel operator on input space."""
         if self.base_kernel is not None:
             if not isinstance(self.base_kernel, Kernel):
                 raise ValueError("base_kernel must be a topo.tpgraph.Kernel instance.")
             if getattr(self.base_kernel, "P", None) is None:
                 raise ValueError("base_kernel exists but does not expose fitted `P`.")
+
             self.P_X_ = csr_matrix(self.base_kernel.P)
             return
-
-        if self.base_kernel_version in self.BaseKernelDict:
-            self.base_kernel = self.BaseKernelDict[self.base_kernel_version]
-            if getattr(self.base_kernel, "P", None) is None:
-                raise RuntimeError(
-                    f"Cached base kernel {self.base_kernel_version!r} is not fitted."
-                )
-            self.P_X_ = csr_matrix(self.base_kernel.P)
-            return
-
-        if self.base_knn_graph is None:
-            self._build_base_graph(X)
 
         if self.base_knn_graph is None:
             raise RuntimeError("Cannot build base kernel before base kNN graph exists.")
 
         t0 = time.time()
-        self.base_kernel, self.BaseKernelDict = self._build_kernel(
+        self.base_kernel = self._build_kernel(
             self.base_knn_graph,
-            self.base_knn,
+            int(self.base_knn),
             self.base_kernel_version,
-            self.BaseKernelDict,
-            low_memory=self.low_memory,
             data_for_expansion=X,
             base=True,
         )

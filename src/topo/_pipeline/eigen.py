@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 
 def copy_eigendecomposition(eig: EigenDecomposition) -> EigenDecomposition:
     """Return an independent copy of a fitted EigenDecomposition object."""
-    return cast(EigenDecomposition, copy.deepcopy(eig))
+    out: EigenDecomposition = copy.deepcopy(eig)
+    return out
 
 
 def _as_scaffold_array(value: Any, name: str) -> np.ndarray:
@@ -53,7 +54,6 @@ class EigenBuildMixin:
     id_ks: int | Sequence[int]
     _backend_resolved: str
     id_metric: str
-    n_jobs: int
     _n_jobs_effective: int
     id_quantile: float
     id_min_components: int
@@ -81,20 +81,21 @@ class EigenBuildMixin:
     graph_knn: int
     graph_metric: str
     graph_kernel_version: str
-    GraphKernelDict: dict[str, Kernel]
     low_memory: bool
     graph_kernel: Kernel | None
     knn_Z_: csr_matrix | None
     knn_msZ_: csr_matrix | None
     P_Z_: csr_matrix | None
     P_msZ_: csr_matrix | None
+    K_Z_: csr_matrix | None
+    K_msZ_: csr_matrix | None
     _knn_msZ: csr_matrix | None
     _knn_Z: csr_matrix | None
     _kernel_msZ: Kernel | None
     _kernel_Z: Kernel | None
     base_kernel: Kernel | None
 
-    def _build_kernel(self, *args, **kwargs) -> tuple[Kernel, dict[str, Kernel]]:
+    def _build_kernel(self, *args, **kwargs) -> Kernel:
         raise NotImplementedError
 
     def spectral_layout(self, *args, **kwargs) -> np.ndarray:
@@ -197,7 +198,7 @@ class EigenBuildMixin:
         # The msDM object reuses the fitted decomposition but changes the transform
         # mode. If EigenDecomposition later gains a dedicated clone/copy method, use
         # that instead of relying on this internal object copy.
-        ms_eig = cast(EigenDecomposition, copy_eigendecomposition(dm_eig))
+        ms_eig = copy_eigendecomposition(dm_eig)
         ms_eig.method = "msDM"
 
         self.EigenbasisDict[dm_key] = dm_eig
@@ -205,7 +206,7 @@ class EigenBuildMixin:
 
         self.eigenbasis = ms_eig
 
-        self._build_scaffold_graphs(dm_eig, ms_eig, dm_key, ms_key)
+        self._build_scaffold_graphs(dm_eig, ms_eig)
 
         if self._kernel_msZ is None:
             raise RuntimeError("msDM scaffold kernel was not built.")
@@ -223,8 +224,6 @@ class EigenBuildMixin:
         self,
         dm_eig: EigenDecomposition,
         ms_eig: EigenDecomposition,
-        dm_key: str,
-        ms_key: str,
     ) -> None:
         """Build kNN graphs and refined kernels in both scaffold spaces."""
         ms_components = self._scaffold_components_ms
@@ -303,29 +302,25 @@ class EigenBuildMixin:
         self.knn_Z_ = self._knn_Z
 
         t0 = time.time()
-        self._kernel_msZ, self.GraphKernelDict = self._build_kernel(
+        self._kernel_msZ = self._build_kernel(
             self._knn_msZ,
             int(self.graph_knn),
             self.graph_kernel_version,
-            self.GraphKernelDict,
-            suffix=f" from {ms_key}",
-            low_memory=self.low_memory,
             data_for_expansion=ms_target,
             base=False,
         )
         self.runtimes["Kernel_msZ"] = time.time() - t0
         self.P_msZ_ = csr_matrix(self._kernel_msZ.P)
+        self.K_msZ_ = csr_matrix(self._kernel_msZ.K)
 
         t0 = time.time()
-        self._kernel_Z, self.GraphKernelDict = self._build_kernel(
+        self._kernel_Z = self._build_kernel(
             self._knn_Z,
             int(self.graph_knn),
             self.graph_kernel_version,
-            self.GraphKernelDict,
-            suffix=f" from {dm_key}",
-            low_memory=self.low_memory,
             data_for_expansion=dm_target,
             base=False,
         )
         self.runtimes["Kernel_Z"] = time.time() - t0
         self.P_Z_ = csr_matrix(self._kernel_Z.P)
+        self.K_Z_ = csr_matrix(self._kernel_Z.K)

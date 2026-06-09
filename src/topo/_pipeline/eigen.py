@@ -183,7 +183,6 @@ class EigenBuildMixin:
             eigensolver=self.eigensolver,
             eigen_tol=self.eigen_tol,
             drop_first=True,
-            weight=True,
             t=self.diff_t,
             random_state=self._random_state_resolved,
             verbose=self.bases_graph_verbose,

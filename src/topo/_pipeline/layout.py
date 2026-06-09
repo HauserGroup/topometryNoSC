@@ -14,9 +14,8 @@ from typing import Any, cast
 import numpy as np
 from scipy.sparse import csr_matrix
 
-from topo.base.graph_matrix import as_csr_matrix
 from topo.layouts.projector import Projector
-from topo.spectral.eigen import EigenDecomposition, spectral_layout
+from topo.spectral import LE, EigenDecomposition
 
 logger = logging.getLogger(__name__)
 
@@ -148,17 +147,16 @@ class LayoutBuildMixin:
         rng = self._random_state_resolved
 
         try:
-            spt_result = cast(
-                Any,
-                spectral_layout(
-                    graph,
-                    int(n_components),
-                    rng,
-                    laplacian_type=self.laplacian_type,
-                    eigen_tol=self.eigen_tol,
-                    return_evals=False,
-                ),
+            spt_result = LE(
+                graph,
+                n_eigs=int(n_components),
+                laplacian_type=self.laplacian_type,
+                drop_first=True,
+                return_evals=False,
+                eigen_tol=self.eigen_tol,
+                random_state=rng,
             )
+
             spt = np.asarray(spt_result, dtype=np.float32)
 
             if spt.ndim != 2 or spt.shape[1] != int(n_components):
@@ -173,13 +171,11 @@ class LayoutBuildMixin:
             spt = (spt * expansion).astype(np.float32) + noise
 
         except Exception:
-            graph_csr = as_csr_matrix(graph, "spectral layout fallback graph")
-            spt = np.asarray(
-                EigenDecomposition(n_components=int(n_components)).fit_transform(
-                    graph_csr
-                ),
-                dtype=np.float32,
-            )
+            spt = rng.uniform(
+                low=-10.0,
+                high=10.0,
+                size=(int(shape[0]), n_components),
+            ).astype(np.float32)
 
         self.runtimes["Spectral"] = time.time() - t0
         self.SpecLayout = spt

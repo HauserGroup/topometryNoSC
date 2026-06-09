@@ -737,7 +737,6 @@ class UoMMixin:
                 eigensolver=self.eigensolver,
                 eigen_tol=self.eigen_tol,
                 drop_first=True,
-                weight=True,
                 t=self.diff_t,
                 random_state=self._random_state_resolved,
                 verbose=False,

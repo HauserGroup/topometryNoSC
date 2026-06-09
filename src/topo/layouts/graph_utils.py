@@ -100,7 +100,7 @@ def simplicial_set_embedding(
     densmap,
     densmap_kwds,
     output_dens,
-    output_metric=dist.named_distances_with_gradients["euclidean"],
+    output_metric=dist.euclidean_grad,
     output_metric_kwds={},
     euclidean_output=True,
     parallel=True,

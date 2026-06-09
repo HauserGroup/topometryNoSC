@@ -8,87 +8,100 @@ sparse k-nearest-neighbor graph matrices.
 from typing import Any
 
 import numpy as np
-import scipy.sparse as sp
-from scipy.sparse import coo_matrix, csr_matrix
+from scipy.sparse import coo_matrix, csr_matrix, identity
+
+CSRMatrix = csr_matrix
 
 
 def get_sparse_matrix_from_indices_distances(
-    knn_indices, knn_dists, n_obs, n_neighbors
-):
-    """Build sparse CSR matrix from KNN indices and distances.
+    knn_indices,
+    knn_dists,
+    n_obs,
+    n_neighbors,
+) -> csr_matrix:
+    """Build a CSR kNN distance graph from dense neighbor index/distance arrays."""
+    indices = np.asarray(knn_indices)
+    dists = np.asarray(knn_dists)
 
-    Converts dense index and distance arrays (e.g., from sklearn kneighbors)
-    into a sparse CSR matrix representation suitable for graph operations.
+    n_obs = int(n_obs)
+    n_neighbors = int(n_neighbors)
 
-    Parameters
-    ----------
-    knn_indices : ndarray of shape (n_samples, k)
-        Neighbor indices.
-    knn_dists : ndarray of shape (n_samples, k)
-        Distances to neighbors.
-    n_obs : int
-        Number of samples (rows in output matrix).
-    n_neighbors : int
-        Number of neighbors per sample.
+    if indices.ndim != 2 or dists.ndim != 2:
+        raise ValueError("knn_indices and knn_dists must be 2-D arrays.")
+    if indices.shape != dists.shape:
+        raise ValueError("knn_indices and knn_dists must have the same shape.")
+    if indices.shape[0] != n_obs:
+        raise ValueError(f"Expected {n_obs} rows, got {indices.shape[0]}.")
+    if indices.shape[1] < n_neighbors:
+        raise ValueError(
+            f"Expected at least {n_neighbors} neighbors, got {indices.shape[1]}."
+        )
 
-    Returns
-    -------
-    graph : scipy.sparse.csr_matrix of shape (n_obs, n_obs)
-        Sparse KNN graph with distances as weights.
-    """
-    rows = np.zeros((n_obs * n_neighbors), dtype=int)
-    cols = np.zeros((n_obs * n_neighbors), dtype=int)
-    vals = np.zeros((n_obs * n_neighbors), dtype=float)
-    for i in range(knn_indices.shape[0]):
-        for j in range(n_neighbors):
-            if knn_indices[i, j] == -1:
-                continue  # We didn't get the full knn for i
-            if knn_indices[i, j] == i:
-                val = 0.0
-            else:
-                val = knn_dists[i, j]
+    indices = indices[:, :n_neighbors]
+    dists = dists[:, :n_neighbors]
 
-            rows[i * n_neighbors + j] = i
-            cols[i * n_neighbors + j] = knn_indices[i, j]
-            vals[i * n_neighbors + j] = val
+    rows = np.repeat(np.arange(n_obs), n_neighbors)
+    cols = indices.reshape(-1)
+    vals = dists.reshape(-1)
 
-    result = coo_matrix((vals, (rows, cols)), shape=(n_obs, n_obs))
-    result.eliminate_zeros()
-    return result.tocsr()
+    valid = cols >= 0
+    rows = rows[valid]
+    cols = cols[valid]
+    vals = vals[valid]
+
+    if np.any(cols >= n_obs):
+        raise ValueError("knn_indices contains indices outside n_obs.")
+    if not np.isfinite(vals).all():
+        raise ValueError("knn_dists must be finite.")
+    if np.any(vals < 0):
+        raise ValueError("knn_dists must be non-negative.")
+
+    graph = coo_matrix((vals, (rows, cols)), shape=(n_obs, n_obs))
+    graph.eliminate_zeros()
+    return csr_matrix(graph)
 
 
 def get_indices_distances_from_sparse_matrix(X, n_neighbors):
-    """Extract KNN indices and distances from sparse matrix.
+    """Extract sorted kNN index/distance arrays from a sparse distance graph."""
+    graph = as_csr_matrix(X, "X")
+    n_neighbors = int(n_neighbors)
 
-    Converts a sparse k-nearest-neighbors distance matrix into dense
-    arrays of neighbor indices and distances.
+    if n_neighbors < 1:
+        raise ValueError("n_neighbors must be >= 1.")
 
-    Parameters
-    ----------
-    X : scipy.sparse matrix
-        Input KNN distance matrix.
-    n_neighbors : int
-        Number of neighbors per sample.
+    n_rows, _ = matrix_shape(graph, "X")
+    knn_indices = np.empty((n_rows, n_neighbors), dtype=np.int64)
+    knn_dists = np.empty((n_rows, n_neighbors), dtype=float)
 
-    Returns
-    -------
-    knn_indices : ndarray of shape (n_samples, n_neighbors)
-        Indices of nearest neighbors.
-    knn_dists : ndarray of shape (n_samples, n_neighbors)
-        Distances to nearest neighbors.
-    """
-    _knn_indices = np.zeros((X.shape[0], n_neighbors), dtype=int)
-    _knn_dists = np.zeros(_knn_indices.shape, dtype=float)
-    for row_id in range(X.shape[0]):
-        # Find KNNs row-by-row
-        row_data = X[row_id].data
-        row_indices = X[row_id].indices
-        if len(row_data) < n_neighbors:
-            raise ValueError("Some rows contain fewer than n_neighbors distances!")
-        row_nn_data_indices = np.argsort(row_data)[:n_neighbors]
-        _knn_indices[row_id] = row_indices[row_nn_data_indices]
-        _knn_dists[row_id] = row_data[row_nn_data_indices]
-    return _knn_indices, _knn_dists
+    for row_id in range(n_rows):
+        start, end = graph.indptr[row_id], graph.indptr[row_id + 1]
+        row_indices = graph.indices[start:end]
+        row_data = graph.data[start:end]
+
+        if row_data.size < n_neighbors:
+            raise ValueError(
+                f"Row {row_id} contains {row_data.size} distances, "
+                f"expected at least {n_neighbors}."
+            )
+
+        order = np.argsort(row_data, kind="stable")[:n_neighbors]
+        knn_indices[row_id] = row_indices[order]
+        knn_dists[row_id] = row_data[order]
+
+    return knn_indices, knn_dists
+
+
+def matrix_shape(value: Any, name: str = "matrix") -> tuple[int, int]:
+    """Return a validated 2-D matrix shape."""
+    shape = getattr(value, "shape", None)
+    if shape is None or len(shape) != 2:
+        raise ValueError(f"{name} must be a 2-D matrix.")
+    return int(shape[0]), int(shape[1])
+
+
+def n_rows(value: Any, name: str = "matrix") -> int:
+    """Return the number of rows in a validated 2-D matrix."""
+    return matrix_shape(value, name)[0]
 
 
 def as_csr_matrix(
@@ -98,11 +111,7 @@ def as_csr_matrix(
     dtype: Any | None = None,
     copy: bool = False,
 ) -> csr_matrix:
-    """Return value as a scipy.sparse.csr_matrix.
-
-    This is a typing/runtime boundary helper. It should not change graph
-    semantics beyond CSR conversion and optional dtype conversion.
-    """
+    """Return value as a 2-D scipy.sparse.csr_matrix."""
     if value is None:
         raise ValueError(f"{name} must not be None.")
 
@@ -111,10 +120,12 @@ def as_csr_matrix(
     except Exception as exc:
         raise TypeError(f"{name} must be convertible to a CSR sparse matrix.") from exc
 
+    matrix_shape(out, name)
+
     if dtype is not None and out.dtype != np.dtype(dtype):
         out = out.astype(dtype, copy=False)
 
-    return csr_matrix(out)
+    return out
 
 
 def as_float32_csr(
@@ -132,5 +143,4 @@ def sparse_identity(n: int, *, dtype: Any = np.float32) -> csr_matrix:
     n = int(n)
     if n < 0:
         raise ValueError("n must be non-negative.")
-    diag = np.ones(n, dtype=dtype)
-    return csr_matrix(sp.diags(diag, offsets=0, shape=(n, n), format="csr"))
+    return csr_matrix(identity(n, dtype=dtype, format="csr"))

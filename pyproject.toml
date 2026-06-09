@@ -58,6 +58,8 @@ dependencies = [
     "ipykernel",
     "ipywidgets",
     "jupyterlab",
+    "hnswlib>=0.8.0",
+    "pacmap>=0.9.1",
 ]
 
 [project.optional-dependencies]

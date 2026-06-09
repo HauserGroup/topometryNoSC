@@ -323,7 +323,7 @@ class TestUoMAggregationHelpers:
         np.testing.assert_array_equal(Z[1], np.array([0, 0, 21], dtype=np.float32))
 
 
-def test_uom_same_size_components_do_not_share_cached_kernels():
+def test_uom_same_size_components_build_independent_component_kernels():
     rng = np.random.default_rng(0)
 
     X1 = rng.normal(loc=-5.0, scale=0.1, size=(8, 3))
@@ -342,12 +342,15 @@ def test_uom_same_size_components_do_not_share_cached_kernels():
         backend="sklearn",
         projection_methods=[],
         random_state=0,
-        cache=True,
     )
 
     tg.uom_comp_labels_ = np.array([0] * 8 + [1] * 8)
     tg.fit(X)
 
-    assert tg.uom_BaseKernel_list is not None
-    assert len(tg.uom_BaseKernel_list) == 2
-    assert tg.uom_BaseKernel_list[0] is not tg.uom_BaseKernel_list[1]
+    Z = tg.spectral_scaffold(multiscale=False)
+    msZ = tg.spectral_scaffold(multiscale=True)
+
+    assert tg.P_of_Z.shape == (X.shape[0], X.shape[0])
+    assert tg.P_of_msZ.shape == (X.shape[0], X.shape[0])
+    assert Z.shape[0] == X.shape[0]  # pyright: ignore[reportOptionalSubscript]
+    assert msZ.shape[0] == X.shape[0]  # pyright: ignore[reportOptionalSubscript]

@@ -67,11 +67,12 @@ class EigenBuildMixin:
     selected_scaffold_components_: int | None
     Z_: np.ndarray | csr_matrix | None
     msZ_: np.ndarray | csr_matrix | None
+    evals_Z_: np.ndarray | None
+    evals_msZ_: np.ndarray | None
     global_dimensionality: int | float | None
     local_dimensionality: np.ndarray | None
     verbosity: int
     base_kernel_version: str
-    EigenbasisDict: dict[str, EigenDecomposition]
     eigensolver: str
     eigen_tol: float
     diff_t: int
@@ -91,8 +92,6 @@ class EigenBuildMixin:
     K_msZ_: csr_matrix | None
     _knn_msZ: csr_matrix | None
     _knn_Z: csr_matrix | None
-    _kernel_msZ: Kernel | None
-    _kernel_Z: Kernel | None
     base_kernel: Kernel | None
 
     def _build_kernel(self, *args, **kwargs) -> Kernel:
@@ -176,7 +175,6 @@ class EigenBuildMixin:
             raise ValueError("n_eigs_ must be >= 1 before eigendecomposition.")
 
         dm_key = f"DM with {self.base_kernel_version}"
-        ms_key = f"msDM with {self.base_kernel_version}"
 
         t0 = time.time()
         dm_eig = EigenDecomposition(
@@ -201,21 +199,18 @@ class EigenBuildMixin:
         ms_eig = copy_eigendecomposition(dm_eig)
         ms_eig.method = "msDM"
 
-        self.EigenbasisDict[dm_key] = dm_eig
-        self.EigenbasisDict[ms_key] = ms_eig
-
+        self.evals_Z_ = np.asarray(dm_eig.eigenvalues, dtype=float)
+        self.evals_msZ_ = np.asarray(ms_eig.eigenvalues, dtype=float)
         self.eigenbasis = ms_eig
 
         self._build_scaffold_graphs(dm_eig, ms_eig)
 
-        if self._kernel_msZ is None:
-            raise RuntimeError("msDM scaffold kernel was not built.")
-        if self._kernel_Z is None:
-            raise RuntimeError("DM scaffold kernel was not built.")
+        if self.P_msZ_ is None or self.K_msZ_ is None:
+            raise RuntimeError("msDM scaffold operator/affinity was not built.")
+        if self.P_Z_ is None or self.K_Z_ is None:
+            raise RuntimeError("DM scaffold operator/affinity was not built.")
 
-        self.graph_kernel = self._kernel_msZ
-
-        _ = self.spectral_layout(graph=self._kernel_msZ.K, n_components=2)
+        _ = self.spectral_layout(graph=self.K_msZ_, n_components=2)
         self._run_projections()
 
         return self
@@ -302,7 +297,7 @@ class EigenBuildMixin:
         self.knn_Z_ = self._knn_Z
 
         t0 = time.time()
-        self._kernel_msZ = self._build_kernel(
+        kernel_msZ = self._build_kernel(
             self._knn_msZ,
             int(self.graph_knn),
             self.graph_kernel_version,
@@ -310,11 +305,11 @@ class EigenBuildMixin:
             base=False,
         )
         self.runtimes["Kernel_msZ"] = time.time() - t0
-        self.P_msZ_ = csr_matrix(self._kernel_msZ.P)
-        self.K_msZ_ = csr_matrix(self._kernel_msZ.K)
+        self.P_msZ_ = csr_matrix(kernel_msZ.P)
+        self.K_msZ_ = csr_matrix(kernel_msZ.K)
 
         t0 = time.time()
-        self._kernel_Z = self._build_kernel(
+        kernel_Z = self._build_kernel(
             self._knn_Z,
             int(self.graph_knn),
             self.graph_kernel_version,
@@ -322,5 +317,5 @@ class EigenBuildMixin:
             base=False,
         )
         self.runtimes["Kernel_Z"] = time.time() - t0
-        self.P_Z_ = csr_matrix(self._kernel_Z.P)
-        self.K_Z_ = csr_matrix(self._kernel_Z.K)
+        self.P_Z_ = csr_matrix(kernel_Z.P)
+        self.K_Z_ = csr_matrix(kernel_Z.K)

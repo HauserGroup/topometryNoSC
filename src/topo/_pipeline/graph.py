@@ -40,11 +40,13 @@ class GraphBuildMixin:
     base_kernel: Kernel | None
     base_nbrs_class: BaseEstimator | None
     base_knn_graph: csr_matrix | None
+    knn_X_: csr_matrix | None
+    P_X_: csr_matrix | None
 
     def _build_kernel(self, *args, **kwargs) -> tuple[Kernel, dict[str, Kernel]]:
         raise NotImplementedError
 
-    def _build_base_graph(self, X: np.ndarray | csr_matrix | None, **kwargs) -> None:
+    def _build_base_graph(self, X: np.ndarray | csr_matrix | None) -> None:
         """Build or reuse the base kNN graph in input space.
 
         If ``X`` is None, a fitted ``base_kernel`` must be available and its fitted
@@ -52,8 +54,6 @@ class GraphBuildMixin:
         treated as the square base graph/distance matrix. Otherwise, exact/HNSW
         kNN construction is delegated to ``topo.base.ann.kNN``.
         """
-        del kwargs  # avoid leaking unrelated fit kwargs into kNN construction
-
         if X is None:
             if self.base_kernel is None:
                 raise ValueError("X was not passed and no base_kernel was provided.")
@@ -81,6 +81,7 @@ class GraphBuildMixin:
                 self.m = int(knn.shape[1])  # type: ignore[reportOptionalSubscript]
 
             self.base_knn_graph = knn
+            self.knn_X_ = self.base_knn_graph
             return
 
         shape = getattr(X, "shape", None)
@@ -93,6 +94,7 @@ class GraphBuildMixin:
             if self.n != self.m:
                 raise ValueError("When base_metric='precomputed', X must be square.")
             self.base_knn_graph = as_csr_matrix(X, "base precomputed graph", copy=True)
+            self.knn_X_ = self.base_knn_graph
             return
 
         if self.verbosity >= 1:
@@ -109,19 +111,19 @@ class GraphBuildMixin:
             verbose=self.bases_graph_verbose,
         )
         self.runtimes["kNN_X"] = time.time() - t0
+        self.knn_X_ = self.base_knn_graph
 
         if self.verbosity >= 1:
             logger.info("  Base kNN computed in %.3fs", self.runtimes["kNN_X"])
 
-    def _build_base_kernel(self, X, **kwargs) -> None:
+    def _build_base_kernel(self, X) -> None:
         """Build or reuse the base diffusion/kernel operator on input space."""
-        del kwargs
-
         if self.base_kernel is not None:
             if not isinstance(self.base_kernel, Kernel):
                 raise ValueError("base_kernel must be a topo.tpgraph.Kernel instance.")
             if getattr(self.base_kernel, "P", None) is None:
                 raise ValueError("base_kernel exists but does not expose fitted `P`.")
+            self.P_X_ = csr_matrix(self.base_kernel.P)
             return
 
         if self.base_kernel_version in self.BaseKernelDict:
@@ -130,6 +132,7 @@ class GraphBuildMixin:
                 raise RuntimeError(
                     f"Cached base kernel {self.base_kernel_version!r} is not fitted."
                 )
+            self.P_X_ = csr_matrix(self.base_kernel.P)
             return
 
         if self.base_knn_graph is None:
@@ -149,6 +152,7 @@ class GraphBuildMixin:
             base=True,
         )
         self.runtimes["Kernel_X"] = time.time() - t0
+        self.P_X_ = csr_matrix(self.base_kernel.P)
 
         if self.verbosity >= 1:
             logger.info(

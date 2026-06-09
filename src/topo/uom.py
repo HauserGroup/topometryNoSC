@@ -12,7 +12,7 @@ import warnings
 from typing import Any
 
 import numpy as np
-import scipy.sparse as sp
+from scipy.sparse import block_diag, csr_matrix, diags
 
 from topo.base.ann import kNN
 from topo.base.graph_matrix import as_float32_csr
@@ -35,15 +35,13 @@ def _as_1d_labels(labels, n: int | None = None) -> np.ndarray:
     return out
 
 
-def _sparse_identity(n: int) -> sp.csr_matrix:
+def _sparse_identity(n: int) -> csr_matrix:
     """Return an n-by-n CSR identity matrix with float32 dtype."""
     diag = np.ones(int(n), dtype=np.float32)
-    return sp.csr_matrix(
-        sp.diags(diag, offsets=0, shape=(int(n), int(n)), format="csr")
-    )
+    return csr_matrix(diags(diag, offsets=0, shape=(int(n), int(n)), format="csr"))
 
 
-def _symmetrize_geometric(P: Any) -> sp.csr_matrix:
+def _symmetrize_geometric(P: Any) -> csr_matrix:
     """Return geometric symmetrization on overlapping support."""
     P_csr = as_float32_csr(P, "P")
 
@@ -56,25 +54,25 @@ def _symmetrize_geometric(P: Any) -> sp.csr_matrix:
     if n_rows != n_cols:
         raise ValueError("P must be square.")
 
-    S = sp.csr_matrix(P_csr.multiply(P_csr.T))
+    S = csr_matrix(P_csr.multiply(P_csr.T))
     if S.nnz == 0:
         return S
 
     S.data = np.sqrt(S.data.astype(np.float64)).astype(np.float32, copy=False)
     S.eliminate_zeros()
-    return sp.csr_matrix(S)
+    return csr_matrix(S)
 
 
-def _symmetrize_sum(A) -> sp.csr_matrix:
+def _symmetrize_sum(A) -> csr_matrix:
     """Return additive undirected symmetrization with zero diagonal."""
     A = as_float32_csr(A, "A")
-    S = sp.csr_matrix(A + A.T)
+    S = csr_matrix(A + A.T)
     S.setdiag(0)
     S.eliminate_zeros()
     return S
 
 
-def _normalized_laplacian(A: Any) -> sp.csr_matrix:
+def _normalized_laplacian(A: Any) -> csr_matrix:
     """Compute zero-degree-safe symmetric normalized graph Laplacian."""
     A_csr = as_float32_csr(A, "A")
 
@@ -92,10 +90,10 @@ def _normalized_laplacian(A: Any) -> sp.csr_matrix:
     positive = d > 0
     inv_sqrt[positive] = 1.0 / np.sqrt(d[positive])
 
-    Dmh = sp.diags(inv_sqrt.astype(np.float32), format="csr")
+    Dmh = diags(inv_sqrt.astype(np.float32), format="csr")
     I = _sparse_identity(n_rows)
     L = I - (Dmh @ A_csr @ Dmh)
-    L = sp.csr_matrix(L)
+    L = csr_matrix(L)
     L.eliminate_zeros()
     return L
 
@@ -432,7 +430,7 @@ def find_components(
     r, c, w = mr[upper], mc[upper], vals[upper]
     idx = r * k + c
     acc = np.bincount(idx, weights=w, minlength=k * k).astype(np.float32).reshape(k, k)
-    W = sp.csr_matrix(acc + acc.T, dtype=np.float32)
+    W = csr_matrix(acc + acc.T, dtype=np.float32)
     W.setdiag(0)
     W.eliminate_zeros()
 
@@ -514,7 +512,6 @@ class UoMMixin:
     # Core geometry
     n: int | None
     verbosity: int
-    random_state: int | np.random.RandomState | None
 
     # kNN / kernel settings
     backend: str
@@ -550,10 +547,9 @@ class UoMMixin:
     projection_methods: list[str]
 
     # Computed state
-    current_eigenbasis: str | None
     n_jobs: int
     _backend_resolved: str
-    _random_state_resolved: Any
+    _random_state_resolved: np.random.RandomState
     _n_jobs_effective: int
     _knn_Z: Any
     _knn_msZ: Any
@@ -997,14 +993,14 @@ class UoMMixin:
 
         return order
 
-    def _block_diag_to_original_order(self, blocks) -> sp.csr_matrix:
+    def _block_diag_to_original_order(self, blocks) -> csr_matrix:
         """Build block diagonal matrix and permute rows/cols to original order."""
         n = self.n
         if n is None:
             raise ValueError("UoM aggregation requires fitted sample count.")
 
         csr_blocks = [as_float32_csr(B, "B") for B in blocks]
-        B_cat = sp.block_diag(csr_blocks, format="csr", dtype="float32")
+        B_cat = block_diag(csr_blocks, format="csr", dtype="float32")
 
         order = self._component_order()
         if B_cat.shape != (order.size, order.size):
@@ -1016,7 +1012,7 @@ class UoMMixin:
         inv_order = np.empty_like(order)
         inv_order[order] = np.arange(order.size)
 
-        return sp.csr_matrix(B_cat[inv_order, :][:, inv_order])
+        return csr_matrix(B_cat[inv_order, :][:, inv_order])
 
     def _aggregate_scaffold_to_original_order(
         self, blocks
@@ -1105,6 +1101,7 @@ class UoMMixin:
         self.Z_uom, self._uom_axis_slices = self._aggregate_scaffold_to_original_order(
             uom_Z_list
         )
+
         self.msZ_uom, _ = self._aggregate_scaffold_to_original_order(uom_msZ_list)
 
         self.knn_X_uom = self._block_diag_to_original_order(uom_knn_X_list)
@@ -1120,7 +1117,17 @@ class UoMMixin:
             [K.P for K in uom_Kernel_msZ_list]
         )
 
-        self.current_eigenbasis = f"UoM_{self._uom_active_mode}"
+        # Canonical fitted outputs used by TopOGraph public properties.
+        self.Z_ = self.Z_uom
+        self.msZ_ = self.msZ_uom
+        self.knn_X_ = self.knn_X_uom
+        self.knn_Z_ = self.knn_Z_uom
+        self.knn_msZ_ = self.knn_msZ_uom
+        self.P_X_ = csr_matrix(self.P_of_X_uom)
+        self.P_Z_ = csr_matrix(self.P_of_Z_uom)
+        self.P_msZ_ = csr_matrix(self.P_of_msZ_uom)
+
+        # Legacy/internal compatibility state while UoM internals still use these names.
         self.eigenbasis = None
         self._knn_Z = self.knn_Z_uom
         self._knn_msZ = self.knn_msZ_uom

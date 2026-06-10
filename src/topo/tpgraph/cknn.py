@@ -365,6 +365,45 @@ def cknn_graph(
     from sample ``i`` to its ``scale_k``-th nearest neighbor. Exact mode
     thresholds all pairs. Candidate-neighbor mode is scalable but may miss edges
     if ``candidate_k`` is too small.
+
+    Introduced by Berry & Sauer, "Consistent manifold representation for
+    topological data analysis" (https://arxiv.org/abs/1606.02353). The binary
+    CkNN graph with the unnormalized Laplacian gives a consistent estimate of
+    the Laplace-Beltrami operator regardless of sampling density.
+
+    Parameters
+    ----------
+    X : array-like or sparse matrix of shape (n_samples, n_features)
+        Input data, or a square distance matrix when ``metric='precomputed'``.
+    scale_k : int, default=10
+        Neighbor rank used for the local scale ``rho_i``.
+    delta : float, default=1.0
+        Connection threshold; larger values produce denser graphs.
+    metric : str, default='euclidean'
+        Distance metric, or ``'precomputed'``.
+    candidate_k : int, optional
+        Number of candidate neighbors searched per sample. Defaults to
+        ``max(3 * scale_k, scale_k + 15)``.
+    exact : bool, default=False
+        Threshold all pairwise distances instead of candidate neighbors only.
+        Quadratic in memory; use for small datasets or validation.
+    include_self : bool, default=False
+        Whether to keep self-loops.
+    symmetrize : {'or', 'and', 'none'}, default='or'
+        How to symmetrize the directed candidate relation.
+    backend : {'sklearn', 'hnswlib'}, default='sklearn'
+        Neighbor-search backend for candidate retrieval.
+    n_jobs : int, default=-1
+        Number of threads. ``-1`` uses all available CPUs.
+    verbose : bool, default=False
+        Emit search diagnostics through logging.
+    **kwargs
+        Forwarded to :func:`topo.base.ann.kNN`.
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Binary (0/1) adjacency matrix of shape ``(n_samples, n_samples)``.
     """
     n_samples = int(X.shape[0])
     _validate_cknn_inputs(n_samples, scale_k, delta)

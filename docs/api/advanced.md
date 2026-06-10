@@ -32,6 +32,12 @@ unweighted graph construction, not a weighted adaptive kernel; use
       show_root_heading: true
       show_root_toc_entry: true
 
+::: topo.tpgraph.kernels.compute_kernel
+    options:
+      heading_level: 3
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ::: topo.tpgraph.kernels.Kernel
     options:
       heading_level: 3
@@ -55,6 +61,30 @@ unweighted graph construction, not a weighted adaptive kernel; use
         - "!^__"
         - "!^_"
 
+::: topo.spectral.eigen.eigendecompose
+    options:
+      heading_level: 3
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: topo.spectral.LE
+    options:
+      heading_level: 3
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: topo.spectral.graph_laplacian
+    options:
+      heading_level: 3
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: topo.spectral.diffusion_operator
+    options:
+      heading_level: 3
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ::: topo.layouts.projector.Projector
     options:
       heading_level: 3
@@ -74,3 +104,21 @@ unweighted graph construction, not a weighted adaptive kernel; use
       filters:
         - "!^__"
         - "!^_"
+
+::: topo.tpgraph.intrinsic_dim.automated_scaffold_sizing
+    options:
+      heading_level: 3
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: topo.layouts.diagnostics.find_ideal_projection
+    options:
+      heading_level: 3
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: topo.layouts.diagnostics.run_best_projection
+    options:
+      heading_level: 3
+      show_root_heading: true
+      show_root_toc_entry: true

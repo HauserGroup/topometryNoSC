@@ -4187,16 +4187,11 @@ wheels = [
 name = "topometry-nosc"
 source = { editable = "." }
 dependencies = [
-    { name = "hnswlib" },
-    { name = "ipykernel" },
-    { name = "ipywidgets" },
     { name = "joblib" },
-    { name = "jupyterlab" },
     { name = "matplotlib" },
     { name = "numba" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "pacmap" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -4228,6 +4223,9 @@ layouts = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "ipykernel" },
+    { name = "ipywidgets" },
+    { name = "jupyterlab" },
     { name = "jupytext" },
     { name = "mypy" },
     { name = "nbstripout" },
@@ -4244,19 +4242,14 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "hnswlib", specifier = ">=0.8.0" },
     { name = "hnswlib", marker = "extra == 'all'", specifier = ">=0.8.0" },
     { name = "hnswlib", marker = "extra == 'ann'", specifier = ">=0.8.0" },
-    { name = "ipykernel" },
-    { name = "ipywidgets" },
     { name = "joblib", specifier = ">=1.3" },
-    { name = "jupyterlab" },
     { name = "matplotlib", specifier = ">=3.6" },
     { name = "numba", specifier = ">=0.57" },
     { name = "numpy", specifier = ">=1.23" },
-    { name = "pacmap", specifier = ">=0.9.1" },
-    { name = "pacmap", marker = "extra == 'all'", specifier = ">=0.7" },
-    { name = "pacmap", marker = "extra == 'layouts'", specifier = ">=0.7" },
+    { name = "pacmap", marker = "extra == 'all'", specifier = ">=0.9.1" },
+    { name = "pacmap", marker = "extra == 'layouts'", specifier = ">=0.9.1" },
     { name = "pandas", specifier = ">=1.5" },
     { name = "pyamg", marker = "extra == 'all'", specifier = ">=5.3.0" },
     { name = "pyamg", marker = "extra == 'amg'", specifier = ">=5.3.0" },
@@ -4272,6 +4265,9 @@ provides-extras = ["all", "amg", "ann", "layouts"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "ipykernel" },
+    { name = "ipywidgets" },
+    { name = "jupyterlab" },
     { name = "jupytext", specifier = ">=1.19.3" },
     { name = "mypy", specifier = ">=1.13" },
     { name = "nbstripout", specifier = ">=0.9.1" },

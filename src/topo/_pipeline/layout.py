@@ -64,8 +64,6 @@ class LayoutBuildMixin:
     msTopoMAP_snapshots: list[dict[str, Any]]
     TopoMAP_snapshots: list[dict[str, Any]]
 
-    uom_eigenvalues_ms_list: list[np.ndarray]
-    uom_eigenvalues_dm_list: list[np.ndarray]
     uom_components_: list[np.ndarray] | None
     _uom_active_mode: str
     uom_enabled: bool

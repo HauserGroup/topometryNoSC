@@ -23,7 +23,7 @@ from topo._optional import has, require
 from topo.base.ann import kNN
 from topo.layouts.isomap import Isomap
 from topo.layouts.map import fuzzy_embedding
-from topo.spectral.eigen import spectral_layout
+from topo.spectral.eigen import EigenDecomposition
 from topo.tpgraph.kernels import Kernel
 from topo.utils._utils import get_landmark_indices
 
@@ -317,25 +317,16 @@ class Projector(BaseEstimator, TransformerMixin):
             if self.init == "spectral":
                 try:
                     self.init_Y_ = np.asarray(
-                        spectral_layout(
-                            K,
-                            self.n_components,
-                            self.random_state,
-                            laplacian_type="random_walk",
-                            eigen_tol=10e-4,
-                            return_evals=False,
-                        )
-                    )
-                except Exception:
-                    warnings.warn(
-                        "Multicomponent spectral layout initialization failed, falling back to simple spectral layout..."
-                    )
-                    from topo.spectral.eigen import EigenDecomposition
-
-                    self.init_Y_ = np.asarray(
                         EigenDecomposition(
                             n_components=self.n_components
                         ).fit_transform(K)
+                    )
+                except Exception:
+                    warnings.warn(
+                        "Spectral layout initialization failed, falling back to random initialization..."
+                    )
+                    self.init_Y_ = self.random_state.randn(
+                        _n_rows(K, "projection graph"), self.n_components
                     )
             else:
                 self.init_Y_ = self.random_state.randn(
@@ -771,7 +762,7 @@ if _HAS_PYMDE:
                 f"Computing {n_neighbors}-nearest neighbors, with "
                 f"max_distance={max_distance}"
             )
-        knn_graph = preprocess.generic.k_nearest_neighbors(
+        knn_graph = preprocess.generic.k_nearest_neighbors(  # pyright: ignore[reportAttributeAccessIssue]
             data,
             k=n_neighbors,
             max_distance=max_distance,
@@ -796,7 +787,7 @@ if _HAS_PYMDE:
             if not isinstance(
                 constraint, (constraints._Centered, constraints._Standardized)
             ):
-                constraint.project_onto_constraint(X_init, inplace=True)
+                constraint.project_onto_constraint(X_init, inplace=True)  # pyright: ignore[reportArgumentType]
         elif init == "random":
             X_init = constraint.initialization(n, embedding_dim, device)
         else:
@@ -823,8 +814,10 @@ if _HAS_PYMDE:
                 device
             )
 
-            negative_weights = -torch.ones(
-                negative_edges.shape[0], dtype=X_init.dtype, device=device
+            negative_weights = -torch.ones(  # pyright: ignore[reportCallIssue]
+                negative_edges.shape[0],
+                dtype=X_init.dtype,  # pyright: ignore[reportArgumentType]
+                device=device,
             )
 
             if isinstance(constraint, constraints.Anchored):
@@ -838,7 +831,7 @@ if _HAS_PYMDE:
             f = penalties.PushAndPull(
                 weights,
                 attractive_penalty=attractive_penalty,
-                repulsive_penalty=repulsive_penalty,
+                repulsive_penalty=repulsive_penalty,  # pyright: ignore[reportArgumentType]
             )
         else:
             f = attractive_penalty(weights)
@@ -853,7 +846,7 @@ if _HAS_PYMDE:
             constraint=constraint,
             device=device,
         )
-        mde._X_init = X_init
+        mde._X_init = X_init  # pyright: ignore[reportArgumentType]
 
         # Won't need to cache the graph - we have already computed it and cached with TopoMetry
 
@@ -863,10 +856,10 @@ if _HAS_PYMDE:
             # non-differentiable average distortion. perturb the initialization to
             # mitigate.
             x_init = mde._X_init
-            mde._X_init += 1e-4 * torch.randn(
+            mde._X_init += 1e-4 * torch.randn(  # pyright: ignore[reportCallIssue]
                 x_init.shape,
                 device=x_init.device,
-                dtype=x_init.dtype,
+                dtype=x_init.dtype,  # pyright: ignore[reportArgumentType]
             )
         return mde
 
@@ -965,7 +958,7 @@ if _HAS_PYMDE:
             edges = data.edges.to(device)
             deviations = data.distances.to(device)
         else:
-            graph = preprocess.generic.distances(
+            graph = preprocess.generic.distances(  # pyright: ignore[reportAttributeAccessIssue]
                 data, retain_fraction=retain_fraction, verbose=verbose
             )
             edges = graph.edges.to(device)

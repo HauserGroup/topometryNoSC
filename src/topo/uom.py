@@ -577,8 +577,8 @@ class UoMMixin:
         self.uom_BaseKernel_list = None
         self.uom_DMEig_list = None
         self.uom_msDMEig_list = None
-        self.uom_eigenvalues_dm_list = None
-        self.uom_eigenvalues_ms_list = None
+        self.uom_eigenvalues_dm_list: list[np.ndarray] | None = None
+        self.uom_eigenvalues_ms_list: list[np.ndarray] | None = None
         self._uom_active_mode = "msDM"
         self.uom_Z_list = None
         self.uom_msZ_list = None
@@ -698,7 +698,6 @@ class UoMMixin:
                 metric=self.base_metric,
                 n_jobs=self._n_jobs_effective,
                 backend=self._backend_resolved,
-                return_instance=False,
                 verbose=False,
             )
             knn_i = as_float32_csr(knn_i, "knn_i")
@@ -783,7 +782,6 @@ class UoMMixin:
                     metric=self.graph_metric,
                     n_jobs=self._n_jobs_effective,
                     backend=self._backend_resolved,
-                    return_instance=False,
                     verbose=False,
                 )
             )
@@ -794,7 +792,6 @@ class UoMMixin:
                     metric=self.graph_metric,
                     n_jobs=self._n_jobs_effective,
                     backend=self._backend_resolved,
-                    return_instance=False,
                     verbose=False,
                 )
             )
@@ -1113,6 +1110,8 @@ class UoMMixin:
         self.knn_Z_ = self.knn_Z_uom
         self.knn_msZ_ = self.knn_msZ_uom
         self.P_X_ = csr_matrix(self.P_of_X_uom)
+        self.P_Z_ = csr_matrix(self.P_of_Z_uom)
+        self.P_msZ_ = csr_matrix(self.P_of_msZ_uom)
         self.K_Z_ = csr_matrix(self.P_of_Z_uom)
         self.K_msZ_ = csr_matrix(self.P_of_msZ_uom)
 

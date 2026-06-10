@@ -82,8 +82,11 @@ class TestTopOGraphFit:
     def test_base_kernel_exists(self, fitted_topograph):
         assert fitted_topograph.base_kernel is not None
 
-    def test_graph_kernel_exists(self, fitted_topograph):
-        assert fitted_topograph.graph_kernel is not None
+    def test_graph_kernel_operators_exist(self, fitted_topograph):
+        assert fitted_topograph.P_msZ_ is not None
+        assert fitted_topograph.K_msZ_ is not None
+        assert fitted_topograph.P_Z_ is not None
+        assert fitted_topograph.K_Z_ is not None
 
     def test_intrinsic_dim_estimated(self, fitted_topograph):
         assert fitted_topograph.global_id is not None
@@ -244,13 +247,15 @@ class TestTopOGraphProjections:
         assert "smoothed_EAS" in fitted_topograph.LocalScoresDict
 
     def test_find_ideal_projection_runs(self, fitted_topograph):
+        from topo.layouts.diagnostics import find_ideal_projection
+
         # A very minimal grid search to test the machinery
-        res = fitted_topograph.find_ideal_projection(
+        res = find_ideal_projection(
+            fitted_topograph,
             min_dist_grid=[0.1],
             spread_grid=[1.0],
             initial_alpha_grid=[1.0],
             num_iters=10,
-            verbosity=0,
         )
         assert "best_params" in res
         assert "best_score" in res

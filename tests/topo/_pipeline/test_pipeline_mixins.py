@@ -37,6 +37,10 @@ class DummyGraphBuilder(GraphBuildMixin):
         self.build_kernel_calls = []
         self.dummy_kernel = cast(Kernel, DummyFittedKernel())
 
+    def _build_kernel(self, graph, n_neighbors, version, **kwargs):
+        self.build_kernel_calls.append((graph, n_neighbors, version, {}))
+        return self.dummy_kernel
+
 
 class DummyEigenBuilder(EigenBuildMixin):
     def __init__(self):
@@ -95,6 +99,10 @@ class DummyLayoutBuilder(LayoutBuildMixin):
         self.uom_components_ = None
         self.eigenbasis = None
         self.base_kernel = None
+        self.K_Z_ = None
+        self.K_msZ_ = None
+        self.P_Z_ = None
+        self.P_msZ_ = None
 
 
 def test_graph_build_base_graph_accepts_precomputed_matrix():
@@ -160,13 +168,13 @@ def test_automated_sizing_updates_component_state(monkeypatch):
 
 def test_layout_get_projection_standard_and_uom_keys():
     layout = DummyLayoutBuilder()
-    standard_key = "MAP of gk from msDM with bk"
+    standard_key = "MAP of msDM"
     layout.ProjectionDict[standard_key] = np.ones((3, 2))
     assert layout._get_projection("MAP", multiscale=True).shape == (3, 2)
 
     layout.ProjectionDict.clear()
-    uom_key = "t-SNE of UoM DM with bk"
-    layout.ProjectionDict[uom_key] = np.zeros((3, 2))
+    dm_key = "t-SNE of DM"
+    layout.ProjectionDict[dm_key] = np.zeros((3, 2))
     assert layout._get_projection("t-SNE", multiscale=False).shape == (3, 2)
 
     with pytest.raises(AttributeError, match="embedding unavailable"):
@@ -175,7 +183,7 @@ def test_layout_get_projection_standard_and_uom_keys():
 
 def test_layout_spectral_layout_requires_graph():
     layout = DummyLayoutBuilder()
-    with pytest.raises(ValueError, match="No graph kernel"):
+    with pytest.raises(AttributeError, match="refined affinity unavailable"):
         layout.spectral_layout()
 
 

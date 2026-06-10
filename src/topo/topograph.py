@@ -318,7 +318,6 @@ class TopOGraph(
         self.K_Z_: csr_matrix | None = None
         self.K_msZ_: csr_matrix | None = None
         self.eigenbasis: Any = None
-        self.graph_kernel: Kernel | None = None
         self.SpecLayout: np.ndarray | None = None
         self.global_dimensionality: int | float | None = None
         self.local_dimensionality: np.ndarray | None = None
@@ -688,9 +687,6 @@ class TopOGraph(
 
         if self.eigenbasis is None and not self.uom_enabled:
             raise RuntimeError("fit() completed without an active eigenbasis.")
-
-        if self.graph_kernel is None and not self.uom_enabled:
-            raise RuntimeError("fit() completed without an active graph_kernel.")
 
     # ------------------------------------------------------------------
     # Scaffold access

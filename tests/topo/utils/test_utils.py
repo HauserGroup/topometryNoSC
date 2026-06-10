@@ -67,7 +67,7 @@ class TestLandmarkAndSparseMatrixUtilities:
     def test_sparse_knn_matrix_requires_enough_neighbors(self):
         graph = sparse.csr_matrix([[0.0, 1.0], [0.0, 0.0]])
 
-        with pytest.raises(ValueError, match="fewer than n_neighbors"):
+        with pytest.raises(ValueError, match="expected at least"):
             get_indices_distances_from_sparse_matrix(graph, n_neighbors=2)
 
 

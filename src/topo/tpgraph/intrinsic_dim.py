@@ -464,7 +464,6 @@ def automated_scaffold_sizing(
                 n_neighbors=k_eff,
                 metric=metric,
                 backend=backend,
-                random_state=random_state,
                 **knn_kwargs,
             )
             d_local = fsa_local(K, n_neighbors=k_eff)
@@ -506,7 +505,6 @@ def automated_scaffold_sizing(
             n_neighbors=k_int,
             metric=metric,
             backend=backend,
-            random_state=random_state,
             **knn_kwargs,
         )
         local = np.asarray(mle_local(K, n_neighbors=k_int), dtype=float)

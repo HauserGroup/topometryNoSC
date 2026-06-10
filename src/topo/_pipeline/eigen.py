@@ -83,7 +83,6 @@ class EigenBuildMixin:
     graph_metric: str
     graph_kernel_version: str
     low_memory: bool
-    graph_kernel: Kernel | None
     knn_Z_: csr_matrix | None
     knn_msZ_: csr_matrix | None
     P_Z_: csr_matrix | None
@@ -273,7 +272,6 @@ class EigenBuildMixin:
             metric=self.graph_metric,
             n_jobs=self._n_jobs_effective,
             backend=self._backend_resolved,
-            return_instance=False,
             verbose=self.bases_graph_verbose,
         )
         self.runtimes["kNN_msZ"] = time.time() - t0
@@ -289,7 +287,6 @@ class EigenBuildMixin:
             metric=self.graph_metric,
             n_jobs=self._n_jobs_effective,
             backend=self._backend_resolved,
-            return_instance=False,
             verbose=self.bases_graph_verbose,
         )
         self.runtimes["kNN_Z"] = time.time() - t0

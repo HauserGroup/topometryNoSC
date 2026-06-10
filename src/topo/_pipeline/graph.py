@@ -104,7 +104,6 @@ class GraphBuildMixin:
             metric=self.base_metric,
             n_jobs=self._n_jobs_effective,
             backend=self._backend_resolved,
-            return_instance=False,
             verbose=self.bases_graph_verbose,
         )
         self.runtimes["kNN_X"] = time.time() - t0

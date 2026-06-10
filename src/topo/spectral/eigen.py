@@ -14,7 +14,6 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import ArpackError, eigsh
 
 from topo.spectral._spectral import diffusion_operator, graph_laplacian
-from topo.tpgraph.kernels import Kernel
 
 EIGEN_SOLVERS = {"auto", "dense", "arpack"}
 
@@ -337,6 +336,10 @@ class EigenDecomposition:
             largest = True
         else:
             largest = False
+        # Imported here to avoid a circular import: kernels.py depends on
+        # topo.spectral at module level.
+        from topo.tpgraph.kernels import Kernel
+
         target: Any = None
         if isinstance(X, Kernel):
             self.N = X.N

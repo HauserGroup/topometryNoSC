@@ -33,12 +33,12 @@ from scipy.sparse import (
 )
 from scipy.spatial import procrustes
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize as _l2_normalize_rows
 from sklearn.utils import check_random_state
 
 from topo._compat.umap import fuzzy_graph_from_knn
 from topo.base.ann import kNN
-from topo.base.dists import pairwise_distances
 from topo.base.graph_matrix import get_indices_distances_from_sparse_matrix
 from topo.spectral._spectral import degree as compute_degree
 from topo.spectral._spectral import diffusion_operator, graph_laplacian
@@ -246,7 +246,7 @@ def _compute_knn_distance_graph(
 ) -> csr_matrix:
     """Compute KNN or pairwise distance graph."""
     if pairwise:
-        K_dense = pairwise_distances(X_prep, metric)
+        K_dense = pairwise_distances(X_prep, metric=metric)
         K = csr_matrix(K_dense)
     else:
         K = kNN(
@@ -572,7 +572,7 @@ def compute_kernel(
         K = _as_csr_matrix(X)
         K = _sanitize_sparse_data(K)
         expand_nbr_search = False
-        dens_dict = {}
+        dens_dict: dict = {}
     else:
         X_for_knn = _prepare_knn_input(X, metric, backend, pairwise)
         K = _compute_knn_distance_graph(

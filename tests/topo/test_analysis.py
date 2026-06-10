@@ -4,7 +4,7 @@ import numpy as np
 from scipy import sparse
 
 from topo import analysis
-from topo.spectral.eigen import spectral_layout
+from topo.spectral import LE
 
 
 class TestFilterSignal:
@@ -103,10 +103,14 @@ class TestSpectralLayout:
             format="csr",
         )
 
-        embedding = spectral_layout(
-            graph=graph,
-            dim=2,
-            random_state=42,
+        embedding = np.asarray(
+            LE(
+                graph,
+                n_eigs=2,
+                laplacian_type="normalized",
+                drop_first=True,
+                return_evals=False,
+            )
         )
         assert isinstance(embedding, np.ndarray)
 

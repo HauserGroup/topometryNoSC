@@ -308,7 +308,6 @@ def geodesic_correlation(
             n_neighbors=n_neighbors,
             metric=metric,
             n_jobs=n_jobs,
-            return_instance=False,
             verbose=False,
             **kwargs,
         )
@@ -320,7 +319,6 @@ def geodesic_correlation(
             n_neighbors=n_neighbors,
             metric=metric,
             n_jobs=n_jobs,
-            return_instance=False,
             verbose=False,
             **kwargs,
         )

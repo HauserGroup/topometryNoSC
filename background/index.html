@@ -1,0 +1,1647 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An independently maintained, heavily modified fork of TopOMetry.">
+      
+      
+      
+        <link rel="canonical" href="https://HauserGroup.github.io/topometryNoSC/background/">
+      
+      
+        <link rel="prev" href="../math_details/">
+      
+      
+        <link rel="next" href="../api/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/topometry_logo.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Background: CkNN, Diffusion Maps, & Manifold Learning - topometry-nosc</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Nunito:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Nunito";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Background: CkNN, Diffusion Maps, & Manifold Learning - topometry-nosc" />
+<meta property="og:description" content="An independently maintained, heavily modified fork of TopOMetry." />
+<meta property="og:image" content="https://HauserGroup.github.io/topometryNoSC/assets/images/social/background.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://HauserGroup.github.io/topometryNoSC/background/" />
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:title" content="Background: CkNN, Diffusion Maps, & Manifold Learning - topometry-nosc" />
+<meta property="twitter:description" content="An independently maintained, heavily modified fork of TopOMetry." />
+<meta property="twitter:image" content="https://HauserGroup.github.io/topometryNoSC/assets/images/social/background.png" />
+</head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="pink" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#background-diffusion-maps-cknn-and-manifold-learning" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="topometry-nosc" class="md-header__button md-logo" aria-label="topometry-nosc" data-md-component="logo">
+      
+  <img src="../assets/topometry_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            topometry-nosc
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Background: CkNN, Diffusion Maps, & Manifold Learning
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="pink" data-md-color-accent="teal"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="pink" data-md-color-accent="teal"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/HauserGroup/topometryNoSC" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    HauserGroup/topometryNoSC
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../installation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Installation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../quickstart/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Quickstart
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../faq/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Practical FAQ: Manifold Learning & Dimensionality Reduction
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../tutorials/step-by-step/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../concepts/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Concepts: Graphs & Spectral Scaffolds
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../math_details/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Math Details: LBO, Diffusion Maps, & CkNN
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Background: CkNN, Diffusion Maps, & Manifold Learning
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../citation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Citation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="topometry-nosc" class="md-nav__button md-logo" aria-label="topometry-nosc" data-md-component="logo">
+      
+  <img src="../assets/topometry_logo.png" alt="logo">
+
+    </a>
+    topometry-nosc
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/HauserGroup/topometryNoSC" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    HauserGroup/topometryNoSC
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Practical FAQ: Manifold Learning & Dimensionality Reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/step-by-step/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Step by step: Manifold Learning Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/plotting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plotting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/data-provenance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data provenance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts: Graphs & Spectral Scaffolds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../math_details/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Math Details: LBO, Diffusion Maps, & CkNN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Background: CkNN, Diffusion Maps, & Manifold Learning
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Background: CkNN, Diffusion Maps, & Manifold Learning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-nearest-neighbor-graphs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Nearest-neighbor graphs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-kernels-and-the-laplacebeltrami-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Kernels and the Laplace–Beltrami operator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-spectral-scaffolds-the-eigenbasis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Spectral scaffolds (the eigenbasis)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-union-of-manifolds-uom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Union of Manifolds (UoM)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-intrinsic-dimensionality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Intrinsic dimensionality
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-layouts-and-projections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Layouts and projections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-evaluation-and-geometry-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Evaluation and geometry diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-surveys-and-starting-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Surveys and starting points
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../api/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/topograph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Main workflow: TopOGraph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/advanced/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced estimators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/plotting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plotting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/internal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../citation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Citation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-nearest-neighbor-graphs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Nearest-neighbor graphs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-kernels-and-the-laplacebeltrami-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Kernels and the Laplace–Beltrami operator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-spectral-scaffolds-the-eigenbasis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Spectral scaffolds (the eigenbasis)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-union-of-manifolds-uom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Union of Manifolds (UoM)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-intrinsic-dimensionality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Intrinsic dimensionality
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-layouts-and-projections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Layouts and projections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-evaluation-and-geometry-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Evaluation and geometry diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-surveys-and-starting-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Surveys and starting points
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="background-diffusion-maps-cknn-and-manifold-learning">Background: Diffusion Maps, CkNN, and Manifold Learning<a class="headerlink" href="#background-diffusion-maps-cknn-and-manifold-learning" title="Permanent link">&para;</a></h1>
+<p>A light, readable tour of the ideas behind <code>topometry-nosc</code>, with pointers to the
+papers and package docs that introduce each one. You do <strong>not</strong> need any of this
+to use the package — it is here to explain <em>why</em> each piece exists.</p>
+<p>The sections follow the pipeline the package runs:</p>
+<blockquote>
+<p><strong>neighbor graph → graph operator (Laplace–Beltrami) → spectral scaffold →
+refined graph → 2-D layout → evaluation</strong></p>
+</blockquote>
+<div class="admonition tip">
+<p class="admonition-title">Start here</p>
+<p>If you read only three things, read the <strong>UMAP documentation</strong> (intuition for
+neighbor graphs), <strong>von Luxburg's spectral-clustering tutorial</strong> (graph
+Laplacians), and <strong>Coifman &amp; Lafon on diffusion maps</strong> (the spectral
+backbone). Everything else specializes from there.</p>
+</div>
+<hr />
+<h2 id="1-nearest-neighbor-graphs">1. Nearest-neighbor graphs<a class="headerlink" href="#1-nearest-neighbor-graphs" title="Permanent link">&para;</a></h2>
+<p>The first step turns a table of points into a graph that connects each point to
+its closest neighbors. <em>(Package: <code>topo.base.ann</code>.)</em></p>
+<ul>
+<li><strong>Approximate nearest neighbors (HNSW).</strong> Malkov &amp; Yashunin's Hierarchical
+  Navigable Small World graphs give fast, scalable neighbor search — the default
+  backend for large data. <a href="https://arxiv.org/abs/1603.09320">IEEE TPAMI 2020 / arXiv:1603.09320</a></li>
+<li><strong>Continuous k-nearest neighbors (CkNN).</strong> Berry &amp; Sauer show that a
+  <em>continuous</em> kNN graph yields an unweighted, undirected graph whose
+  unnormalised Laplacian converges to the Laplace-Beltrami operator. Given
+  local scale radii <code>rho_i</code> and <code>rho_j</code>, CkNN connects samples when
+  <code>d(i, j) &lt; delta * sqrt(rho_i * rho_j)</code>.
+  <a href="https://arxiv.org/abs/1606.02353"><em>Foundations of Data Science</em> 2019 / arXiv:1606.02353</a></li>
+</ul>
+<h2 id="2-kernels-and-the-laplacebeltrami-operator">2. Kernels and the Laplace–Beltrami operator<a class="headerlink" href="#2-kernels-and-the-laplacebeltrami-operator" title="Permanent link">&para;</a></h2>
+<p>Edge weights (a <em>kernel</em>) turn the neighbor graph into a discrete approximation
+of a continuous operator on the data's underlying shape. <em>(Package:
+<code>topo.tpgraph.kernels</code>.)</em></p>
+<ul>
+<li><strong>Diffusion maps.</strong> Coifman &amp; Lafon's foundational paper: a diffusion operator
+  built from a Gaussian kernel whose eigenfunctions parameterize the manifold and
+  approximate the Laplace–Beltrami operator. <a href="https://doi.org/10.1016/j.acha.2006.04.006"><em>Appl. Comput. Harmon. Anal.</em> 2006</a></li>
+<li><strong>Variable-bandwidth kernels.</strong> Berry &amp; Harlim generalize diffusion maps:
+  scaling bandwidth by local density improves convergence on unevenly sampled
+  data — the basis for the package's adaptive-bandwidth kernels.
+  <a href="https://arxiv.org/abs/1406.5064"><em>Appl. Comput. Harmon. Anal.</em> 2016 / arXiv:1406.5064</a></li>
+<li><strong>Laplacian eigenmaps.</strong> Belkin &amp; Niyogi: embed data using eigenvectors of the
+  graph Laplacian — the simplest member of this family and a useful baseline.
+  <a href="https://doi.org/10.1162/089976603321780317"><em>Neural Computation</em> 2003</a></li>
+<li><strong>Fuzzy simplicial sets (UMAP's graph).</strong> UMAP builds its graph from <em>fuzzy</em>
+  neighborhoods combined by a probabilistic union. For <code>fuzzy</code> kernels,
+  <code>topometry-nosc</code> delegates this UMAP-specific graph construction to
+  <code>umap-learn</code>; TopoMetry then continues with its own spectral scaffolds,
+  diffusion operators and graph-refinement pipeline. The docs are the gentlest
+  introduction.
+  <a href="https://umap-learn.readthedocs.io/en/latest/how_umap_works.html">UMAP docs</a> ·
+  <a href="https://arxiv.org/abs/1802.03426">McInnes, Healy &amp; Melville, arXiv:1802.03426</a></li>
+</ul>
+<h2 id="3-spectral-scaffolds-the-eigenbasis">3. Spectral scaffolds (the eigenbasis)<a class="headerlink" href="#3-spectral-scaffolds-the-eigenbasis" title="Permanent link">&para;</a></h2>
+<p>Eigenvectors of the graph operator form an orthonormal basis — the "spectral
+scaffold" — that captures structure across scales. <em>(Package:
+<code>topo.spectral.eigen</code>.)</em></p>
+<ul>
+<li><strong>Spectral-clustering tutorial.</strong> Von Luxburg's self-contained tutorial:
+  similarity graphs, the different graph Laplacians and their normalizations, and
+  why their eigenvectors reveal structure. The best single reference for this
+  layer. <a href="https://arxiv.org/abs/0711.0189"><em>Statistics and Computing</em> 2007 / arXiv:0711.0189</a></li>
+<li><strong>Multiscale diffusion (msDM).</strong> Diffusion at multiple time scales (the package's
+  <code>msDM</code> scaffold) follows directly from the diffusion-map eigenstructure in
+  Coifman &amp; Lafon (above); the diffusion <em>time</em> controls the scale of structure
+  emphasized.</li>
+</ul>
+<h2 id="4-union-of-manifolds-uom">4. Union of Manifolds (UoM)<a class="headerlink" href="#4-union-of-manifolds-uom" title="Permanent link">&para;</a></h2>
+<p>When data splits into disconnected or weakly connected pieces, the package builds
+per-component scaffolds and assembles them block-diagonally. <em>(Package:
+<code>topo.uom</code>.)</em></p>
+<ul>
+<li><strong>Louvain community detection.</strong> Blondel et al.'s greedy modularity method —
+  used to partition the graph into coherent communities before per-component
+  scaffolding. <a href="https://arxiv.org/abs/0803.0476"><em>J. Stat. Mech.</em> 2008 / arXiv:0803.0476</a></li>
+<li><strong>Leiden (modern refinement).</strong> Traag et al. fix Louvain's badly-connected-community
+  issue; useful background even though the package's own splitter is Louvain-style.
+  <a href="https://doi.org/10.1038/s41598-019-41695-z"><em>Scientific Reports</em> 2019</a></li>
+<li><strong>Cuts and conductance.</strong> Shi &amp; Malik's normalized cuts motivate the
+  conductance-based merging of fragile components; von Luxburg's tutorial (§3)
+  also covers cut measures. <a href="https://doi.org/10.1109/34.868688"><em>IEEE TPAMI</em> 2000</a></li>
+</ul>
+<h2 id="5-intrinsic-dimensionality">5. Intrinsic dimensionality<a class="headerlink" href="#5-intrinsic-dimensionality" title="Permanent link">&para;</a></h2>
+<p>How many underlying factors really shape the data — used to size the scaffold.
+<em>(Package: <code>topo.tpgraph.intrinsic_dim</code>, methods <code>fsa</code> and <code>mle</code>.)</em></p>
+<ul>
+<li><strong>FSA estimator.</strong> Farahmand, Szepesvári &amp; Audibert's manifold-adaptive
+  dimension estimator from nearest-neighbor distance ratios (the <code>fsa</code> method).
+  <a href="https://doi.org/10.1145/1273496.1273530"><em>ICML</em> 2007</a></li>
+<li><strong>MLE estimator.</strong> Levina &amp; Bickel's maximum-likelihood intrinsic-dimension
+  estimator (the <code>mle</code> method). <a href="https://papers.nips.cc/paper/2004/hash/74934548253bcab8490ebd74afed7031-Abstract.html"><em>NeurIPS</em> 2004</a></li>
+<li><strong>Practical overview.</strong> <code>scikit-dimension</code> collects and benchmarks many such
+  estimators — handy for context. <a href="https://doi.org/10.3390/e23101368">Bac et al., <em>Entropy</em> 2021</a></li>
+</ul>
+<h2 id="6-layouts-and-projections">6. Layouts and projections<a class="headerlink" href="#6-layouts-and-projections" title="Permanent link">&para;</a></h2>
+<p>Turning the scaffold and refined graph into a 2-D picture. <em>(Package:
+<code>topo.layouts</code>.)</em> Different methods trade off local detail against the global
+arrangement; trying a few is normal.</p>
+<ul>
+<li><strong>Isomap.</strong> Tenenbaum, de Silva &amp; Langford: geodesic distances + classical MDS;
+  the foundational geodesic-preserving embedding. <a href="https://doi.org/10.1126/science.290.5500.2319"><em>Science</em> 2000</a></li>
+<li><strong>t-SNE.</strong> Van der Maaten &amp; Hinton: heavy-tailed neighbor embedding, excellent
+  for local cluster structure. <a href="https://www.jmlr.org/papers/v9/vandermaaten08a.html"><em>JMLR</em> 2008</a></li>
+<li><strong>UMAP / MAP.</strong> <code>projection_method="UMAP"</code> uses <code>umap-learn</code>'s UMAP estimator.
+  The package's <code>MAP</code> remains a local checkpoint-aware graph-layout optimizer
+  for TopoMetry refined graphs. <a href="https://arxiv.org/abs/1802.03426">McInnes et al., arXiv:1802.03426</a></li>
+<li><strong>PaCMAP.</strong> Wang, Huang, Rudin &amp; Shaposhnik: balances local and global structure
+  by design, with a clear analysis of what makes a good DR loss.
+  <a href="https://www.jmlr.org/papers/v22/20-1061.html"><em>JMLR</em> 2021</a></li>
+<li><strong>TriMap.</strong> Amid &amp; Warmuth: triplet-constraint embedding that preserves global
+  layout and scales to large data. <a href="https://arxiv.org/abs/1910.00204">arXiv:1910.00204</a></li>
+<li><strong>Minimum-Distortion Embedding (MDE).</strong> Agrawal, Ali &amp; Boyd: a general framework
+  (generalizing PCA, MDS, spectral embedding, UMAP…) implemented in PyMDE.
+  <a href="https://arxiv.org/abs/2103.02559"><em>Found. Trends ML</em> 2021 / arXiv:2103.02559</a> ·
+  <a href="https://pymde.org">PyMDE docs</a></li>
+</ul>
+<h2 id="7-evaluation-and-geometry-diagnostics">7. Evaluation and geometry diagnostics<a class="headerlink" href="#7-evaluation-and-geometry-diagnostics" title="Permanent link">&para;</a></h2>
+<p>How faithful is the embedding? The package emphasizes geometry and operator
+preservation rather than trusting any single layout. <em>(Packages: <code>topo.eval</code>,
+<code>topo.eval.topo_metrics</code>, <code>topo.eval.rmetric</code>.)</em></p>
+<ul>
+<li><strong>Geodesic rank correlation.</strong> The package compares geodesic distances in the
+  original vs. embedded space with Spearman/Kendall correlation (built on Isomap's
+  geodesic idea, §6). <a href="https://doi.org/10.1126/science.290.5500.2319">Tenenbaum et al., <em>Science</em> 2000</a></li>
+<li><strong>Operator-native topology metrics.</strong> The package also compares transition
+  neighborhoods, transition probabilities, and spectral coordinates between
+  graph operators. These scores are meant to compare representations and
+  parameter choices in the same graph/diffusion language as the pipeline.</li>
+<li><strong>Trustworthiness &amp; continuity.</strong> These are standard DR diagnostics in the
+  broader literature: do embedded neighbors reflect real neighbors, and vice
+  versa? They are useful context, but they are not the main built-in evaluation
+  API in this fork.
+  <a href="https://doi.org/10.1016/j.neunet.2006.05.014">Venna &amp; Kaski, <em>Neural Networks</em> 2006</a></li>
+<li><strong>Co-ranking framework.</strong> Lee &amp; Verleysen unify these rank-based metrics in one
+  co-ranking matrix — the cleanest way to think about DR quality.
+  <a href="https://doi.org/10.1016/j.neucom.2008.12.017"><em>Neurocomputing</em> 2009</a></li>
+<li><strong>Riemannian metric estimation.</strong> Perrault-Joncas &amp; Meila estimate the distortion
+  an embedding introduces from its Laplacian — the basis for the package's
+  <code>rmetric</code> diagnostics (after the megaman library). <a href="https://arxiv.org/abs/1305.7255">arXiv:1305.7255</a> ·
+  <a href="https://www.jmlr.org/papers/v17/16-109.html">megaman, <em>JMLR</em> 2016</a></li>
+<li><strong>Target-aware evaluation.</strong> Predicting or smoothing a per-sample target
+  answers a different question from geometry preservation. See the
+  <a href="../faq/#how-should-i-evaluate-an-embedding-against-a-target-variable">Practical FAQ</a>
+  for recommended checks.</li>
+</ul>
+<h2 id="8-surveys-and-starting-points">8. Surveys and starting points<a class="headerlink" href="#8-surveys-and-starting-points" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Comparative review of nonlinear DR.</strong> Van der Maaten, Postma &amp; van den Herik
+  compare many techniques on common datasets — a map of the whole field.
+  <a href="https://lvdmaaten.github.io/publications/papers/TR_Dimensionality_Reduction_Review_2009.pdf">Report, 2009 (PDF)</a></li>
+<li><strong>UMAP documentation.</strong> Still the friendliest on-ramp to neighbor graphs and
+  fuzzy topology. <a href="https://umap-learn.readthedocs.io/en/latest/">umap-learn docs</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../math_details/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Math Details: LBO, Diffusion Maps, &amp; CkNN">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Math Details: LBO, Diffusion Maps, & CkNN
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../api/" class="md-footer__link md-footer__link--next" aria-label="Next: Overview">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Overview
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.indexes", "navigation.footer", "content.code.copy", "content.code.annotate", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

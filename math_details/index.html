@@ -1,0 +1,2018 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An independently maintained, heavily modified fork of TopOMetry.">
+      
+      
+      
+        <link rel="canonical" href="https://HauserGroup.github.io/topometryNoSC/math_details/">
+      
+      
+        <link rel="prev" href="../concepts/">
+      
+      
+        <link rel="next" href="../background/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/topometry_logo.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Math Details: LBO, Diffusion Maps, & CkNN - topometry-nosc</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Nunito:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Nunito";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Math Details: LBO, Diffusion Maps, & CkNN - topometry-nosc" />
+<meta property="og:description" content="An independently maintained, heavily modified fork of TopOMetry." />
+<meta property="og:image" content="https://HauserGroup.github.io/topometryNoSC/assets/images/social/math_details.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://HauserGroup.github.io/topometryNoSC/math_details/" />
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:title" content="Math Details: LBO, Diffusion Maps, & CkNN - topometry-nosc" />
+<meta property="twitter:description" content="An independently maintained, heavily modified fork of TopOMetry." />
+<meta property="twitter:image" content="https://HauserGroup.github.io/topometryNoSC/assets/images/social/math_details.png" />
+</head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="pink" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#mathematical-details-lbo-diffusion-maps-and-cknn" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="topometry-nosc" class="md-header__button md-logo" aria-label="topometry-nosc" data-md-component="logo">
+      
+  <img src="../assets/topometry_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            topometry-nosc
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Math Details: LBO, Diffusion Maps, & CkNN
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="pink" data-md-color-accent="teal"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="pink" data-md-color-accent="teal"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/HauserGroup/topometryNoSC" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    HauserGroup/topometryNoSC
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../installation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Installation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../quickstart/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Quickstart
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../faq/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Practical FAQ: Manifold Learning & Dimensionality Reduction
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../tutorials/step-by-step/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../concepts/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Concepts: Graphs & Spectral Scaffolds
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Math Details: LBO, Diffusion Maps, & CkNN
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../background/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Background: CkNN, Diffusion Maps, & Manifold Learning
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../citation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Citation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="topometry-nosc" class="md-nav__button md-logo" aria-label="topometry-nosc" data-md-component="logo">
+      
+  <img src="../assets/topometry_logo.png" alt="logo">
+
+    </a>
+    topometry-nosc
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/HauserGroup/topometryNoSC" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    HauserGroup/topometryNoSC
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Practical FAQ: Manifold Learning & Dimensionality Reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/step-by-step/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Step by step: Manifold Learning Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/plotting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plotting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/data-provenance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data provenance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts: Graphs & Spectral Scaffolds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Math Details: LBO, Diffusion Maps, & CkNN
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Math Details: LBO, Diffusion Maps, & CkNN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-manifold-hypothesis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The Manifold Hypothesis
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-why-pca-falls-short" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Why PCA Falls Short
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-laplace-beltrami-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The Laplace-Beltrami Operator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-heat-diffusion-the-physical-intuition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Heat Diffusion: The Physical Intuition
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-from-continuous-to-discrete-graph-laplacians-and-the-density-bias-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. From Continuous to Discrete: Graph Laplacians and the Density-Bias Problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-removing-the-density-bias-two-approaches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Removing the Density Bias: Two Approaches
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Removing the Density Bias: Two Approaches">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#6a-diffusion-maps-with-alpha-normalisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6a. Diffusion Maps with \(\alpha\)-Normalisation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6b-continuous-k-nn-cknn-graphs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6b. Continuous \(k\)-NN (CkNN) Graphs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-the-diffusion-operator-and-its-eigenvalues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. The Diffusion Operator and Its Eigenvalues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. The Diffusion Operator and Its Eigenvalues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#contrast-with-laplacian-eigenmaps-le" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contrast with Laplacian Eigenmaps (LE)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-the-spectral-scaffold-dm-and-msdm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. The Spectral Scaffold: DM and msDM
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. The Spectral Scaffold: DM and msDM">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#diffusion-maps-dm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diffusion Maps (DM)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiscale-diffusion-maps-msdm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiscale Diffusion Maps (msDM)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reading-the-eigenspectrum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading the Eigenspectrum
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-measuring-distortion-the-riemannian-metric" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Measuring Distortion: The Riemannian Metric
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-topometrys-pipeline-putting-it-all-together" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. TopoMetry's Pipeline: Putting It All Together
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-summary-why-this-is-better" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Summary: Why This Is Better
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#further-reading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Further Reading
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../background/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Background: CkNN, Diffusion Maps, & Manifold Learning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../api/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/topograph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Main workflow: TopOGraph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/advanced/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced estimators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/plotting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plotting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/internal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../citation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Citation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-manifold-hypothesis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The Manifold Hypothesis
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-why-pca-falls-short" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Why PCA Falls Short
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-laplace-beltrami-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The Laplace-Beltrami Operator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-heat-diffusion-the-physical-intuition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Heat Diffusion: The Physical Intuition
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-from-continuous-to-discrete-graph-laplacians-and-the-density-bias-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. From Continuous to Discrete: Graph Laplacians and the Density-Bias Problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-removing-the-density-bias-two-approaches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Removing the Density Bias: Two Approaches
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Removing the Density Bias: Two Approaches">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#6a-diffusion-maps-with-alpha-normalisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6a. Diffusion Maps with \(\alpha\)-Normalisation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6b-continuous-k-nn-cknn-graphs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6b. Continuous \(k\)-NN (CkNN) Graphs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-the-diffusion-operator-and-its-eigenvalues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. The Diffusion Operator and Its Eigenvalues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. The Diffusion Operator and Its Eigenvalues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#contrast-with-laplacian-eigenmaps-le" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contrast with Laplacian Eigenmaps (LE)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-the-spectral-scaffold-dm-and-msdm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. The Spectral Scaffold: DM and msDM
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. The Spectral Scaffold: DM and msDM">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#diffusion-maps-dm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diffusion Maps (DM)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiscale-diffusion-maps-msdm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiscale Diffusion Maps (msDM)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reading-the-eigenspectrum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading the Eigenspectrum
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-measuring-distortion-the-riemannian-metric" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Measuring Distortion: The Riemannian Metric
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-topometrys-pipeline-putting-it-all-together" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. TopoMetry's Pipeline: Putting It All Together
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-summary-why-this-is-better" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Summary: Why This Is Better
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#further-reading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Further Reading
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="mathematical-details-lbo-diffusion-maps-and-cknn">Mathematical Details: LBO, Diffusion Maps, and CkNN<a class="headerlink" href="#mathematical-details-lbo-diffusion-maps-and-cknn" title="Permanent link">&para;</a></h1>
+<p>TopoMetry is a <strong>manifold learning</strong> framework built on geometric operators from differential geometry and spectral theory. This page explains the core mathematics — how we approximate the <strong>Laplace-Beltrami Operator (LBO)</strong>, why <strong>Continuous k-Nearest Neighbors (CkNN)</strong> corrects density bias, and how <strong>Diffusion Maps</strong> provide superior <strong>dimensionality reduction</strong> compared to PCA.</p>
+<p>No prior knowledge of differential geometry is required. Where equations appear, we explain what they mean in plain language right next to them.</p>
+<hr />
+<h2 id="1-the-manifold-hypothesis">1. The Manifold Hypothesis<a class="headerlink" href="#1-the-manifold-hypothesis" title="Permanent link">&para;</a></h2>
+<p>Image embeddings, text representations, sensor arrays, genomics — modern data collection routinely produces observations in a space of dimension <span class="arithmatex">\(D \sim 10^2\)</span>–<span class="arithmatex">\(10^4\)</span>. Most of this space is empty: meaningful states live along smooth, low-dimensional paths or surfaces.</p>
+<p>This is the <strong>manifold hypothesis</strong>: the data lie (approximately) on a smooth <span class="arithmatex">\(d\)</span>-dimensional manifold <span class="arithmatex">\(\mathcal{M}\)</span> embedded in the ambient <span class="arithmatex">\(\mathbb{R}^D\)</span>, with intrinsic dimension <span class="arithmatex">\(d \ll D\)</span>.</p>
+<p>Think of it this way: a spiral of data points tracing a smooth transition traces a 1-dimensional curve through thousands of feature dimensions. The informative structure is the curve, not the high-dimensional box it sits in.</p>
+<p>The challenge for any analysis method is to <em>respect this intrinsic geometry</em> rather than imposing the geometry of the ambient box.</p>
+<hr />
+<h2 id="2-why-pca-falls-short">2. Why PCA Falls Short<a class="headerlink" href="#2-why-pca-falls-short" title="Permanent link">&para;</a></h2>
+<p>The standard approach — PCA followed by kNN graph construction — projects data onto the directions of maximum <em>global</em> variance in feature space. This is mathematically equivalent to finding the best-fitting flat (hyperplane) subspace.</p>
+<p>The problem: <strong>curved manifolds cannot be faithfully represented by flat subspaces</strong>. A spiral cannot be unrolled by projecting onto a plane without distorting distances along the spiral.</p>
+<p>More precisely: for PCA to preserve the geometry of <span class="arithmatex">\(\mathcal{M}\)</span>, the tangent plane to <span class="arithmatex">\(\mathcal{M}\)</span> at <em>every</em> data point would need to point in the same direction — but on a curved manifold, tangent planes rotate as you move along the surface. A single global projection cannot align with all of them simultaneously.</p>
+<p>This creates two compounding problems:</p>
+<ol>
+<li><strong>Geometric distortion</strong>: Euclidean distances in PCA space are poor proxies for actual distances along the manifold. Nearby points on the manifold may appear far apart (or vice versa) after projection.</li>
+<li><strong>Dropped signal</strong>: Rare subpopulations and subtle trajectories often vary in directions of <em>low</em> global variance. PCA discards exactly these directions, making rare groups invisible.</li>
+</ol>
+<p>TopoMetry addresses both problems by working directly with the intrinsic geometry of the data manifold, using operators derived from the <strong>Laplace-Beltrami Operator</strong>.</p>
+<hr />
+<h2 id="3-the-laplace-beltrami-operator">3. The Laplace-Beltrami Operator<a class="headerlink" href="#3-the-laplace-beltrami-operator" title="Permanent link">&para;</a></h2>
+<p>On a curved surface <span class="arithmatex">\(\mathcal{M}\)</span> equipped with a Riemannian metric <span class="arithmatex">\(g\)</span> (a smoothly varying notion of distance and angle at each point), the <strong>Laplace-Beltrami operator</strong> (LBO) is defined as:</p>
+<div class="arithmatex">\[
+\Delta_\mathcal{M} f = \frac{1}{\sqrt{|g|}}\, \partial_i\!\left(\sqrt{|g|}\; g^{ij}\, \partial_j f\right)
+\]</div>
+<p>In plain language: it is the natural generalisation of the ordinary second derivative to curved spaces. On flat Euclidean space it reduces to the familiar Laplacian <span class="arithmatex">\(\sum_i \partial^2 f / \partial x_i^2\)</span>.</p>
+<p>The LBO is self-adjoint and non-positive. Its eigenvalue equation is written:</p>
+<div class="arithmatex">\[
+-\Delta_\mathcal{M}\, \varphi_k = \tilde\lambda_k\, \varphi_k, \qquad \tilde\lambda_k \geq 0
+\]</div>
+<p>with <span class="arithmatex">\(0 = \tilde\lambda_0 \leq \tilde\lambda_1 \leq \tilde\lambda_2 \leq \cdots \to \infty\)</span> (non-negative, increasing). The eigenfunctions <span class="arithmatex">\(\{\varphi_k\}\)</span> form a complete orthonormal basis: every function on <span class="arithmatex">\(\mathcal{M}\)</span> can be expanded as <span class="arithmatex">\(f = \sum_k \langle f, \varphi_k\rangle \varphi_k\)</span>, exactly as Fourier modes on a circle. Small <span class="arithmatex">\(\tilde\lambda_k\)</span> corresponds to slowly-varying (smooth, global-scale) eigenfunctions; large <span class="arithmatex">\(\tilde\lambda_k\)</span> to rapidly-oscillating (fine-scale) ones.</p>
+<p><strong>Key property</strong>: The LBO spectrum encodes the full intrinsic geometry of <span class="arithmatex">\(\mathcal{M}\)</span> in a coordinate-free way. Two geometrically identical (isometric) manifolds have exactly the same spectrum <span class="arithmatex">\(\{\tilde\lambda_k\}\)</span> — the eigenfunctions are canonical descriptors of the surface's shape, independent of how it sits in ambient space.</p>
+<blockquote>
+<p><strong>Important</strong>: TopoMetry does not directly decompose the LBO. Instead, it decomposes a closely related <strong>diffusion operator</strong> (see Section 7) whose eigenvalues live in <span class="arithmatex">\((0, 1]\)</span> and are ordered <em>decreasingly</em> — the opposite of the LBO convention. The relationship is <span class="arithmatex">\(\lambda_k \approx e^{-\tilde\lambda_k \varepsilon}\)</span>, where <span class="arithmatex">\(\varepsilon\)</span> is the kernel bandwidth.</p>
+</blockquote>
+<hr />
+<h2 id="4-heat-diffusion-the-physical-intuition">4. Heat Diffusion: The Physical Intuition<a class="headerlink" href="#4-heat-diffusion-the-physical-intuition" title="Permanent link">&para;</a></h2>
+<p>The LBO governs how heat spreads on a surface. If you place a hot spot at point <span class="arithmatex">\(y\)</span> at time <span class="arithmatex">\(t=0\)</span> and let the heat diffuse, the temperature at point <span class="arithmatex">\(x\)</span> at time <span class="arithmatex">\(t\)</span> is the <strong>heat kernel</strong>:</p>
+<div class="arithmatex">\[
+k_t(x, y) = \sum_{k=0}^\infty e^{-\tilde\lambda_k t}\, \varphi_k(x)\, \varphi_k(y)
+\]</div>
+<p>Notice: since <span class="arithmatex">\(\tilde\lambda_k \geq 0\)</span>, each term decays in time. High-frequency eigenmodes (large <span class="arithmatex">\(\tilde\lambda_k\)</span>) decay rapidly — fine-scale details wash out quickly. Low-frequency modes (small <span class="arithmatex">\(\tilde\lambda_k\)</span>) persist — they capture coarse global shape.</p>
+<p>At short times (<span class="arithmatex">\(t \to 0\)</span>), Varadhan's theorem shows that the heat kernel approximates a Gaussian in <em>geodesic</em> distance:</p>
+<div class="arithmatex">\[
+k_t(x,y) \approx \frac{e^{-d_\mathcal{M}(x,y)^2/4t}}{(4\pi t)^{d/2}}
+\]</div>
+<p>where <span class="arithmatex">\(d_\mathcal{M}(x,y)\)</span> is the distance <em>along</em> the manifold, not through ambient space. This means heat diffusion naturally recovers true geodesic distances.</p>
+<p>A profound result (Bérard, Besson &amp; Gallot, 1994) states that the map</p>
+<div class="arithmatex">\[
+x \mapsto \left(e^{-\tilde\lambda_1 t/2}\varphi_1(x),\; e^{-\tilde\lambda_2 t/2}\varphi_2(x),\; \ldots\right)
+\]</div>
+<p>is an <strong>isometric embedding</strong> of <span class="arithmatex">\(\mathcal{M}\)</span>: squared distances in this infinite-dimensional representation converge to geodesic distances squared as <span class="arithmatex">\(t \to 0\)</span>. This is the rigorous theoretical foundation for Diffusion Maps — and for why diffusing on a data graph is geometrically meaningful.</p>
+<hr />
+<h2 id="5-from-continuous-to-discrete-graph-laplacians-and-the-density-bias-problem">5. From Continuous to Discrete: Graph Laplacians and the Density-Bias Problem<a class="headerlink" href="#5-from-continuous-to-discrete-graph-laplacians-and-the-density-bias-problem" title="Permanent link">&para;</a></h2>
+<p>In practice, we only have a finite point cloud sampled from <span class="arithmatex">\(\mathcal{M}\)</span>. A fundamental theorem (Hein 2007; Belkin &amp; Niyogi 2008) shows that the unnormalized graph Laplacian <span class="arithmatex">\(L = D - W\)</span> (with Gaussian-kernel edge weights) converges not to <span class="arithmatex">\(\Delta_\mathcal{M}\)</span>, but to a <em>density-weighted</em> version:</p>
+<div class="arithmatex">\[
+\frac{1}{nh^{d/2+1}} L f(x_i) \;\xrightarrow{n\to\infty}\; C_d\!\left[\Delta_\mathcal{M} f + g(\nabla \log p,\, \nabla f)\right]
+\]</div>
+<p>The extra term <span class="arithmatex">\(g(\nabla \log p, \nabla f)\)</span> is a <strong>drift towards high-density regions</strong>: the random walk is pulled toward wherever there are more data points, regardless of geometry. In practice, <span class="arithmatex">\(p(x)\)</span> reflects both true structure and artefacts (sampling bias, batch effects, noise). The standard pipeline — kNN graph without density correction — therefore encodes a mixture of geometry and sampling statistics rather than pure manifold structure.</p>
+<hr />
+<h2 id="6-removing-the-density-bias-two-approaches">6. Removing the Density Bias: Two Approaches<a class="headerlink" href="#6-removing-the-density-bias-two-approaches" title="Permanent link">&para;</a></h2>
+<p>TopoMetry implements two complementary strategies to recover the pure LBO.</p>
+<h3 id="6a-diffusion-maps-with-alpha-normalisation">6a. Diffusion Maps with <span class="arithmatex">\(\alpha\)</span>-Normalisation<a class="headerlink" href="#6a-diffusion-maps-with-alpha-normalisation" title="Permanent link">&para;</a></h3>
+<p>Coifman &amp; Lafon (2006) showed that dividing the kernel by a power <span class="arithmatex">\(\alpha\)</span> of an empirical density estimate cancels the drift. First, estimate the local density:</p>
+<div class="arithmatex">\[
+d_\varepsilon(x_i) = \sum_j \exp\!\left(-\frac{\|x_i - x_j\|^2}{\varepsilon}\right) \;\approx\; n\,\varepsilon^{d/2}(4\pi)^{d/2}\, p(x_i)
+\]</div>
+<p>Then form the <span class="arithmatex">\(\alpha\)</span>-renormalised kernel:</p>
+<div class="arithmatex">\[
+k_\varepsilon^{(\alpha)}(x_i, x_j) = \frac{k_\varepsilon(x_i, x_j)}{d_\varepsilon(x_i)^\alpha \cdot d_\varepsilon(x_j)^\alpha}
+\]</div>
+<p>and normalise rows to obtain a Markov (row-stochastic) transition matrix <span class="arithmatex">\(T\)</span>. The limiting operator depends on <span class="arithmatex">\(\alpha\)</span>:</p>
+<table>
+<thead>
+<tr>
+<th><span class="arithmatex">\(\alpha\)</span></th>
+<th>Limiting operator</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="arithmatex">\(0\)</span></td>
+<td><span class="arithmatex">\(\Delta_\mathcal{M} + 2g(\nabla\!\log p, \nabla)\)</span></td>
+<td>Density maximally distorts geometry</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(1/2\)</span></td>
+<td><span class="arithmatex">\(\Delta_\mathcal{M} + g(\nabla\!\log p, \nabla)\)</span></td>
+<td>Partial correction</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(1\)</span></td>
+<td><span class="arithmatex">\(\Delta_\mathcal{M}\)</span></td>
+<td><strong>Pure geometry — density fully removed</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Setting <span class="arithmatex">\(\alpha = 1\)</span> completely cancels the drift term. TopoMetry's default <code>bw_adaptive</code> kernel applies an adaptive local bandwidth (estimated from <span class="arithmatex">\(k\)</span>-NN distances) <em>before</em> the <span class="arithmatex">\(\alpha = 1\)</span> renormalisation — a double correction that removes both global and local density effects.</p>
+<h3 id="6b-continuous-k-nn-cknn-graphs">6b. Continuous <span class="arithmatex">\(k\)</span>-NN (CkNN) Graphs<a class="headerlink" href="#6b-continuous-k-nn-cknn-graphs" title="Permanent link">&para;</a></h3>
+<p>An alternative approach (Berry &amp; Sauer, 2019) corrects for density <em>by construction</em>. The key observation is that the distance to the <span class="arithmatex">\(k\)</span>-th nearest neighbour scales as <span class="arithmatex">\(\rho_k(x) \sim C\, p(x)^{-1/d}\)</span> — small in dense regions, large in sparse ones. Normalising pairwise distances by the geometric mean of local neighbour distances factors out the density:</p>
+<div class="arithmatex">\[
+r_{ij}^{\text{CkNN}} =
+\frac{\|x_i - x_j\|}{\sqrt{\rho_k(x_i)\,\rho_k(x_j)}}.
+\]</div>
+<p>Two points are connected with binary weight 1 when
+<span class="arithmatex">\(r_{ij}^{\text{CkNN}} &lt; \delta\)</span>. Equivalently,
+<span class="arithmatex">\(\|x_i - x_j\| &lt; \delta\sqrt{\rho_k(x_i)\rho_k(x_j)}\)</span>.
+Under the assumptions in Berry &amp; Sauer (2019), the <strong>unnormalised</strong> Laplacian
+of this binary graph converges to a Laplace–Beltrami operator associated with
+the density-adapted geometry. Within the multiscale unweighted graph family
+analyzed in that work, CkNN is the unique choice yielding this consistent
+geometry. In approximate mode, TopoMetry tests a candidate-neighbour set for
+scalability; exact mode thresholds all pairs.</p>
+<hr />
+<h2 id="7-the-diffusion-operator-and-its-eigenvalues">7. The Diffusion Operator and Its Eigenvalues<a class="headerlink" href="#7-the-diffusion-operator-and-its-eigenvalues" title="Permanent link">&para;</a></h2>
+<p>After building a density-corrected similarity graph, TopoMetry constructs the <strong>diffusion operator</strong> — the row-stochastic Markov matrix:</p>
+<div class="arithmatex">\[
+T_{ij} = \frac{k_\varepsilon^{(\alpha)}(x_i, x_j)}{\sum_j k_\varepsilon^{(\alpha)}(x_i, x_j)}
+\]</div>
+<p><span class="arithmatex">\(T\)</span> describes a random walk on the data graph: entry <span class="arithmatex">\(T_{ij}\)</span> is the probability of moving from point <span class="arithmatex">\(i\)</span> to point <span class="arithmatex">\(j\)</span> in one step. Its eigenpairs <span class="arithmatex">\(\{(\lambda_k, \psi_k)\}\)</span> satisfy <span class="arithmatex">\(T\, \psi_k = \lambda_k\, \psi_k\)</span>.</p>
+<p><strong>TopoMetry's eigenvalues live in <span class="arithmatex">\((0, 1]\)</span> and are stored in decreasing order:</strong></p>
+<div class="arithmatex">\[
+1 = \lambda_0 \geq \lambda_1 \geq \lambda_2 \geq \cdots \geq 0
+\]</div>
+<p>This is the <strong>opposite</strong> of the LBO convention. The connection is:</p>
+<div class="arithmatex">\[
+\lambda_k \approx e^{-\tilde\lambda_k \varepsilon}
+\]</div>
+<p>where <span class="arithmatex">\(\tilde\lambda_k \geq 0\)</span> are the increasing LBO eigenvalues and <span class="arithmatex">\(\varepsilon\)</span> is the kernel bandwidth. A diffusion eigenvalue near 1 means the corresponding mode is smooth and geometrically persistent; a diffusion eigenvalue near 0 means the mode is noisy and rapidly-decaying.</p>
+<p>The trivial eigenvalue <span class="arithmatex">\(\lambda_0 = 1\)</span> (the constant eigenfunction, meaning every point looks the same at all scales) is always discarded (<code>drop_first=True</code>). The eigenspectrum (<code>tg.eigenspectrum()</code>) plots <span class="arithmatex">\(\lambda_1 \geq \lambda_2 \geq \cdots\)</span> — a decreasing curve that "elbows" toward zero as modes transition from signal to noise.</p>
+<blockquote>
+<p><strong>Floating-point note</strong>: At 64-bit double precision, theoretically zero eigenvalues may be computed as small negative numbers (e.g., <span class="arithmatex">\(-10^{-16}\)</span>). TopoMetry's msDM weighting uses <span class="arithmatex">\(\lambda_k / (1 - \lambda_k)\)</span>, which diverges for <span class="arithmatex">\(\lambda_k \to 1^-\)</span> and is undefined for <span class="arithmatex">\(\lambda_k \leq 0\)</span>. The code therefore uses only components satisfying <span class="arithmatex">\(\lambda_k &gt; 0\)</span>, making the pipeline numerically robust to this floating-point artefact.</p>
+</blockquote>
+<h3 id="contrast-with-laplacian-eigenmaps-le">Contrast with Laplacian Eigenmaps (LE)<a class="headerlink" href="#contrast-with-laplacian-eigenmaps-le" title="Permanent link">&para;</a></h3>
+<p>When the <code>method='LE'</code> option is used, TopoMetry instead decomposes the graph Laplacian <span class="arithmatex">\(L = D - W\)</span> and seeks its <em>smallest</em> non-zero eigenvalues <span class="arithmatex">\(\tilde\lambda_1 \leq \tilde\lambda_2 \leq \cdots\)</span> (increasing from 0). The eigenvalue ordering and scale are completely different from DM/msDM — LE eigenvalues are non-negative and unbounded, while DM eigenvalues are in <span class="arithmatex">\((0,1]\)</span>. The two are related by <span class="arithmatex">\(\lambda_k \approx e^{-\tilde\lambda_k \varepsilon}\)</span> but should not be compared directly.</p>
+<hr />
+<h2 id="8-the-spectral-scaffold-dm-and-msdm">8. The Spectral Scaffold: DM and msDM<a class="headerlink" href="#8-the-spectral-scaffold-dm-and-msdm" title="Permanent link">&para;</a></h2>
+<p>The eigenvectors <span class="arithmatex">\(\{\psi_k\}\)</span> of <span class="arithmatex">\(T\)</span> converge to the eigenfunctions of <span class="arithmatex">\(\Delta_\mathcal{M}\)</span> — the "Fourier modes" of the data manifold, ordered from smoothest (<span class="arithmatex">\(\psi_1\)</span>, encoding global structure) to most oscillatory (<span class="arithmatex">\(\psi_m\)</span>, encoding fine-scale detail).</p>
+<h3 id="diffusion-maps-dm">Diffusion Maps (DM)<a class="headerlink" href="#diffusion-maps-dm" title="Permanent link">&para;</a></h3>
+<p>The <strong>Diffusion Map</strong> embedding at diffusion time <span class="arithmatex">\(t\)</span> weights each eigenmode by <span class="arithmatex">\(\lambda_k^t\)</span>:</p>
+<div class="arithmatex">\[
+\Psi_t(x_i) = \bigl(\lambda_1^t\,\psi_1(x_i),\;\lambda_2^t\,\psi_2(x_i),\;\ldots,\;\lambda_m^t\,\psi_m(x_i)\bigr) \in \mathbb{R}^m
+\]</div>
+<p>Since <span class="arithmatex">\(\lambda_k \in (0,1)\)</span>, raising to the power <span class="arithmatex">\(t &gt; 1\)</span> suppresses small (noisy) eigenvalues more aggressively than large (geometrically meaningful) ones. The squared Euclidean distance in this space equals the <strong>diffusion distance</strong> — robust to noise because it integrates over all <span class="arithmatex">\(t\)</span>-step paths simultaneously, not just the shortest path.</p>
+<p>TopoMetry stores the DM scaffold as <code>X_spectral_scaffold</code>.</p>
+<h3 id="multiscale-diffusion-maps-msdm">Multiscale Diffusion Maps (msDM)<a class="headerlink" href="#multiscale-diffusion-maps-msdm" title="Permanent link">&para;</a></h3>
+<p>For datasets with hierarchical structure (e.g., a tree with both broad groups and fine sub-populations), a fixed diffusion time <span class="arithmatex">\(t\)</span> captures only one geometric scale. The <strong>multiscale Diffusion Map</strong> aggregates over all <span class="arithmatex">\(t \geq 1\)</span> via the geometric series <span class="arithmatex">\(\sum_{t=1}^\infty \lambda^t = \lambda/(1-\lambda)\)</span>:</p>
+<div class="arithmatex">\[
+\Psi_{\text{ms}}(x_i) = \left(\frac{\lambda_k}{1 - \lambda_k}\,\psi_k(x_i)\right)_{k=1}^m, \qquad \lambda_k &gt; 0
+\]</div>
+<p>The weight <span class="arithmatex">\(\lambda_k / (1-\lambda_k)\)</span> is monotone increasing in <span class="arithmatex">\(\lambda_k\)</span>: eigenmodes with large eigenvalues (globally-persistent geometry) are upweighted; eigenmodes with small eigenvalues (local fluctuations) are downweighted. This simultaneously encodes structure at all scales in a single representation.</p>
+<p>TopoMetry uses the msDM scaffold as its default high-dimensional coordinate system, stored as <code>X_ms_spectral_scaffold</code>.</p>
+<h3 id="reading-the-eigenspectrum">Reading the Eigenspectrum<a class="headerlink" href="#reading-the-eigenspectrum" title="Permanent link">&para;</a></h3>
+<p>The <code>tg.eigenspectrum()</code> scree plot shows <span class="arithmatex">\(\lambda_1 \geq \lambda_2 \geq \cdots\)</span> in decreasing order. How to interpret it:</p>
+<ul>
+<li><strong>Sharp initial drop, then plateau near 0</strong>: a few dominant geometric modes capture most structure; the "elbow" suggests a natural intrinsic dimensionality.</li>
+<li><strong>Slow, gradual decay</strong>: rich multi-scale structure with no single dominant scale — msDM is especially beneficial.</li>
+<li><strong>Gap between <span class="arithmatex">\(\lambda_m\)</span> and <span class="arithmatex">\(\lambda_{m+1}\)</span></strong>: the first <span class="arithmatex">\(m\)</span> eigenmodes are well-separated from noise. TopoMetry's automated scaffold sizing uses this gap alongside MLE and FSA intrinsic-dimensionality estimators.</li>
+</ul>
+<hr />
+<h2 id="9-measuring-distortion-the-riemannian-metric">9. Measuring Distortion: The Riemannian Metric<a class="headerlink" href="#9-measuring-distortion-the-riemannian-metric" title="Permanent link">&para;</a></h2>
+<p>Any reduction of high-dimensional data to 2D for visualisation <em>must</em> distort distances — it is geometrically impossible to perfectly flatten a curved surface. TopoMetry makes this distortion <em>visible and quantifiable</em>.</p>
+<p>A smooth embedding <span class="arithmatex">\(f: \mathcal{M} \to \mathbb{R}^N\)</span> induces a <strong>pullback metric</strong> on <span class="arithmatex">\(\mathcal{M}\)</span>:</p>
+<div class="arithmatex">\[
+(f^* g_{\text{Eucl}})_{ij}(p) = \left(J_f^T J_f\right)_{ij}
+\]</div>
+<p>where <span class="arithmatex">\(J_f\)</span> is the Jacobian of <span class="arithmatex">\(f\)</span>. If the embedding is isometric, all singular values <span class="arithmatex">\(\sigma_k\)</span> of <span class="arithmatex">\(J_f\)</span> equal 1. Deviations measure distortion:</p>
+<ul>
+<li><strong>Contraction</strong> (<span class="arithmatex">\(\sigma_k &lt; 1\)</span>): the embedding compresses distances — points that are far on the manifold appear close in the plot.</li>
+<li><strong>Expansion</strong> (<span class="arithmatex">\(\sigma_k &gt; 1\)</span>): the embedding stretches distances — points that are close on the manifold appear far in the plot.</li>
+<li><strong>Anisotropy</strong> (<span class="arithmatex">\(\sigma_1/\sigma_d \gg 1\)</span>): different directions are distorted by different amounts — trajectories are bent or twisted.</li>
+</ul>
+<p>The <code>tg.riemann_diagnostics()</code> method computes these local distortion fields and overlays them on 2D embeddings, turning a qualitative visualisation into a quantitatively interpretable map.</p>
+<hr />
+<h2 id="10-topometrys-pipeline-putting-it-all-together">10. TopoMetry's Pipeline: Putting It All Together<a class="headerlink" href="#10-topometrys-pipeline-putting-it-all-together" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>Data matrix (n samples × D features)
+        │
+        ▼
+  (Optional) Feature selection + scaling
+        │
+        ▼
+  1. kNN graph in feature space  (no PCA)
+        │
+        ▼
+  2. Density-corrected diffusion operator T  [bw_adaptive: local bandwidth + α=1]
+     Eigenvalues: 1 ≥ λ₁ ≥ λ₂ ≥ … ≥ 0  (decreasing, in (0,1])
+        │
+        ▼
+  3. Eigendecomposition → DM scaffold  (ψₖ × λₖᵗ)
+                        → msDM scaffold (ψₖ × λₖ/(1−λₖ))
+     [automated sizing via intrinsic dimensionality + spectral gap]
+        │
+        ▼
+  4. kNN graph in scaffold space
+        │
+        ▼
+  5. Refined diffusion operator on scaffold → P(Z), P(msZ)
+        │
+        ▼
+  6. Graph-layout optimisation (MAP / PaCMAP) → 2D visualisation
+        │
+        ▼
+  7. Evaluation: geometry-preservation scores and distortion quantification via Riemannian metric
+</code></pre></div>
+<p><strong>Step 1 (kNN in feature space, not PC space)</strong> avoids the metric distortion introduced by PCA. With appropriate preprocessing, Euclidean distances in feature space are already a reasonable proxy for geodesic distances — unlike distances in PCA space, which are distorted by curvature and by directions discarded by the projection.</p>
+<p><strong>Steps 2–3</strong> implement the density-corrected LBO approximation. The eigenvectors of the resulting diffusion operator converge to the LBO eigenfunctions on the data manifold. Critically, the eigenvalues are in <span class="arithmatex">\((0,1]\)</span> and decreasing — large values mark geometrically meaningful modes, small values near 0 mark noise.</p>
+<p><strong>Step 5</strong> is a second round of diffusion on the scaffold coordinates, further smoothing residual noise while preserving the structure captured in the first decomposition.</p>
+<p><strong>Step 7</strong> lets you see <em>where</em> your 2D plot is trustworthy and where it is deceptive.</p>
+<hr />
+<h2 id="11-summary-why-this-is-better">11. Summary: Why This Is Better<a class="headerlink" href="#11-summary-why-this-is-better" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>PCA-based pipelines</th>
+<th>TopoMetry</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Geometry model</td>
+<td>Global linear (flat)</td>
+<td>Local nonlinear (curved manifold)</td>
+</tr>
+<tr>
+<td>Density bias</td>
+<td>Present (<span class="arithmatex">\(\alpha=0\)</span> → converges to <span class="arithmatex">\(\Delta_p \neq \Delta_\mathcal{M}\)</span>)</td>
+<td>Removed (<span class="arithmatex">\(\alpha=1\)</span> or CkNN)</td>
+</tr>
+<tr>
+<td>Eigenvalue type</td>
+<td>Variance fractions (no diffusion time)</td>
+<td>Diffusion operator:<span class="arithmatex">\(1 \geq \lambda_1 \geq \cdots \geq 0\)</span></td>
+</tr>
+<tr>
+<td>Scale sensitivity</td>
+<td>Single scale (fixed<span class="arithmatex">\(k\)</span> PCs)</td>
+<td>Multi-scale (msDM:<span class="arithmatex">\(\lambda/(1-\lambda)\)</span> sums over all <span class="arithmatex">\(t\)</span>)</td>
+</tr>
+<tr>
+<td>Rare-group detection</td>
+<td>May miss low-variance subtypes</td>
+<td>Preserved (no global variance filter)</td>
+</tr>
+<tr>
+<td>Distortion visible?</td>
+<td>No</td>
+<td>Yes (Riemannian metric diagnostics)</td>
+</tr>
+<tr>
+<td>Theoretical guarantee</td>
+<td>None (heuristic)</td>
+<td>Convergence to LBO eigenfunctions</td>
+</tr>
+</tbody>
+</table>
+<p>In brief: TopoMetry replaces a heuristic pipeline built for computational convenience with one that is mathematically justified to recover the intrinsic geometry of the data manifold. The practical consequence is better separation of rare groups, more faithful trajectories, and visualisations where distortion is explicit rather than hidden.</p>
+<hr />
+<h2 id="further-reading">Further Reading<a class="headerlink" href="#further-reading" title="Permanent link">&para;</a></h2>
+<p>The mathematical foundations are detailed in:</p>
+<ul>
+<li>Coifman &amp; Lafon (2006) — Diffusion Maps and the <span class="arithmatex">\(\alpha\)</span>-normalisation.</li>
+<li>Coifman &amp; Maggioni (2006) — Multiscale Diffusion Maps.</li>
+<li>Berry &amp; Sauer (2019) — CkNN and the unique unweighted LBO-consistent graph.</li>
+<li>Bérard, Besson &amp; Gallot (1994) — The heat kernel isometric embedding theorem.</li>
+<li>Hein, Audibert &amp; von Luxburg (2007) — Convergence of graph Laplacians to the LBO.</li>
+</ul>
+<p>For a self-contained mathematical treatment covering all of the above, see the original <a href="https://doi.org/10.7554/eLife.100361.2">TopOMetry paper</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../concepts/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Concepts: Graphs &amp; Spectral Scaffolds">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Concepts: Graphs & Spectral Scaffolds
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../background/" class="md-footer__link md-footer__link--next" aria-label="Next: Background: CkNN, Diffusion Maps, &amp; Manifold Learning">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Background: CkNN, Diffusion Maps, & Manifold Learning
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.indexes", "navigation.footer", "content.code.copy", "content.code.annotate", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

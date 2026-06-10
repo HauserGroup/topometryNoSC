@@ -32,7 +32,8 @@ from topo.eval.topo_metrics import (
     topo_preserve_score,
 )
 from topo.layouts.projector import Projector
-from topo.spectral.eigen import EigenDecomposition, spectral_layout
+from topo.spectral import LE
+from topo.spectral.eigen import EigenDecomposition
 from topo.topograph import _KERNEL_CONFIGS
 from topo.tpgraph.kernels import Kernel
 
@@ -307,7 +308,7 @@ def graph_layout_array(value: Any, n_samples: int) -> FloatArray:
         value = value[0]
     return checked_embedding(
         value,
-        "spectral_layout()",
+        "LE()",
         n_samples=n_samples,
         min_columns=2,
     )
@@ -357,7 +358,6 @@ def run_pipeline(data: DemoData, config: DemoConfig) -> PipelineResult:
         method=config.dm_method,
         eigensolver=config.eigensolver,
         drop_first=True,
-        weight=True,
         t=config.diffusion_time,
     )
     eigen.fit(kernel_X)
@@ -387,9 +387,12 @@ def run_pipeline(data: DemoData, config: DemoConfig) -> PipelineResult:
     K_Z = as_csr_matrix(kernel_Z.K, "kernel_Z.K")
     L_Z = as_csr_matrix(kernel_Z.L, "kernel_Z.L")
 
-    init_raw = spectral_layout(
-        graph=K_Z,
-        dim=config.n_components_2d,
+    init_raw = LE(
+        K_Z,
+        n_eigs=config.n_components_2d,
+        laplacian_type="normalized",
+        drop_first=True,
+        return_evals=False,
         random_state=config.random_state,
     )
     init_Y = graph_layout_array(init_raw, n_samples=X.shape[0])

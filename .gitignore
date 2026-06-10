@@ -87,3 +87,6 @@ CLAUDE.md
 .prompt.md
 .github/prompts/
 .github/copilot-instructions.md
+
+# --- Secrets ---
+.pypi-token

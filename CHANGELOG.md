@@ -6,6 +6,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-10
+
+First PyPI release of the fork.
+
+### Fixed
+- Repaired the breakage left behind by the spectral/ann/dists simplification:
+  restored imports and call sites (`pairwise_distances` now delegated to
+  scikit-learn, spectral initialization via `EigenDecomposition`/`LE`), broke
+  the `kernels <-> spectral.eigen` circular import, removed the dead
+  `graph_kernel` state, and made the UoM path populate `P_Z_`/`P_msZ_`.
+- kNN graphs no longer silently drop genuine zero-distance neighbors
+  (duplicate points); off-diagonal zeros are clamped to a tiny positive float
+  so every row keeps exactly `k` edges (both sklearn and HNSWlib backends).
+
+### Changed
+- Deleted `topo.base.dists`; the Euclidean gradient is delegated to
+  `umap.distances.euclidean_grad`.
+- Runtime dependencies slimmed: Jupyter packages moved to the dev group;
+  `hnswlib` and `pacmap` are optional extras only (`[ann]`, `[layouts]`),
+  with corrected install hints.
+
+### Documentation
+- API reference now covers the standalone building blocks (`compute_kernel`,
+  `eigendecompose`, `LE`, `graph_laplacian`, `diffusion_operator`,
+  `automated_scaffold_sizing`, projection diagnostics).
+- `cknn_graph` gained a full NumPy-style docstring with the Berry & Sauer
+  reference. Example notebooks updated to the current API and re-synced with
+  their jupytext sources.
+
+### Tests
+- Added integration tests composing the standalone estimators outside
+  `TopOGraph`, plus a duplicate-point kNN regression test. Suite: 213 tests,
+  ruff/mypy/pyright clean.
+
 ### Packaging
 - **Renamed the distribution to `topometry-nosc`** (independently maintained
   fork) to avoid colliding with the upstream `topometry` project on PyPI. The

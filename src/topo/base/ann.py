@@ -31,6 +31,11 @@ from topo.base.graph_matrix import as_csr_matrix
 
 logger = logging.getLogger(__name__)
 
+# Clamp value for genuine zero-distance neighbor edges (duplicate points).
+# float32 tiny survives both float32 and float64 sparse-data round-trips,
+# unlike float64 tiny which underflows to 0.0 when graphs are cast to float32.
+_ZERO_DISTANCE_TINY = float(np.finfo(np.float32).tiny)
+
 
 def _resolve_n_jobs(n_jobs: int | str | None) -> int:
     """Resolve sklearn/joblib-style n_jobs."""
@@ -191,8 +196,24 @@ def _build_sparse_knn_graph(
     k = int(indices.shape[1])
     indptr = np.arange(0, n_query_samples * k + 1, k, dtype=np.int64)
 
+    vals = distances.ravel()
+    if not np.issubdtype(vals.dtype, np.floating):
+        vals = vals.astype(np.float64)
+
+    # Genuine zero-distance neighbors (duplicate points) must survive CSR
+    # storage; clamp off-diagonal zeros to the smallest positive float so
+    # eliminate_zeros() below only drops self-loops.
+    cols = indices.ravel()
+    rows = np.repeat(np.arange(n_query_samples), k)
+    off_diagonal = (
+        rows != cols
+        if n_query_samples == n_fit_samples
+        else np.ones(vals.shape, dtype=bool)
+    )
+    vals = np.where((vals <= 0) & off_diagonal, _ZERO_DISTANCE_TINY, vals)
+
     graph = csr_matrix(
-        (distances.ravel(), indices.ravel(), indptr),
+        (vals, cols, indptr),
         shape=(n_query_samples, n_fit_samples),
     )
     graph.eliminate_zeros()
@@ -235,6 +256,9 @@ def _sklearn_knn_graph(
         ),
         "sklearn kneighbors_graph output",
     )
+    # Keep genuine zero-distance neighbors (duplicate points): clamp to a
+    # tiny positive float so eliminate_zeros() only drops self-loops.
+    graph.data = np.where(graph.data <= 0, _ZERO_DISTANCE_TINY, graph.data)
     graph.setdiag(0.0)
     graph.eliminate_zeros()
     return graph

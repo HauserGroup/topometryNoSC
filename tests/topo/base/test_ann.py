@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from scipy.sparse import csr_matrix
+from sklearn.metrics import pairwise_distances
 
 from topo.base.ann import HNSWlibTransformer, _resolve_n_jobs, kNN
 
@@ -16,19 +17,47 @@ def test_kNN_sklearn():
 
 def test_kNN_sklearn_direct_kneighbors_graph_path():
     X = np.random.default_rng(0).normal(size=(30, 3))
-    graph = kNN(X, n_neighbors=5, backend="sklearn", return_instance=False)
+    graph = kNN(X, n_neighbors=5, backend="sklearn")
     assert isinstance(graph, csr_matrix)
     assert graph.shape == (30, 30)
     assert graph.nnz == 30 * 5
     assert graph.format == "csr"
 
 
-def test_kNN_sklearn_return_instance_with_precomputed():
+def test_kNN_sklearn_precomputed():
     X = np.random.default_rng(1).normal(size=(20, 3))
-    nbrs, graph = kNN(X, n_neighbors=5, backend="sklearn", return_instance=True)
-    assert hasattr(nbrs, "kneighbors")
+    D = pairwise_distances(X)
+    graph = kNN(D, n_neighbors=5, metric="precomputed", backend="sklearn")
     assert isinstance(graph, csr_matrix)
     assert graph.shape == (20, 20)
+
+
+def test_kNN_rejects_unknown_kwargs():
+    X = np.random.default_rng(2).normal(size=(20, 3))
+    with pytest.raises(TypeError, match="Unexpected kNN keyword"):
+        kNN(X, n_neighbors=5, backend="sklearn", return_instance=True)
+
+
+def test_knn_keeps_zero_distance_duplicate_neighbors():
+    """Duplicate points must not shorten kNN graph rows (regression).
+
+    Zero-distance edges used to be dropped by eliminate_zeros(), which broke
+    downstream consumers that require exactly k neighbors per row.
+    """
+    rng = np.random.default_rng(7)
+    X = rng.normal(size=(20, 3))
+    X[1] = X[0]  # exact duplicate -> zero distance between rows 0 and 1
+    k = 4
+
+    for backend in ["sklearn", "hnswlib"]:
+        if backend == "hnswlib":
+            pytest.importorskip("hnswlib")
+        G = kNN(X, n_neighbors=k, backend=backend)
+        row_counts = np.diff(G.indptr)
+        assert np.all(row_counts == k), (
+            f"{backend}: expected {k} neighbors per row, got {np.unique(row_counts)}"
+        )
+        assert np.all(G.data > 0)
 
 
 def test_resolve_n_jobs():

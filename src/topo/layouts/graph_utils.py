@@ -10,11 +10,11 @@ from typing import Any
 
 import numpy as np
 from sklearn.neighbors import KDTree
+from umap.distances import euclidean_grad
 from umap.layouts import optimize_layout_euclidean, optimize_layout_generic
 from umap.umap_ import make_epochs_per_sample
 
 from topo._compat.umap import find_umap_ab_params, fuzzy_graph_from_data
-from topo.base import dists as dist
 from topo.spectral import LE
 
 find_ab_params = find_umap_ab_params
@@ -79,7 +79,7 @@ def simplicial_set_embedding(
     densmap,
     densmap_kwds=None,
     output_dens=False,
-    output_metric=dist.euclidean_grad,
+    output_metric=euclidean_grad,
     output_metric_kwds=None,
     euclidean_output=True,
     parallel=True,

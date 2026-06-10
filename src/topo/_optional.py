@@ -1,7 +1,7 @@
 """Centralised handling of optional dependencies.
 
 The core package depends on the numerical stack, plotting (matplotlib),
-dataframe I/O (pandas), Jupyter, and ``umap-learn``. Everything else—the AMG
+dataframe I/O (pandas), and ``umap-learn``. Everything else—the AMG
 eigensolver, the HNSWlib approximate-nearest-neighbour backend, and third-party
 layout libraries—is optional and gated through the helpers in this module so that:
 
@@ -23,7 +23,7 @@ __all__ = [
 
 _EXTRA_FOR: dict[str, str] = {
     "pyamg": "amg",
-    "hnswlib": "hnswlib",
+    "hnswlib": "ann",
     "pacmap": "layouts",
     "pymde": "layouts",
     "trimap": "layouts",

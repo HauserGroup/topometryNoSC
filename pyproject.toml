@@ -55,18 +55,13 @@ dependencies = [
     "umap-learn>=0.5.8",
     "matplotlib>=3.6",
     "pandas>=1.5",
-    "ipykernel",
-    "ipywidgets",
-    "jupyterlab",
-    "hnswlib>=0.8.0",
-    "pacmap>=0.9.1",
 ]
 
 [project.optional-dependencies]
 ann = ["hnswlib>=0.8.0"]
 amg = ["pyamg>=5.3.0"]
 layouts = [
-    "pacmap>=0.7",
+    "pacmap>=0.9.1",
     "pymde>=0.1",
     "trimap>=1.1",
 ]
@@ -81,6 +76,9 @@ Changelog = "https://github.com/HauserGroup/topometryNoSC/blob/master/CHANGELOG.
 
 [dependency-groups]
 dev = [
+    "ipykernel",
+    "ipywidgets",
+    "jupyterlab",
     "jupytext>=1.19.3",
     "mypy>=1.13",
     "nbstripout>=0.9.1",
@@ -147,12 +145,6 @@ convention = "numpy"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B", "D"]
-# numba-jitted internals: agreed bar is a concise one-line summary, not full
-# NumPy sections. Keep presence rules (D1xx); drop the section-content rules.
-"src/topo/base/sparse.py" = ["D205", "D400", "D401", "D415"]
-"src/topo/base/dists.py" = ["D205", "D400", "D401", "D415"]
-"src/topo/spectral/umap_layouts.py" = ["D205", "D400", "D401", "D415"]
-"src/topo/utils/umap_utils.py" = ["D205", "D400", "D401", "D415"]
 
 [tool.mypy]
 python_version = "3.10"

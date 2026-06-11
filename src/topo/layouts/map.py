@@ -141,11 +141,12 @@ def fuzzy_embedding(
     euclidean_output : bool, default=True
         Whether to use the faster code specialised for euclidean output metrics
     save_every : int or None, optional
-        If provided and >0, store the embedding every `save_every` epochs into
+        If provided and >0, store the final embedding into
         `aux_data["checkpoints"]` as a list of dicts:
             [{"epoch": e, "embedding": Y_e}, ...]
-        WARNING: storing many snapshots can be memory intensive. Consider
-        passing `save_callback` to stream snapshots to disk.
+        Per-epoch checkpointing is not implemented since layout optimization
+        is delegated to `umap-learn`; at most the initial (epoch 0) and final
+        snapshots are captured.
     save_limit : int or None, optional
         Maximum number of snapshots to keep in-memory in `aux_data`.
         If exceeded, the earliest snapshots are discarded (FIFO).

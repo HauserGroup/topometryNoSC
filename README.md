@@ -1,3 +1,4 @@
+[![PyPI](https://img.shields.io/pypi/v/topometry-nosc)](https://pypi.org/project/topometry-nosc/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/HauserGroup/topometryNoSC/blob/master/notebooks/example.ipynb)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
@@ -161,9 +162,14 @@ Example `TopOGraph` fit:
 
 ## Changelog
 
-**0.2.0** — Core-only release
-- Removed single-cell / scanpy / AnnData wrappers (now a standalone geometry toolkit)
-- Core API unchanged: `TopOGraph`, spectral scaffolds, graph operators, layouts, metrics, plotting
+**0.3.0** — First PyPI release
+- Published to PyPI as [`topometry-nosc`](https://pypi.org/project/topometry-nosc/)
+- Simplified internals delegate to scikit-learn/SciPy/umap-learn where possible;
+  slimmer runtime dependencies (ANN backends and extra layouts are opt-in extras)
+- Standalone building blocks (`kNN`, `Kernel`, `cknn_graph`, `EigenDecomposition`,
+  `LE`, `Projector`) usable and tested outside the `TopOGraph` orchestrator
+
+See [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 #### Citation
 

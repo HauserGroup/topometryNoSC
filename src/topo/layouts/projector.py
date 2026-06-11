@@ -23,7 +23,7 @@ from topo._optional import has, require
 from topo.base.ann import kNN
 from topo.layouts.isomap import Isomap
 from topo.layouts.map import fuzzy_embedding
-from topo.spectral.eigen import EigenDecomposition
+from topo.spectral import LE
 from topo.tpgraph.kernels import Kernel
 from topo.utils._utils import get_landmark_indices
 
@@ -73,10 +73,11 @@ class Projector(BaseEstimator, TransformerMixin):
 
     projection_method : str, default='Isomap'
         Which projection method to use. `UMAP` delegates to `umap-learn`; `MAP`
-        is TopoMetry's local checkpoint-aware graph-layout optimizer. Current options are:
+        is TopoMetry's graph-layout optimizer (optional initial/final snapshot
+        capture). Current options are:
             * 'Isomap' - one of the first manifold learning methods
             * ['t-SNE'](https://github.com/DmitryUlyanov/Multicore-TSNE) - a classic manifold learning method
-            * 'MAP' - local checkpoint-aware graph-layout optimization
+            * 'MAP' - graph-layout optimization with initial/final snapshot capture
             * ['UMAP'](https://umap-learn.readthedocs.io/en/latest/index.html) - upstream `umap-learn` estimator
             * ['PaCMAP'](http://jmlr.org/papers/v22/20-1061.html) (Pairwise-controlled Manifold Approximation and Projection) - for balanced visualizations
             * ['TriMAP'](https://github.com/eamid/trimap) - dimensionality reduction using triplets
@@ -125,11 +126,11 @@ class Projector(BaseEstimator, TransformerMixin):
         keep_estimator=False,
         random_state=None,
         verbose=False,
-        # ---- NEW: checkpointing passthrough to MAP ----
-        save_every=None,  # int or None: store Y every `save_every` epochs
+        # ---- checkpointing passthrough to MAP ----
+        save_every=None,  # int or None: store final MAP embedding in aux checkpoints
         save_limit=None,  # cap snapshots kept in memory
         save_callback=None,  # callable(epoch:int, Y:np.ndarray) -> None
-        include_init_snapshot=True,  # store epoch=0 (post-init) snapshot
+        include_init_snapshot=True,  # store epoch=0 snapshot before SGD
     ):
         self.n_components = n_components
         self.metric = metric
@@ -317,9 +318,14 @@ class Projector(BaseEstimator, TransformerMixin):
             if self.init == "spectral":
                 try:
                     self.init_Y_ = np.asarray(
-                        EigenDecomposition(
-                            n_components=self.n_components
-                        ).fit_transform(K)
+                        LE(
+                            K,
+                            n_eigs=int(self.n_components),
+                            laplacian_type="normalized",
+                            drop_first=True,
+                            return_evals=False,
+                        ),
+                        dtype=np.float32,
                     )
                 except Exception:
                     warnings.warn(
@@ -327,7 +333,7 @@ class Projector(BaseEstimator, TransformerMixin):
                     )
                     self.init_Y_ = self.random_state.randn(
                         _n_rows(K, "projection graph"), self.n_components
-                    )
+                    ).astype(np.float32)
             else:
                 self.init_Y_ = self.random_state.randn(
                     _n_rows(K, "projection graph"), self.n_components

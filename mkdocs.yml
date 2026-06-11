@@ -93,6 +93,8 @@ markdown_extensions:
       permalink: true
   - tables
   - pymdownx.superfences
+  - pymdownx.snippets:
+      check_paths: true
   - pymdownx.highlight
   - pymdownx.inlinehilite
   - pymdownx.arithmatex:

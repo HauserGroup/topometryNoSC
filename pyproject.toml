@@ -78,7 +78,7 @@ Changelog = "https://github.com/HauserGroup/topometryNoSC/blob/master/CHANGELOG.
 dev = [
     "ipykernel",
     "ipywidgets",
-    "jupyterlab",
+    "jupyterlab>=4.6.0",
     "jupytext>=1.19.3",
     "mypy>=1.13",
     "nbstripout>=0.9.1",
@@ -175,3 +175,11 @@ branch = true
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+
+[tool.uv]
+constraint-dependencies = [
+  "jupyterlab-server>=2.20.0",
+  "tornado>=6.5.7",
+  "bleach>=6.4.0",
+
+]

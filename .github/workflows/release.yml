@@ -22,6 +22,8 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          cache-suffix: release-py312
 
       - name: Build sdist + wheel
         run: uv build
@@ -30,10 +32,11 @@ jobs:
         run: uvx twine check dist/*
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/*
+          if-no-files-found: error
 
   publish:
     name: Publish to PyPI
@@ -42,11 +45,12 @@ jobs:
     environment: pypi
 
     permissions:
+      contents: read
       id-token: write
 
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
@@ -54,4 +58,5 @@ jobs:
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          packages-dir: dist/
           skip-existing: true

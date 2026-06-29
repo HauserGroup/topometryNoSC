@@ -1,4 +1,4 @@
-# Mathematical Details: LBO, Diffusion Maps, and CkNN
+# Math details
 
 TopoMetry is a **manifold learning** framework built on geometric operators from differential geometry and spectral theory. This page explains the core mathematics — how we approximate the **Laplace-Beltrami Operator (LBO)**, why **Continuous k-Nearest Neighbors (CkNN)** corrects density bias, and how **Diffusion Maps** provide superior **dimensionality reduction** compared to PCA.
 

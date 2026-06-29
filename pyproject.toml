@@ -89,7 +89,7 @@ dev = [
     "ruff>=0.15.11",
 ]
 docs = [
-    "mkdocs-material[imaging]>=9",
+    "zensical",
     "mkdocstrings[python]>=0.25",
 ]
 

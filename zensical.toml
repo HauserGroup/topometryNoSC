@@ -1,0 +1,113 @@
+[project]
+site_name = "topometry-nosc"
+site_description = "An independently maintained, heavily modified fork of TopOMetry."
+site_url = "https://HauserGroup.github.io/topometryNoSC/"
+repo_url = "https://github.com/HauserGroup/topometryNoSC"
+repo_name = "HauserGroup/topometryNoSC"
+edit_uri = "edit/master/docs/"
+
+watch = ["docs", "src/topo"]
+extra_javascript = [
+    "javascripts/mathjax.js",
+    "https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"
+]
+
+nav = [
+    { "Home" = "index.md" },
+    { "Installation" = "installation.md" },
+    { "Quickstart" = "quickstart.md" },
+    { "Practical FAQ" = "faq.md" },
+    { "Tutorials" = [
+        { "Step by step: Manifold Learning Pipeline" = "tutorials/step-by-step.md" },
+        { "Plotting" = "tutorials/plotting.md" },
+        { "Data provenance" = "tutorials/data-provenance.md" },
+    ] },
+    { "Concepts" = "concepts.md" },
+    { "Math details" = "math_details.md" },
+    { "Background" = "background.md" },
+    { "API Reference" = [
+        { "Overview" = "api/index.md" },
+        { "Main workflow: TopOGraph" = "api/topograph.md" },
+        { "Advanced estimators" = "api/advanced.md" },
+        { "Evaluation metrics" = "api/metrics.md" },
+        { "Plotting" = "api/plotting.md" },
+        { "Developer reference" = "api/internal.md" },
+    ] },
+    { "Citation" = "citation.md" },
+    { "Changelog" = "changelog.md" },
+]
+
+[project.theme]
+logo = "assets/topometry_logo.png"
+favicon = "assets/topometry_logo.png"
+features = [
+    "navigation.tabs",
+    "navigation.sections",
+    "navigation.top",
+    "navigation.indexes",
+    "navigation.footer",
+    "navigation.instant",
+    "navigation.tracking",
+    "navigation.path",
+    "content.code.copy",
+    "content.code.annotate",
+    "content.code.select",
+    "content.tabs.link",
+    "content.tooltips",
+    "search.suggest",
+    "search.highlight",
+    "content.action.edit",
+    "content.action.view",
+]
+
+[project.theme.icon]
+repo = "fontawesome/brands/github"
+edit = "material/pencil"
+view = "material/eye"
+
+[project.theme.font]
+text = "Nunito"
+code = "JetBrains Mono"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "deep-orange"
+accent = "teal"
+toggle.icon = "material/weather-night"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "deep-orange"
+accent = "teal"
+toggle.icon = "material/weather-sunny"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.tables]
+[project.markdown_extensions.toc]
+permalink = true
+[project.markdown_extensions.pymdownx.superfences]
+[project.markdown_extensions.pymdownx.snippets]
+base_path = ["."]
+check_paths = true
+[project.markdown_extensions.pymdownx.highlight]
+[project.markdown_extensions.pymdownx.inlinehilite]
+[project.markdown_extensions.pymdownx.arithmatex]
+generic = true
+
+[project.plugins.search]
+[project.plugins.social]
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "numpy"
+show_source = false
+separate_signature = true
+show_signature_annotations = true
+members_order = "source"
+merge_init_into_class = true

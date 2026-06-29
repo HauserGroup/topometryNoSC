@@ -1,4 +1,4 @@
-# Practical FAQ: Manifold Learning and Dimensionality Reduction
+# Practical FAQ
 
 Short answers to common workflow questions that are not tied to one API call.
 

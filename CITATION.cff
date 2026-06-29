@@ -4,7 +4,8 @@ message: >-
   fork and also cite the original TopOMetry work listed under references.
 type: software
 title: topometry-nosc
-version: 0.1.0
+version: 0.3.0
+date-released: 2026-06-10
 authors:
   - family-names: Madsen
     given-names: Jakob
@@ -34,6 +35,6 @@ references:
     journal: eLife
     year: 2024
     volume: 13
-    article-number: RP100361
+    number: RP100361
     doi: 10.7554/eLife.100361.2
     url: "https://doi.org/10.7554/eLife.100361.2"

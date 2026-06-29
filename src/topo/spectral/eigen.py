@@ -164,7 +164,7 @@ def eigendecompose(
             G_csr,
             k=k,
             which="LM" if largest else "SM",
-            tol=float(eigen_tol),  # type: ignore
+            tol=_eigsh_tol(eigen_tol),
         )
     except ArpackError as exc:
         raise RuntimeError(

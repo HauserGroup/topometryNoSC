@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-30
+
+### Changed
+- Refreshed locked dependencies, including security updates to `jupyterlab`
+  and `urllib3`.
+- Upgraded `mkdocstrings`, `mkdocstrings-python` and `zensical` for
+  compatibility with `pymdown-extensions` 12.
+- Migrated the documentation site from MkDocs to Zensical.
+
 ## [0.3.0] - 2026-06-10
 
 First PyPI release of the fork.

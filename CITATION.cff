@@ -4,8 +4,8 @@ message: >-
   fork and also cite the original TopOMetry work listed under references.
 type: software
 title: topometry-nosc
-version: 0.3.0
-date-released: 2026-06-10
+version: 0.3.1
+date-released: 2026-10-30
 authors:
   - family-names: Madsen
     given-names: Jakob

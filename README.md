@@ -162,6 +162,8 @@ Example `TopOGraph` fit:
 
 ## Changelog
 
+**0.3.1** — Dependency refresh and documentation build migrated to Zensical
+
 **0.3.0** — First PyPI release
 - Published to PyPI as [`topometry-nosc`](https://pypi.org/project/topometry-nosc/)
 - Simplified internals delegate to scikit-learn/SciPy/umap-learn where possible;
